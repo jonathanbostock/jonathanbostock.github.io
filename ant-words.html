@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>my page</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    max-width: 42rem; margin: 0 auto; padding: 3rem 1.5rem 6rem;
+    line-height: 1.7; color: #1a1a1a; background: #faf8f4;
+  }
+  h1 { font-size: 2rem; margin-bottom: .2rem; }
+  .subtitle { color:#777; margin-top:0; }
+  a { color: #b4530a; }
+
+  .ant-btn {
+    position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 9999;
+    font: inherit; font-size: .9rem; padding: .6rem 1rem;
+    background:#1a1a1a; color:#faf8f4; border:none; border-radius:999px;
+    cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,.25);
+  }
+  .ant-btn:hover { background:#b4530a; }
+
+  #pher { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+
+  .ant-word { display:inline-block; will-change: transform; }
+  .ant-word.loose {
+    position: fixed; top: 0; left: 0; margin: 0;
+    white-space: nowrap; pointer-events: none; z-index: 10;
+    /* transform-origin left at default 50% 50% -> pivots about visual centre */
+  }
+</style>
+</head>
+<body>
+  <canvas id="pher"></canvas>
+
+  <main id="page">
+    <h1>Jonathan B.</h1>
+    <p class="subtitle">PhD student · interpretability · fermentation enthusiast · keeper of moths</p>
+    <p>I do AI safety research in London, somewhere near the canals. Most of my time goes on mechanistic interpretability — pulling apart language models to see what they are actually doing in there, which is harder and weirder than it sounds.</p>
+    <p>When I am not doing that I am brewing mead, rearing lime hawk-moths, losing at chess, or reading something far too long. This site is mostly a list of things I have made and things I am still pretending I will finish one day.</p>
+    <p>You can find me on <a href="#">GitHub</a>, occasionally on a <a href="#">preprint server</a>, and never on a beach.</p>
+  </main>
+
+  <button class="ant-btn" id="antBtn">🐜 Release the ants</button>
+
+  <script>
+  (function () {
+    // ---- knobs -------------------------------------------------------------
+    const SHOW_PHEROMONE = false;  // flip to true to watch the trail field
+    const CELL        = 22;        // pheromone grid resolution (px)
+    const EVAP        = 0.997;     // pheromone decay/frame (closer to 1 = trails persist)
+    const DIFFUSE     = 0.16;      // how much pheromone bleeds to neighbours
+    const DEPOSIT     = 4;         // pheromone dropped per ant per frame
+    const SEED        = 30;        // strength of the pre-laid starter trails
+    const SENSE_DIST  = 28;        // how far ahead the ant sniffs
+    const SENSE_ANGLE = 0.5;       // left/right sensor spread (rad)
+    const STEER       = 0.03;      // turn toward the strongest trail
+    const WANDER      = 0.03;      // random heading jitter
+    const MAX_TURN    = 0.045;     // HARD cap on turn per frame -> slow turns
+    const SPEED       = 0.9;       // forward px per frame
+    const SETTLE      = 80;        // within this distance of home, rotate upright
+    // ------------------------------------------------------------------------
+
+    const btn  = document.getElementById('antBtn');
+    const page = document.getElementById('page');
+    const cvs  = document.getElementById('pher');
+    const ctx  = cvs.getContext('2d');
+
+    let ants = [], raf = null;
+    let running = false, goingHome = false, savedHTML = null;
+    let cols, rows, W, H, pher, tmp;
+
+    const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+    function lerpAngle(a, b, t) {
+      let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
+      if (d < -Math.PI) d += Math.PI * 2;
+      return a + d * t;
+    }
+
+    // ---- pheromone field ---------------------------------------------------
+    function idx(gx, gy) {
+      gx = ((gx % cols) + cols) % cols;
+      gy = ((gy % rows) + rows) % rows;
+      return gy * cols + gx;
+    }
+    function readPher(px, py) { return pher[idx(Math.floor(px / CELL), Math.floor(py / CELL))]; }
+    function deposit(px, py, amt) { pher[idx(Math.floor(px / CELL), Math.floor(py / CELL))] += amt; }
+
+    function diffuseEvaporate() {
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const i = y * cols + x;
+          const avg = (pher[idx(x - 1, y)] + pher[idx(x + 1, y)] +
+                       pher[idx(x, y - 1)] + pher[idx(x, y + 1)]) * 0.25;
+          tmp[i] = (pher[i] * (1 - DIFFUSE) + avg * DIFFUSE) * EVAP;
+        }
+      }
+      const s = pher; pher = tmp; tmp = s;
+    }
+
+    // lay down a few fat, wavy trails so the ants have real structure on frame 1
+    function seedTrails() {
+      const lanes = 3;
+      for (let t = 0; t < lanes; t++) {
+        const y0 = (t + 0.7) / (lanes + 0.4) * H;
+        const amp = 30 + Math.random() * 70;
+        const phase = Math.random() * Math.PI * 2;
+        const freq = (0.8 + Math.random() * 1.2) * Math.PI * 2 / W;
+        for (let x = 0; x < W; x += 3) {
+          const y = y0 + Math.sin(x * freq + phase) * amp;
+          deposit(x, y, SEED);
+          deposit(x, y - CELL, SEED * 0.5);
+          deposit(x, y + CELL, SEED * 0.5);
+          deposit(x, y - 2 * CELL, SEED * 0.18);
+          deposit(x, y + 2 * CELL, SEED * 0.18);
+        }
+      }
+    }
+
+    function drawPher() {
+      ctx.clearRect(0, 0, W, H);
+      if (!SHOW_PHEROMONE) return;
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const v = pher[y * cols + x];
+          if (v > 0.4) {
+            ctx.fillStyle = 'rgba(180,83,10,' + Math.min(0.45, v / 40) + ')';
+            ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+          }
+        }
+      }
+    }
+
+    // ---- word -> ant -------------------------------------------------------
+    function wrapWords() {
+      const walker = document.createTreeWalker(page, NodeFilter.SHOW_TEXT, {
+        acceptNode: n => n.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+      });
+      const nodes = [];
+      let n; while ((n = walker.nextNode())) nodes.push(n);
+      for (const node of nodes) {
+        const frag = document.createDocumentFragment();
+        for (const part of node.nodeValue.split(/(\s+)/)) {
+          if (part === '' || /^\s+$/.test(part)) frag.appendChild(document.createTextNode(part));
+          else {
+            const s = document.createElement('span');
+            s.className = 'ant-word';
+            s.textContent = part;
+            frag.appendChild(s);
+          }
+        }
+        node.parentNode.replaceChild(frag, node);
+      }
+    }
+
+    // pivot about centre; facing only decides initial heading + keeps text upright.
+    // `settle` (0..1) eases rotation toward upright and kills the bob as an ant parks.
+    function place(a) {
+      const s = a.settle || 0;
+      const bob = Math.sin(a.legPhase) * 1.2 * (1 - s);
+      const walkRot = a.facing === 1 ? a.heading : a.heading - Math.PI;
+      const rot = lerpAngle(walkRot, 0, s);
+      a.el.style.transform = 'translate(' + a.x + 'px,' + (a.y + bob) + 'px) rotate(' + rot + 'rad)';
+    }
+
+    function release() {
+      W = innerWidth; H = innerHeight;
+      cvs.width = W; cvs.height = H;
+      cols = Math.ceil(W / CELL) + 1;
+      rows = Math.ceil(H / CELL) + 1;
+      pher = new Float32Array(cols * rows);
+      tmp  = new Float32Array(cols * rows);
+      seedTrails();
+
+      savedHTML = page.innerHTML;
+      wrapWords();
+
+      // PASS 1: measure every word while all are still in normal flow
+      const spans = [...page.querySelectorAll('.ant-word')];
+      const rects = spans.map(el => el.getBoundingClientRect());
+
+      // PASS 2: now detach them all (no reflow can corrupt the stored positions)
+      ants = spans.map((el, i) => {
+        const r = rects[i];
+        const faceRight = Math.random() < 0.5;     // 50/50 left or right
+        el.classList.add('loose');
+        return {
+          el,
+          x: r.left, y: r.top, ox: r.left, oy: r.top,
+          hw: r.width / 2, hh: r.height / 2,
+          facing: faceRight ? 1 : -1,
+          heading: faceRight ? 0 : Math.PI,        // initial visual rotation = 0
+          legPhase: Math.random() * Math.PI * 2,
+          pause: 0, settle: 0
+        };
+      });
+      ants.forEach(place);
+
+      running = true; goingHome = false;
+      btn.textContent = '🐜 Recall the ants';
+      loop();
+    }
+
+    function sense(a, ang) {
+      return readPher(a.x + a.hw + Math.cos(ang) * SENSE_DIST,
+                      a.y + a.hh + Math.sin(ang) * SENSE_DIST);
+    }
+
+    function loop() {
+      diffuseEvaporate();
+      let allHome = true;
+
+      for (const a of ants) {
+        if (goingHome) {
+          const dx = a.ox - a.x, dy = a.oy - a.y, d = Math.hypot(dx, dy);
+          if (d > 1.5) {
+            allHome = false;
+            const desired = Math.atan2(dy, dx);
+            a.heading = lerpAngle(a.heading, desired, 0.18);
+            const align = Math.max(0, Math.cos(a.heading - desired)); // walk only if facing home
+            const step = Math.min(d, 3.2) * align;
+            a.x += Math.cos(a.heading) * step;
+            a.y += Math.sin(a.heading) * step;
+            a.legPhase += 0.5 * align;
+            a.settle = 1 - clamp(d / SETTLE, 0, 1);  // ease upright over the last stretch
+          } else {
+            a.x = a.ox; a.y = a.oy; a.settle = 1;    // parked: exactly home, exactly upright
+          }
+          place(a);
+          continue;
+        }
+
+        // three-sensor trail following
+        const fwd = sense(a, a.heading);
+        const lft = sense(a, a.heading - SENSE_ANGLE);
+        const rgt = sense(a, a.heading + SENSE_ANGLE);
+        let turn = 0;
+        if (fwd >= lft && fwd >= rgt) turn = 0;
+        else if (lft > rgt) turn = -STEER;
+        else turn = STEER;
+        turn += (Math.random() - 0.5) * WANDER;
+        a.heading += clamp(turn, -MAX_TURN, MAX_TURN);   // slow, capped turning
+
+        if (a.pause > 0) a.pause--;
+        else if (Math.random() < 0.002) a.pause = 8 + Math.random() * 18;
+        const moving = a.pause === 0;
+        const sp = moving ? SPEED : 0;
+        a.legPhase += moving ? 0.6 : 0.12;
+
+        a.x += Math.cos(a.heading) * sp;
+        a.y += Math.sin(a.heading) * sp;
+
+        if (a.x < -80) a.x = W + 60; else if (a.x > W + 80) a.x = -60;
+        if (a.y < -40) a.y = H + 40; else if (a.y > H + 60) a.y = -40;
+
+        if (moving) deposit(a.x + a.hw, a.y + a.hh, DEPOSIT); // don't pile pheromone while paused
+        place(a);
+      }
+
+      drawPher();
+      if (goingHome && allHome) return finishRecall();
+      raf = requestAnimationFrame(loop);
+    }
+
+    function recall() { goingHome = true; btn.textContent = '🐜 marching home…'; }
+    function finishRecall() {
+      cancelAnimationFrame(raf);
+      running = goingHome = false;
+      ctx.clearRect(0, 0, W, H);
+      page.innerHTML = savedHTML;
+      btn.textContent = '🐜 Release the ants';
+    }
+
+    btn.addEventListener('click', () => {
+      if (!running) release();
+      else if (!goingHome) recall();
+    });
+  })();
+  </script>
+</body>
+</html>

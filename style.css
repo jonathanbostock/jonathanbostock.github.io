@@ -1,0 +1,129 @@
+body {
+  font-family: Helvetica, sans-serif;
+  background-color: #f0f5dd;
+  color: #1f3318;
+
+  /* Center the content in a comfortable reading column */
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+
+  /* Easier-to-read body text */
+  line-height: 1.6;
+}
+
+h1 {
+  color: #123608;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+h2 {
+  color: #1d5512;
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+h3 {
+  color: #2c6a1d;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+p {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+a {
+  color: #b44e24;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Action buttons look like links by default, in the action blue */
+.action-button {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  color: #4087a2;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.action-button:hover {
+  text-decoration: underline;
+}
+
+/* Keep the underline showing while a tooltip is pinned */
+.action-button.pinned {
+  text-decoration: underline;
+}
+
+/* The "boxed" modifier keeps an action button looking like a little box.
+   Only two looks, and never underlined: transparent normally, pale opaque
+   whenever its tooltip is showing (hover or pinned) OR the ants are out. */
+.action-button.boxed {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #4087a2;
+  border-radius: 4px;
+  color: #4087a2;
+  background-color: transparent;
+  text-decoration: none;
+}
+
+.action-button.boxed:hover,
+.action-button.boxed.pinned,
+body.ants-active .action-button.boxed {
+  background-color: #e6f0f5;
+  text-decoration: none;
+}
+
+/* Centered block (used for the living-document button + its tooltip) */
+.centered {
+  text-align: center;
+}
+
+/* Tooltip floats above all other content */
+.action-tooltip {
+  position: absolute;
+  z-index: 1000;
+  max-width: 320px;
+  padding: 0.4rem 0.6rem;
+  background-color: #4087a2;
+  color: #e6f0f5;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* ---- "Release the ants" effect (triggered by the living-document button) ---- */
+#pher {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.ant-word {
+  display: inline-block;
+  will-change: transform;
+}
+
+.ant-word.loose {
+  position: fixed;
+  top: 0;
+  left: 0;
+  margin: 0;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+}
