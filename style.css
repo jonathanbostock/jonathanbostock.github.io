@@ -1,33 +1,80 @@
+/* Layout knobs for the gutters that flank the content column.
+   --gutter     : width of each side gutter (also the image width)
+   --gutter-gap : breathing room between the column and the gutter */
+:root {
+  --gutter: 300px;
+  --gutter-gap: 1.5rem;
+
+  /* Theme colours (light) */
+  --bg: #f0f5dd;
+  --text: #1f3318;
+  --h1: #123608;
+  --h2: #1d5512;
+  --h3: #2c6a1d;
+  --link: #b44e24;          /* orange */
+  --ttbtn: #4087a2;         /* tooltip-button blue */
+  --action: #a40043;        /* action button purple */
+  --action-fill: #f6dce8;   /* pale-purple fill */
+  --toggle-bg: #2c6a1d;     /* theme-toggle green */
+  --toggle-fg: #f0f5dd;
+}
+
+/* Theme colours (dark) — toggled by adding .dark to <html> */
+:root.dark {
+  --bg: #161d14;
+  --text: #d7e4c8;
+  --h1: #a6e58a;
+  --h2: #8ed26f;
+  --h3: #79bd5e;
+  --link: #e8924f;
+  --ttbtn: #6cb6d6;
+  --action: #f175a4;
+  --action-fill: #4a1830;
+  --toggle-bg: #6aae57;
+  --toggle-fg: #161d14;
+}
+
+/* Self-hosted IBM Plex Sans — variable font (any weight 100–700) */
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url("fonts/ibm-plex-sans-latin-wght-normal.woff2") format("woff2");
+}
+
 body {
-  font-family: Helvetica, sans-serif;
-  background-color: #f0f5dd;
-  color: #1f3318;
+  font-family: "IBM Plex Sans", Helvetica, sans-serif;
+  font-weight: 440; /* base text, marginally heavier than normal (400) */
+  background-color: var(--bg);
+  color: var(--text);
 
   /* Center the content in a comfortable reading column */
-  max-width: 700px;
+  max-width: 720px;
   margin: 0 auto;
-  padding: 2rem 1.5rem;
+  padding: 2rem 1.5rem 6rem; /* extra buffer space at the bottom */
 
   /* Easier-to-read body text */
   line-height: 1.6;
 }
 
 h1 {
-  color: #123608;
+  color: var(--h1);
   margin-top: 0;
   margin-bottom: 0.5rem;
 }
 
 h2 {
-  color: #1d5512;
+  color: var(--h2);
   margin-top: 2rem;
   margin-bottom: 0.5rem;
 }
 
 h3 {
-  color: #2c6a1d;
+  color: var(--h3);
   margin-top: 1.5rem;
   margin-bottom: 0.5rem;
+  font-weight: 500; /* semi-bold — see note about font support */
 }
 
 p {
@@ -36,66 +83,157 @@ p {
 }
 
 a {
-  color: #b44e24;
+  color: var(--link);
   text-decoration: none;
+  font-weight: 500; /* links: marginally heavier than base text (440) */
 }
 
 a:hover {
   text-decoration: underline;
 }
 
-/* Action buttons look like links by default, in the action blue */
-.action-button {
+/* TOOLTIP BUTTONS — inline, look like links (in the action blue), and just
+   reveal a definition tooltip. These hide while the ants are out. */
+.tooltip-button {
   background: none;
   border: none;
   padding: 0;
   margin: 0;
   font-family: inherit;
   font-size: inherit;
-  color: #4087a2;
+  font-weight: 500; /* same marginal bump as links */
+  color: var(--ttbtn);
   text-decoration: none;
   cursor: pointer;
 }
 
-.action-button:hover {
+.tooltip-button:hover,
+.tooltip-button.pinned { /* underline on hover / while a tooltip is pinned */
   text-decoration: underline;
 }
 
-/* Keep the underline showing while a tooltip is pinned */
-.action-button.pinned {
-  text-decoration: underline;
-}
-
-/* The "boxed" modifier keeps an action button looking like a little box.
-   Only two looks, and never underlined: transparent normally, pale opaque
-   whenever its tooltip is showing (hover or pinned) OR the ants are out. */
-.action-button.boxed {
+/* THE action button — the boxed, purple launcher that releases the ants.
+   Two looks, never underlined: transparent normally, pale-purple fill when
+   its tooltip is showing (hover/pinned) OR the ants are out. */
+.action-button {
   display: inline-block;
-  padding: 0.4rem 0.8rem;
-  border: 1px solid #4087a2;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--action);
   border-radius: 4px;
-  color: #4087a2;
-  background-color: transparent;
+  color: var(--action);
+  background: transparent;
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.25;
+  white-space: nowrap; /* keep each <br> line intact; sizes to the widest line */
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.action-button:hover,
+.action-button.pinned,
+body.ants-active .action-button {
+  background-color: var(--action-fill);
   text-decoration: none;
 }
 
-.action-button.boxed:hover,
-.action-button.boxed.pinned,
-body.ants-active .action-button.boxed {
-  background-color: #e6f0f5;
-  text-decoration: none;
+/* While the ants are out, the tooltip buttons fade away entirely. */
+body.ants-active .tooltip-button {
+  opacity: 0;
+  pointer-events: none;
 }
+
+/* Small green dark-mode toggle, sitting to the left of the title. */
+#theme-toggle {
+  position: absolute;
+  left: 0;
+  top: 0.2em;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--toggle-bg);
+  color: var(--toggle-fg);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#theme-toggle::before { content: "\263E"; }       /* ☾ moon (switch to dark) */
+:root.dark #theme-toggle::before { content: "\2600"; } /* ☀ sun (switch to light) */
+#theme-toggle:hover { filter: brightness(1.1); }
 
 /* Centered block (used for the living-document button + its tooltip) */
 .centered {
   text-align: center;
 }
 
-/* Tooltip floats above all other content */
+/* Justification helpers — apply to a div (or any block) to align its
+   contents. Affects text and inline/inline-block children. */
+.align-left,
+.align-center,
+.align-right {
+  max-width: 82%; /* narrower than the column, so text doesn't span the full width */
+}
+.align-left   { text-align: left;   margin-right: auto; } /* block hugs the left  */
+.align-center { text-align: center; margin: 0 auto;      } /* block stays centered */
+.align-right  { text-align: right;  margin-left: auto;  } /* block hugs the right */
+
+/* Side divs / the abstract are positioning contexts for their flanking
+   elements (images, the action-button launcher). */
+.align-left,
+.align-right,
+#abstract {
+  position: relative;
+}
+
+/* The abstract spans the full column (its text is centered anyway), so the
+   launcher's 100% lands on the column edge — the same reference the images
+   use, keeping the button and images on one gutter centre-line. */
+#abstract {
+  max-width: none;
+}
+
+/* Images that flank a side column. Pinned just outside the div's edge and
+   vertically centered against the div, so they stay centered as text is
+   added or removed. */
+.side-img {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: var(--gutter);
+  height: auto;
+  border-radius: 6px;
+}
+/* Image fills its gutter, sitting --gutter-gap clear of the text column. */
+.side-img-left  { right: calc(100% + var(--gutter-gap)); }
+.side-img-right { left:  calc(100% + var(--gutter-gap)); }
+
+/* The action button lives in its own area to the right of the abstract,
+   vertically centered against it (holds as the abstract's text changes). */
+.ant-launcher {
+  position: absolute;
+  top: 50%;
+  /* Center the button on the right gutter's centre-line — the SAME line the
+     flanking images sit on. The abstract spans the full column (below), so
+     100% is the column's right edge; +gap+gutter/2 reaches the gutter centre.
+     translate(-50%) keeps it centered whatever its width. */
+  left: calc(100% + var(--gutter-gap) + var(--gutter) / 2);
+  transform: translate(-50%, -50%);
+}
+
+/* Tooltip floats above all other content. Blue by default (tooltip buttons);
+   purple variant for the ant action button. */
 .action-tooltip {
   position: absolute;
   z-index: 1000;
-  max-width: 320px;
+  max-width: 240px;
   padding: 0.4rem 0.6rem;
   background-color: #4087a2;
   color: #e6f0f5;
@@ -103,6 +241,18 @@ body.ants-active .action-button.boxed {
   font-size: 0.9rem;
   line-height: 1.4;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.action-tooltip.ant-tooltip {
+  background-color: #a40043; /* dark purple */
+  color: #f6dce8;            /* pale purple */
+}
+
+/* URL link tooltip: light orange text on a dark background. */
+.action-tooltip.link-tooltip {
+  background-color: #241f1c;
+  color: #ef9a5b;
+  font-weight: 500;
 }
 
 /* ---- "Release the ants" effect (triggered by the living-document button) ---- */
@@ -113,17 +263,47 @@ body.ants-active .action-button.boxed {
   pointer-events: none;
 }
 
+/* Word wrappers sit in normal flow. They fade out (rather than detach) while
+   the ants are active, so the page layout never changes. */
 .ant-word {
   display: inline-block;
+}
+body.ants-active .ant-word {
+  opacity: 0; /* vanish instantly the moment the ants appear */
+}
+
+/* While the ants are out, disable links (tooltip buttons are already hidden +
+   disabled above). The action button stays live so it can recall the ants. */
+body.ants-active a {
+  pointer-events: none;
+}
+
+/* Overlay holding the ant clones — absolutely positioned at the document
+   origin so the ants scroll WITH the page. Transparent to clicks so the
+   action button underneath stays usable. */
+#ant-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.ant-clone {
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: nowrap;
   will-change: transform;
 }
 
-.ant-word.loose {
-  position: fixed;
+/* A piece of image being carried by an ant / piled at the nest. */
+.ant-piece {
+  position: absolute;
   top: 0;
   left: 0;
-  margin: 0;
-  white-space: nowrap;
   pointer-events: none;
-  z-index: 10;
+  will-change: transform;
 }

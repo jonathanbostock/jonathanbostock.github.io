@@ -4,20 +4,53 @@
 		<meta charset="utf-8">
 		<title>Jonathan Bostock Personal Page</title>
 		<link rel="stylesheet" href="style.css">
+		<script>
+			// Apply the theme before first paint to avoid a flash: saved choice
+			// wins, otherwise follow the system preference.
+			(function () {
+				var saved = localStorage.getItem("theme");
+				var dark = saved ? saved === "dark"
+				                 : matchMedia("(prefers-color-scheme: dark)").matches;
+				if (dark) document.documentElement.classList.add("dark");
+			})();
+		</script>
 	</head>
 	<body>
 		<canvas id="pher"></canvas>
 		<main id="page">
-			<h1 class="centered">Jonathan Bostock</h1>
-      <p class="centered">I'm an <button class="action-button" data-define="ai-alignment">AI Alignment</button> researcher with a background in chemistry and nanotech, working on the Alignment Team at Arcadia Impact, alongside members of the UK's AISI. At the moment, I'm studying how the motivations and behaviours of modern LLMs change when they're trained to exhibit specific behaviours. In the past, I've done research into <button class="action-button" data-define="ai-control">AI control</button>, and outside of AI I've done experimental (wet lab) work in several areas of <button class="action-button" data-define="bio-nanotech">bio-nanotech</button>.
-			<p class="centered"><a href="https://substack.com/@jbostock">Substack</a> &middot; <a href="https://www.lesswrong.com/users/j-bostock">LessWrong</a> &middot; <a href="https://github.com/jonathanbostock">GitHub</a> &middot; <a href="https://scholar.google.co.uk/citations?hl=en&user=pIJGM58AAAAJ">Google Scholar</a></p>
-			<p class="centered"><button class="action-button boxed" data-define="living-document">This page is a living document.</button></p>
-			<h2>Research</h2>
-      <h3>Published Papers</h3>
-			<p><a href="https://arxiv.org/pdf/2602.20628">When Can We Trust Untrusted Monitoring?</a> An investigation into AI Control.</p>
-      <h3>Non-Published Work</h3>
-      <p>PhD in DNA Nanotechnology from Imperial College London, carried out with the Ces Group as well as the Hindley Group (Kings College London) and the Di Michele Group (University of Cambridge).</p>
-      <p>MSci in artificial metalloenzymes from University of Cambridge, carried out with the Barker Group.</p>
+
+			<div class="align-center" id="abstract">
+				<button id="theme-toggle" aria-label="Toggle dark mode"></button>
+				<h1>Jonathan Bostock</h1>
+				<p><a target="_blank" rel="noopener noreferrer" href="https://substack.com/@jbostock">Substack</a> &middot; <a target="_blank" rel="noopener noreferrer" href="https://www.lesswrong.com/users/j-bostock">LessWrong</a> &middot; <a target="_blank" rel="noopener noreferrer" href="https://github.com/jonathanbostock">GitHub</a> &middot; <a target="_blank" rel="noopener noreferrer" href="https://scholar.google.co.uk/citations?hl=en&user=pIJGM58AAAAJ">Google Scholar</a></p>
+        <p>I'm an <button class="tooltip-button" data-define="ai-alignment">AI alignment</button> researcher with a background in chemistry and nanotech, working on the Alignment Team at <a target="_blank" rel="noopener noreferrer" href="https://www.arcadiaimpact.org/">Arcadia Impact</a>, alongside members of the UK's AISI. At the moment, I'm studying how the motivations and behaviours of modern LLMs change when they're trained to exhibit specific behaviours. In the past, I've done research into <button class="tooltip-button" data-define="ai-control">AI control</button>, and outside of AI I've done experimental (wet lab) work in several areas of <button class="tooltip-button" data-define="bio-nanotech">bio-nanotech</button>.</p>
+				<div class="ant-launcher">
+					<button class="action-button" data-define="living-document">Warning!<br>This page is a<br>living document!</button>
+				</div>
+			</div>
+
+			<div class="align-left">
+				<img class="side-img side-img-left" src="images/sf_bay_selife.png" alt="Jonathan by San Francisco Bay">
+				<h2>Research</h2>
+				<h3>Papers and Preprints</h3>
+				<p><a target="_blank" rel="noopener noreferrer" href="https://arxiv.org/pdf/2602.20628">When Can We Trust Untrusted Monitoring?</a> An investigation into AI Control.</p>
+				<h3>Other</h3>
+        <p>PhD in from Imperial College London, investigating DNA nanotechnology with the Ces, Di Michele, and Hindley groups.</p>
+				<p>MSci in artificial metalloenzymes from University of Cambridge, carried out with the Barker Group.</p>
+			</div>
+
+			<div class="align-right">
+				<img class="side-img side-img-right" src="images/pause_ai.png" alt="PauseAI">
+				<h2>Public Talks</h2>
+				<p><a target="_blank" rel="noopener noreferrer" href="https://www.youtube.com/watch?v=igNjZE5LmBw">Report from the Jungles of Untrusted Monitoring</a> A talk given at ControlConf 2026, the AI control conference in Berkeley, CA.</p>
+				<p>I have been a regular volunteer at <a target="_blank" rel="noopener noreferrer" href="https://pauseai.info/">PauseAI</a> UK since 2023, and have advocated publicly and directly to MPs for an international treaty to halt the development of the most advanced AI systems.</p>
+			</div>
+
+      <div class="align-left">
+        <h2>Miscalleneous</h2>
+        <p>I'm an avid birder, and have experience in <button class="tooltip-button" data-define="insect-husbandry">insect husbandry</button>.</p>
+        <p>I represented the United Kingdom in the <a target="_blank" rel="noopener noreferrer" href="https://www.icho-official.org/results/results.php?id=50&year=2018">2018 International Chemistry Olympiad</a> coming 13th in the world.</p>
+      </div>
 		</main>
 		<script src="script.js"></script>
 	</body>
