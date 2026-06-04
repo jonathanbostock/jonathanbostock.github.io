@@ -8,7 +8,7 @@ const actionButtonDefinitions = {
   "ai-alignment": "The AI alignment problem is the technical and philosophical problem of producing artificially intelligent systems which are aligned to human values.",
   "ai-control": "The field of AI control studies how to prevent AI systems from causing harm, even if they attempt to do so. I investigated a sub-field called untrusted montoring.",
   "bio-nanotech": "Bio-nanotech is a field of science which attempts to build nanometer-scale structures out of biological molecules, like lipids, DNA, and proteins.",
-  "insect-husbandry": "Insect husbandry refers to raising and breeding insects, often as part of agricultural efforts.",
+  "insect-husbandry": "This is not a joke."
 };
 
 // ------------------------------------------------------------
