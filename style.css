@@ -248,10 +248,11 @@ body.ants-active .tooltip-button {
   color: #f6dce8;            /* pale purple */
 }
 
-/* URL link tooltip: light orange text on a dark background. */
+/* URL link tooltip: pale text on a mid-orange background (matches the
+   accent-bg + light-text spirit of the other two tooltip variants). */
 .action-tooltip.link-tooltip {
-  background-color: #241f1c;
-  color: #ef9a5b;
+  background-color: #b44e24; /* the link orange (--link, light) */
+  color: #f7e4d6;            /* pale orange */
   font-weight: 500;
 }
 
@@ -306,4 +307,41 @@ body.ants-active a {
   left: 0;
   pointer-events: none;
   will-change: transform;
+}
+
+/* ============================================================
+   MOBILE / NARROW LAYOUT
+   The 300px side gutters only fit above ~1380px. Below that, stack
+   everything into a single reading column: gutter images flow inline
+   (above their section), the living-document button is removed, and the
+   ant effect therefore never runs. Desktop (>1380px) is unaffected.
+   ============================================================ */
+@media (max-width: 1380px) {
+  /* Gutter images become normal-flow, constrained, centered blocks. They're
+     already the first child of each section, so they land above the heading. */
+  .side-img {
+    position: static;
+    transform: none;
+    display: block;
+    width: min(300px, 100%);
+    height: auto;
+    margin: 0 auto 1rem; /* centered, with breathing room below */
+  }
+  /* Cancel the gutter offsets (they reference the column edge + gutter). */
+  .side-img-left,
+  .side-img-right { right: auto; left: auto; }
+
+  /* Let the section blocks use the full reading column. */
+  .align-left,
+  .align-center,
+  .align-right {
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .align-center { margin: 0 auto; } /* abstract text stays centered */
+
+  /* Remove the living-document launcher entirely (not just hidden visually):
+     display:none makes it untappable, so the ant effect can never start. */
+  .ant-launcher { display: none; }
 }

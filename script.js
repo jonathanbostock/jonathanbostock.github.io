@@ -23,7 +23,16 @@ const pinnedTooltips = new Map();
 function positionTooltipUnder(button, tooltip) {
   const rect = button.getBoundingClientRect();
   const centerX = rect.left + rect.width / 2 + window.scrollX;
-  tooltip.style.left = centerX - tooltip.offsetWidth / 2 + "px";
+  // Clamp horizontally so a tooltip near a screen edge can't overflow the
+  // viewport (matters on narrow/mobile screens; a no-op on the desktop column).
+  const MARGIN = 8;
+  const w = tooltip.offsetWidth;
+  const minLeft = window.scrollX + MARGIN;
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - w - MARGIN;
+  let left = centerX - w / 2;
+  if (left < minLeft) left = minLeft;
+  if (left > maxLeft) left = Math.max(minLeft, maxLeft);
+  tooltip.style.left = left + "px";
   tooltip.style.top = rect.bottom + window.scrollY + 6 + "px";
 }
 
@@ -83,6 +92,9 @@ function hideHoverTooltip() {
 const truncateUrl = (s, n) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 
 function showLinkTooltip(link) {
+  // Only on hover-capable (pointer) devices — touch devices have no hover and
+  // the link navigates on tap anyway, so the href tooltip is dropped there.
+  if (!matchMedia("(hover: hover)").matches) return;
   if (pinnedTooltips.size) return;                 // don't fight a pinned tooltip
   const key = "url:" + link.href;
   if (hoverTooltip && hoverTooltip.key === key) return;
@@ -145,21 +157,27 @@ document.addEventListener("click", (e) => {
 // Delegated click handler: works even after the ant effect rebuilds the page.
 document.addEventListener("click", (e) => {
   const button = e.target.closest(BTN_SEL);
-  const hadTooltips = pinnedTooltips.size > 0;
+  const isActionBtn = button && button.classList.contains("action-button");
+
+  // Was THIS exact button the one already pinned? (capture before we clear,
+  // since dismissAllTooltips removes the pinned state.)
+  const thisWasPinned = button && !isActionBtn &&
+                        pinnedTooltips.has(button.dataset.define);
 
   // A click ANYWHERE cancels any active tooltip.
-  if (hadTooltips) dismissAllTooltips();
+  if (pinnedTooltips.size > 0) dismissAllTooltips();
 
   if (button) {
-    if (button.classList.contains("action-button")) {
+    if (isActionBtn) {
       // THE action button: releases/recalls the ants. Pin its tooltip only
       // when this click RELEASES them; on a recall click it stays down — even
       // if it was already dismissed by an earlier click somewhere random.
       if (Ants.toggle() === "released") pinTooltip(button);
     } else {
-      // Tooltip buttons: pin unless this same click just dismissed one
-      // (so clicking an open button reads as "close", not "reopen").
-      if (!hadTooltips) pinTooltip(button);
+      // Tooltip buttons: pin the clicked one — switching the pin from any
+      // other open button to this one. The exception is clicking the button
+      // that was already pinned: that just closed it, so leave it closed.
+      if (!thisWasPinned) pinTooltip(button);
     }
   }
 });
@@ -172,6 +190,9 @@ document.addEventListener("click", (e) => {
 // ============================================================
 const Ants = (function () {
   // ---- knobs -------------------------------------------------------------
+  const SPEED_MULT  = 1.4;      // MASTER ant-speed multiplier (1 = original).
+                                // Scales every movement: wander, guard, forage,
+                                // and the march home.
   const SHOW_PHEROMONE = false; // flip to true to watch the trail field
   const CELL        = 22;       // pheromone grid resolution (px)
   const EVAP        = 0.997;    // pheromone decay/frame (closer to 1 = trails persist)
@@ -183,12 +204,12 @@ const Ants = (function () {
   const STEER       = 0.03;     // turn toward the strongest trail
   const WANDER      = 0.03;     // random heading jitter
   const MAX_TURN    = 0.045;    // HARD cap on turn per frame -> slow turns
-  const SPEED       = 0.9;      // forward px per frame
+  const SPEED       = 0.9 * SPEED_MULT;  // forward px per frame
   const SETTLE      = 80;       // within this distance of home, rotate upright
   // -- foraging (biting pieces off the images, carrying them to the nest) --
   const NEST_SCENT   = 8;       // pheromone laid at the nest each frame
   const FORAGE_CHANCE = 0.004;  // per-frame chance an idle ant goes foraging
-  const FORAGE_SPEED = 1.7;     // foragers move faster than wanderers
+  const FORAGE_SPEED = 1.7 * SPEED_MULT; // foragers move faster than wanderers
   const CELL_PX      = 15;      // bite size (px of image taken per trip)
   const REACH        = 12;      // "arrived at the bite point" threshold
   const NEST_REACH   = 70;      // "arrived at the nest" threshold (a big nest area)
@@ -272,15 +293,34 @@ const Ants = (function () {
     return true;
   }
 
+  // Drop one obstacle on the line from the nest to (tx, ty). Scans outward from
+  // the midpoint for a spot that clears the nest/image keep-out zones, so there
+  // is always something for foragers to steer around between the two. Returns
+  // true if one was placed.
+  function placePathRepellor(tx, ty) {
+    const ts = [0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7, 0.25, 0.75];
+    for (const t of ts) {
+      const x = nest.x + (tx - nest.x) * t;
+      const y = nest.y + (ty - nest.y) * t;
+      if (spotIsClear(x, y)) { repellors.push({ x, y }); return true; }
+    }
+    return false;
+  }
+
   function buildRepellors() {
     repellors = [];
-    for (let i = 0; i < REPEL_COUNT; i++) {
+    // Guarantee one obstacle on the path between the nest and each image, so the
+    // ants always have something to walk around on the way out and back.
+    for (const b of biteImages) placePathRepellor(b.x0 + b.w / 2, b.y0 + b.h / 2);
+
+    // Fill the rest in with random scatter, up to REPEL_COUNT total.
+    while (repellors.length < REPEL_COUNT) {
       let x, y, tries = 0;
       do {
         x = 80 + Math.random() * (W - 160);
         y = 80 + Math.random() * (H - 160);
       } while (!spotIsClear(x, y) && ++tries < 40);
-      if (!spotIsClear(x, y)) continue; // couldn't find a clear spot — skip it
+      if (!spotIsClear(x, y)) break; // couldn't find a clear spot — stop filling
       repellors.push({ x, y }); // invisible: an unseen force the ants curve around
     }
   }
@@ -518,6 +558,10 @@ const Ants = (function () {
   }
 
   function release() {
+    // Guard: on mobile the launcher is removed, so there's nothing to release.
+    // (release reads the button's position for the nest, so bail if it's gone.)
+    if (!document.querySelector(".action-button")) return;
+
     // Work in DOCUMENT coordinates and size the field to the whole page, so
     // the ants scroll with the page and bounce off the page edges (not the
     // screen edges).
@@ -630,7 +674,7 @@ const Ants = (function () {
           const desired = Math.atan2(dy, dx);
           a.heading = lerpAngle(a.heading, desired, 0.35);
           const align = Math.max(0, Math.cos(a.heading - desired));
-          const step = Math.min(d, 9) * align;
+          const step = Math.min(d, 9 * SPEED_MULT) * align;
           a.x += Math.cos(a.heading) * step;
           a.y += Math.sin(a.heading) * step;
           a.legPhase += 0.5 * align;
