@@ -270,7 +270,9 @@ body.ants-active .tooltip-button {
   font-weight: 600;
 }
 .music-word:hover { text-decoration: underline; }
-.music-word.spent { cursor: default; }
+/* Once flown (button active), the word reads as normal text, not the purple
+   "clickable" colour. It returns to purple when the player is dismissed. */
+.music-word.spent { cursor: default; color: var(--text); }
 .music-word.spent:hover { text-decoration: none; }
 
 /* On desktop the flying word is live; the mobile fallback button is hidden. */
@@ -334,11 +336,13 @@ body.ants-active .tooltip-button {
 .side-img-left  { right: calc(100% + var(--gutter-gap)); }
 .side-img-right { left:  calc(100% + var(--gutter-gap)); }
 
-/* The action button lives in its own area to the right of the abstract,
-   vertically centered against it (holds as the abstract's text changes). */
+/* The action button lives in the right gutter. It still anchors to the abstract
+   (which spans the full column, so the horizontal gutter maths below works), but
+   sits well BELOW it — roughly in line with the first paragraph after the intro.
+   Tune the `+ 7rem` to nudge it up/down. */
 .ant-launcher {
   position: absolute;
-  top: 50%;
+  top: calc(100% + 7rem);
   /* Center the button on the right gutter's centre-line — the SAME line the
      flanking images sit on. The abstract spans the full column (below), so
      100% is the column's right edge; +gap+gutter/2 reaches the gutter centre.

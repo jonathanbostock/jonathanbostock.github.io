@@ -15,7 +15,7 @@ const actionButtonDefinitions = {
   "ai-alignment": "The AI alignment problem is the technical and philosophical problem of producing artificially intelligent systems which are aligned to human values.",
   "ai-control": "The field of AI control studies how to prevent AI systems from causing harm, even if they attempt to do so. I investigated a sub-field called untrusted montoring.",
   "bio-nanotech": "Bio-nanotech is a field of science which attempts to build nanometer-scale structures out of biological molecules, like lipids, DNA, and proteins.",
-  "insect-husbandry": "This is not a joke.",
+  "insect-husbandry": "Not a joke: see left picture. I have also worked on a fly farm.",
   "music-desktop": "But only on desktop :("
 };
 
@@ -176,9 +176,10 @@ document.addEventListener("click", (e) => {
   if (!to.width) return; // button isn't on screen (e.g. mobile) — do nothing
 
   const from = word.getBoundingClientRect();
-  word.classList.add("spent"); // stop further hovers/clicks on the original word
 
-  // A copy flies so the sentence is left intact.
+  // A copy flies so the sentence is left intact. Capture the word's look BEFORE
+  // marking it spent, so the moving copy keeps the purple "clickable" colour
+  // while the original drops to normal text colour.
   const fly = document.createElement("span");
   fly.className = "music-fly";
   fly.textContent = word.textContent;
@@ -188,6 +189,8 @@ document.addEventListener("click", (e) => {
   fly.style.fontWeight = cs.fontWeight;
   fly.style.color = cs.color;
   document.body.appendChild(fly);
+
+  word.classList.add("spent"); // grey out the original + stop further hovers/clicks
 
   // Centres of start (word) and end (button) in DOCUMENT coords — the clone is
   // position:absolute (pinned to the page), so the motion-path uses page coords
@@ -233,9 +236,9 @@ const Music = (function () {
   // `note` is a longer blurb shown beneath the song title in the Music button's
   // hover tooltip. Leave it "" for no blurb. (name/file/label are also editable.)
   const SONGS = [
-    { name: "♪ Counting Flowers ♪\n(Jonathan)", file: "songs/counting flowers.wav", label: "#c46a3a", note: "" }, // warm orange
-    { name: "♪ What we Meant ♪\n(Jonathan)",    file: "songs/what we meant.wav",    label: "#3f7e88", note: "" }, // teal
-    { name: "♪ No Earth ♪\n(Thumbprint)",         file: "songs/no earth.mp3",         label: "#5a8f3c", note: "" }, // green
+    { name: "♪ Counting Flowers ♪\n(Jonathan, 2020)", file: "songs/counting flowers.wav", label: "#c46a3a", note: "" }, // warm orange
+    { name: "♪ What we Meant ♪\n(Jonathan, 2020)",    file: "songs/what we meant.wav",    label: "#3f7e88", note: "" }, // teal
+    { name: "♪ No Earth ♪\n(Thumbprint, 2019)",         file: "songs/no earth.mp3",         label: "#5a8f3c", note: "" }, // green
   ];
   // ↑↑↑ EDIT PER-SONG TOOLTIP TEXT HERE ↑↑↑
   const audio    = document.getElementById("music-audio");
@@ -391,9 +394,7 @@ const Music = (function () {
     if (confirmClose) { el.textContent = "No more music?"; return; }
     if (!firstClick) { el.textContent = "Are you sure?"; return; }
     const s = SONGS[index];
-    const title = document.createElement("strong");
-    title.textContent = s.name;
-    el.appendChild(title);
+    el.appendChild(document.createTextNode(s.name)); // title (not bold)
     if (s.note) {
       el.appendChild(document.createElement("br"));
       el.appendChild(document.createTextNode(s.note));
@@ -454,7 +455,15 @@ const Music = (function () {
     if (musicBtn) musicBtn.classList.add("activated");
   }
 
-  return { activate };
+  // Re-apply the in-prose word's state to match the real music state. Needed
+  // after the ant effect rebuilds #page from a snapshot, which can otherwise
+  // restore a stale "spent" word (e.g. dismissed while the ants were out).
+  function syncWord() {
+    document.querySelectorAll(".music-word")
+      .forEach(w => w.classList.toggle("spent", activated));
+  }
+
+  return { activate, syncWord };
 })();
 
 // Delegated click handler: works even after the ant effect rebuilds the page.
@@ -1094,6 +1103,7 @@ const Ants = (function () {
     ctx.clearRect(0, 0, W, H);
     if (overlay) { overlay.remove(); overlay = null; } // remove the ant clones + pieces
     page().innerHTML = savedHTML; // unwrap words + restore the original <img> tags
+    Music.syncWord(); // the restored word may be stale — match the real music state
     nest = null; biteImages = []; pieces = []; repellors = [];
   }
 
