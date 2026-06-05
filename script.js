@@ -236,9 +236,9 @@ const Music = (function () {
   // `note` is a longer blurb shown beneath the song title in the Music button's
   // hover tooltip. Leave it "" for no blurb. (name/file/label are also editable.)
   const SONGS = [
-    { name: "♪ Counting Flowers ♪\n(Jonathan, 2020)", file: "songs/counting flowers.wav", label: "#c46a3a", note: "" }, // warm orange
-    { name: "♪ What we Meant ♪\n(Jonathan, 2020)",    file: "songs/what we meant.wav",    label: "#3f7e88", note: "" }, // teal
     { name: "♪ No Earth ♪\n(Thumbprint, 2019)",         file: "songs/no earth.mp3",         label: "#5a8f3c", note: "" }, // green
+    { name: "♪ What we Meant ♪\n(Jonathan, 2020)",    file: "songs/what we meant.wav",    label: "#3f7e88", note: "" }, // teal
+    { name: "♪ Counting Flowers ♪\n(Jonathan, 2020)", file: "songs/counting flowers.wav", label: "#c46a3a", note: "" }, // warm orange
   ];
   // ↑↑↑ EDIT PER-SONG TOOLTIP TEXT HERE ↑↑↑
   const audio    = document.getElementById("music-audio");
