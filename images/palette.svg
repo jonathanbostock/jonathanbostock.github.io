@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="724" viewBox="0 0 680 724" font-family="IBM Plex Sans, Helvetica, sans-serif">
+  <rect width="680" height="724" fill="#ffffff"/>
+  <text x="24" y="42" font-size="24" font-weight="600" fill="#1f3318">Site palette</text>
+  <text x="24" y="64" font-size="13" fill="#666">Theme colours from style.css — sample away.</text>
+
+  <!-- ===== Light theme column ===== -->
+  <g transform="translate(24,96)">
+    <text x="0" y="0" font-size="16" font-weight="600" fill="#222">Light</text>
+
+    <!-- bg -->
+    <g transform="translate(0,16)">
+      <rect width="56" height="44" rx="6" fill="#f0f5dd" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--bg</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#f0f5dd</text>
+    </g>
+    <!-- text -->
+    <g transform="translate(0,68)">
+      <rect width="56" height="44" rx="6" fill="#1f3318" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--text</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#1f3318</text>
+    </g>
+    <!-- h1 -->
+    <g transform="translate(0,120)">
+      <rect width="56" height="44" rx="6" fill="#123608" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--h1</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#123608</text>
+    </g>
+    <!-- h2 -->
+    <g transform="translate(0,172)">
+      <rect width="56" height="44" rx="6" fill="#1d5512" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--h2</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#1d5512</text>
+    </g>
+    <!-- h3 -->
+    <g transform="translate(0,224)">
+      <rect width="56" height="44" rx="6" fill="#2c6a1d" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--h3</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#2c6a1d</text>
+    </g>
+    <!-- link -->
+    <g transform="translate(0,276)">
+      <rect width="56" height="44" rx="6" fill="#b44e24" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--link</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#b44e24</text>
+    </g>
+    <!-- ttbtn -->
+    <g transform="translate(0,328)">
+      <rect width="56" height="44" rx="6" fill="#4087a2" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--ttbtn</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#4087a2</text>
+    </g>
+    <!-- action -->
+    <g transform="translate(0,380)">
+      <rect width="56" height="44" rx="6" fill="#a40043" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--action</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#a40043</text>
+    </g>
+    <!-- action-fill -->
+    <g transform="translate(0,432)">
+      <rect width="56" height="44" rx="6" fill="#f6dce8" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--action-fill</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#f6dce8</text>
+    </g>
+    <!-- toggle-bg -->
+    <g transform="translate(0,484)">
+      <rect width="56" height="44" rx="6" fill="#2c6a1d" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--toggle-bg</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#2c6a1d</text>
+    </g>
+    <!-- toggle-fg -->
+    <g transform="translate(0,536)">
+      <rect width="56" height="44" rx="6" fill="#f0f5dd" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--toggle-fg</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#f0f5dd</text>
+    </g>
+  </g>
+
+  <!-- ===== Dark theme column ===== -->
+  <g transform="translate(356,96)">
+    <text x="0" y="0" font-size="16" font-weight="600" fill="#222">Dark</text>
+
+    <!-- bg -->
+    <g transform="translate(0,16)">
+      <rect width="56" height="44" rx="6" fill="#161d14" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--bg</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#161d14</text>
+    </g>
+    <!-- text -->
+    <g transform="translate(0,68)">
+      <rect width="56" height="44" rx="6" fill="#d7e4c8" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--text</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#d7e4c8</text>
+    </g>
+    <!-- h1 -->
+    <g transform="translate(0,120)">
+      <rect width="56" height="44" rx="6" fill="#a6e58a" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--h1</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#a6e58a</text>
+    </g>
+    <!-- h2 -->
+    <g transform="translate(0,172)">
+      <rect width="56" height="44" rx="6" fill="#8ed26f" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--h2</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#8ed26f</text>
+    </g>
+    <!-- h3 -->
+    <g transform="translate(0,224)">
+      <rect width="56" height="44" rx="6" fill="#79bd5e" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--h3</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#79bd5e</text>
+    </g>
+    <!-- link -->
+    <g transform="translate(0,276)">
+      <rect width="56" height="44" rx="6" fill="#e8924f" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--link</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#e8924f</text>
+    </g>
+    <!-- ttbtn -->
+    <g transform="translate(0,328)">
+      <rect width="56" height="44" rx="6" fill="#6cb6d6" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--ttbtn</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#6cb6d6</text>
+    </g>
+    <!-- action -->
+    <g transform="translate(0,380)">
+      <rect width="56" height="44" rx="6" fill="#f175a4" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--action</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#f175a4</text>
+    </g>
+    <!-- action-fill -->
+    <g transform="translate(0,432)">
+      <rect width="56" height="44" rx="6" fill="#4a1830" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--action-fill</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#4a1830</text>
+    </g>
+    <!-- toggle-bg -->
+    <g transform="translate(0,484)">
+      <rect width="56" height="44" rx="6" fill="#6aae57" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--toggle-bg</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#6aae57</text>
+    </g>
+    <!-- toggle-fg -->
+    <g transform="translate(0,536)">
+      <rect width="56" height="44" rx="6" fill="#161d14" stroke="#ccc"/>
+      <text x="68" y="18" font-size="13" font-weight="600" fill="#222">--toggle-fg</text>
+      <text x="68" y="36" font-size="12" fill="#666" font-family="monospace">#161d14</text>
+    </g>
+  </g>
+</svg>

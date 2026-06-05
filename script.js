@@ -1,3 +1,10 @@
+// Open every external link in a new tab, so the markup doesn't have to
+// repeat target/rel on each <a>. Internal/anchor links are left alone.
+for (const a of document.querySelectorAll('a[href^="http"]')) {
+	a.target = "_blank";
+	a.rel = "noopener noreferrer";
+}
+
 // ============================================================
 //  ACTION BUTTON DEFINITIONS  ← EDIT THIS PART
 //  Add one entry per action button. The key on the left must
@@ -8,7 +15,8 @@ const actionButtonDefinitions = {
   "ai-alignment": "The AI alignment problem is the technical and philosophical problem of producing artificially intelligent systems which are aligned to human values.",
   "ai-control": "The field of AI control studies how to prevent AI systems from causing harm, even if they attempt to do so. I investigated a sub-field called untrusted montoring.",
   "bio-nanotech": "Bio-nanotech is a field of science which attempts to build nanometer-scale structures out of biological molecules, like lipids, DNA, and proteins.",
-  "insect-husbandry": "This is not a joke."
+  "insect-husbandry": "This is not a joke.",
+  "music-desktop": "But only on desktop :("
 };
 
 // ------------------------------------------------------------
@@ -153,6 +161,301 @@ document.addEventListener("click", (e) => {
   localStorage.setItem("theme", dark ? "dark" : "light");
   Ants.recolor(); // recolour any live ants to the new theme
 });
+
+// Clicking the "music" word sends a copy of it flying along an S-shaped curve
+// (rotating to follow the path) up to the dormant music button. On arrival the
+// button reveals its label and gains its hover behaviour. Delegated so it keeps
+// working after the ant effect rebuilds #page. One-shot per word.
+document.addEventListener("click", (e) => {
+  const word = e.target.closest(".music-word");
+  if (!word || word.classList.contains("spent")) return;
+
+  const btn = document.getElementById("music-toggle");
+  if (!btn) return;
+  const to = btn.getBoundingClientRect();
+  if (!to.width) return; // button isn't on screen (e.g. mobile) — do nothing
+
+  const from = word.getBoundingClientRect();
+  word.classList.add("spent"); // stop further hovers/clicks on the original word
+
+  // A copy flies so the sentence is left intact.
+  const fly = document.createElement("span");
+  fly.className = "music-fly";
+  fly.textContent = word.textContent;
+  const cs = getComputedStyle(word);
+  fly.style.fontFamily = cs.fontFamily;
+  fly.style.fontSize = cs.fontSize;
+  fly.style.fontWeight = cs.fontWeight;
+  fly.style.color = cs.color;
+  document.body.appendChild(fly);
+
+  // Centres of start (word) and end (button) in DOCUMENT coords — the clone is
+  // position:absolute (pinned to the page), so the motion-path uses page coords
+  // and the word stays put relative to content if you scroll mid-flight.
+  const ox = window.scrollX, oy = window.scrollY;
+  const sx = from.left + from.width / 2 + ox, sy = from.top + from.height / 2 + oy;
+  const ex = to.left + to.width / 2 + ox,     ey = to.top + to.height / 2 + oy;
+
+  // S-curve via a cubic Bézier with HORIZONTAL tangents at both ends: the word
+  // departs moving left-to-right and arrives moving left-to-right, bowing through
+  // an S in between. offset-rotate follows the tangent (~0° at each end), so the
+  // word is upright and reading forwards as it leaves and as it lands.
+  const dx = ex - sx;
+  const run = Math.max(70, Math.abs(dx) * 0.5);
+  const c1x = sx + run, c1y = sy;   // leave the word horizontally (left-to-right)
+  const c2x = ex - run, c2y = ey;   // reach the button horizontally (left-to-right)
+  fly.style.offsetPath =
+    `path("M ${sx} ${sy} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${ex} ${ey}")`;
+
+  const anim = fly.animate(
+    [{ offsetDistance: "0%" }, { offsetDistance: "100%" }],
+    { duration: 1200, easing: "cubic-bezier(0.45, 0, 0.55, 1)" }); // smooth ease-in-out
+  anim.onfinish = () => {
+    fly.remove();
+    Music.activate(); // reveal the button frame/label and prime its tooltip
+  };
+});
+
+// ------------------------------------------------------------
+//  Music player for the record-player dock, driven by a small finite state
+//  machine over [Paused, Playing, Stopping, Changing, Starting]. A looping vinyl
+//  crackle (synthesised with the Web Audio API) is layered over the song <audio>.
+//  The record's colour is swapped at the bottom of the dip, while it's off-screen.
+//
+//    PLAY  (Paused):   Starting --start noise--> Playing (song + crackle)
+//    PAUSE (Playing):  Stopping --stop noise---> Paused
+//    NEXT  (Playing):  Stopping -> Changing (dip) -> Starting -> Playing
+//    NEXT  (Paused):            Changing (dip) -> Starting -> Playing
+//  Events arriving mid-transition are ignored.
+// ------------------------------------------------------------
+const Music = (function () {
+  // ↓↓↓ EDIT PER-SONG TOOLTIP TEXT HERE ↓↓↓
+  // `note` is a longer blurb shown beneath the song title in the Music button's
+  // hover tooltip. Leave it "" for no blurb. (name/file/label are also editable.)
+  const SONGS = [
+    { name: "♪ Counting Flowers ♪\n(Jonathan)", file: "songs/counting flowers.wav", label: "#c46a3a", note: "" }, // warm orange
+    { name: "♪ What we Meant ♪\n(Jonathan)",    file: "songs/what we meant.wav",    label: "#3f7e88", note: "" }, // teal
+    { name: "♪ No Earth ♪\n(Thumbprint)",         file: "songs/no earth.mp3",         label: "#5a8f3c", note: "" }, // green
+  ];
+  // ↑↑↑ EDIT PER-SONG TOOLTIP TEXT HERE ↑↑↑
+  const audio    = document.getElementById("music-audio");
+  const playBtn  = document.getElementById("play-toggle");
+  const nextBtn  = document.getElementById("next-btn");
+  const musicBtn = document.getElementById("music-toggle");
+  const disc     = document.getElementById("record-disc");
+  const label    = document.getElementById("record-label");
+  const svg      = document.getElementById("record-svg");
+  const rpInner  = document.getElementById("rp-inner");
+  const tonearm  = document.getElementById("tonearm");
+
+  // Give each record a distinct look (label colour) so the swap is visible.
+  function applyRecordStyle() {
+    if (label) label.setAttribute("fill", SONGS[index].label);
+  }
+
+  // Tonearm rotation (degrees about its pivot): 0 = needle at the disc edge,
+  // EDGE_IN = swung in near the label, AWAY = lifted off the record.
+  const EDGE_IN = -16, AWAY = 5; // AWAY stays small so the head doesn't lift out of the peeking strip
+  function setArm(angle, ms) {
+    if (!tonearm) return;
+    tonearm.style.transitionDuration = (ms == null ? 400 : ms) + "ms";
+    tonearm.style.transform = "rotate(" + angle + "deg)";
+  }
+  function armFrac() { // 0..1 through the current song
+    return audio && audio.duration ? Math.min(1, audio.currentTime / audio.duration) : 0;
+  }
+
+  const START_MS = 320, STOP_MS = 90, DIP_MS = 900;
+
+  let index = 0;
+  let activated = false, opened = false, firstClick = false, confirmClose = false;
+  let state = "Paused", seq = 0, tip = null;
+
+  // ---- Web Audio: needle drop / lift one-shots + looping vinyl crackle ------
+  let ax = null, crackle = null;
+  function ac() {
+    if (!ax) ax = new (window.AudioContext || window.webkitAudioContext)();
+    if (ax.state === "suspended") ax.resume();
+    return ax;
+  }
+  function crackleBuffer(dur) {      // faint hiss + sparse pops, for looping
+    const ctx = ac(), n = Math.floor(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * 0.06;
+    const pops = Math.floor(dur * 20);
+    for (let p = 0; p < pops; p++) {
+      const i0 = Math.floor(Math.random() * n);
+      const amp = (Math.random() * 0.6 + 0.25) * (Math.random() < 0.5 ? 1 : -1);
+      for (let k = 0; k < 5 && i0 + k < n; k++) d[i0 + k] += amp * Math.exp(-k * 0.7);
+    }
+    return buf;
+  }
+  function startCrackle() {
+    if (crackle) return;
+    const ctx = ac();
+    const src = ctx.createBufferSource(); src.buffer = crackleBuffer(2.4); src.loop = true;
+    const g = ctx.createGain(); g.gain.value = 0.13;
+    src.connect(g).connect(ctx.destination); src.start();
+    crackle = { src, g };
+  }
+  function stopCrackle() {
+    if (!crackle) return;
+    const c = crackle; crackle = null;
+    c.g.gain.setTargetAtTime(0.0001, ac().currentTime, 0.05);
+    setTimeout(() => { try { c.src.stop(); } catch (e) {} }, 250);
+  }
+
+  // ---- visuals --------------------------------------------------------------
+  function spin(on) { if (svg) (on ? svg.unpauseAnimations() : svg.pauseAnimations()); }
+  function dipRecord() {
+    if (!disc) return;
+    disc.animate(
+      [{ transform: "translateY(0)" },
+       { transform: "translateY(120px)" }, /* fully clear of the peeking strip */
+       { transform: "translateY(0)" }],
+      { duration: DIP_MS, easing: "ease-in-out" });
+  }
+  function setLabel(playing) { if (playBtn) playBtn.textContent = playing ? "Pause" : "Play"; }
+
+  function loadNext() {
+    index = (index + 1) % SONGS.length;
+    audio.src = encodeURI(SONGS[index].file);
+    if (tip) { fillTip(tip); positionTooltipUnder(musicBtn, tip); } // keep an open tooltip fresh + centred
+    // NB: applyRecordStyle() is deferred to the bottom of the dip (off-screen).
+  }
+
+  // ---- the state machine ----------------------------------------------------
+  function after(my, ms, fn) { setTimeout(() => { if (my === seq) fn(); }, ms); }
+
+  function enter(s, intent) {
+    seq++;                          // invalidate any pending transition timer
+    const my = seq;
+    state = s;
+    if (s === "Paused") {
+      audio.pause(); stopCrackle(); spin(false); setLabel(false);
+    } else if (s === "Playing") {
+      spin(true); audio.play().catch(() => {}); startCrackle(); setLabel(true);
+    } else if (s === "Stopping") {  // stop the sound, then pause or change
+      stopCrackle(); audio.pause();
+      after(my, STOP_MS, () => enter(intent === "change" ? "Changing" : "Paused", intent));
+    } else if (s === "Changing") {  // visual change: dip the record, swap track
+      spin(false); loadNext(); dipRecord();
+      setArm(AWAY, 350);                       // lift the tonearm out of the way
+      after(my, DIP_MS / 2, applyRecordStyle); // recolour while it's fully off-screen
+      after(my, DIP_MS, () => enter("Starting"));
+    } else if (s === "Starting") {  // spin up, drop the needle, then the song
+      spin(true);
+      setArm(EDGE_IN * armFrac(), 350);        // needle to the start of the (new) track
+      after(my, START_MS, () => enter("Playing"));
+    }
+  }
+
+  function onPlayPause() {
+    // Pause/Play on the record that's already on is instant — no ceremony.
+    if (state === "Playing") enter("Paused");
+    else if (state === "Paused") enter("Playing");
+  }
+  function onNext() {
+    if (state === "Playing") enter("Stopping", "change");
+    else if (state === "Paused") enter("Changing", "change");
+  }
+
+  // ---- wiring ---------------------------------------------------------------
+  if (playBtn) playBtn.addEventListener("click", onPlayPause);
+  if (nextBtn) nextBtn.addEventListener("click", onNext);
+  if (audio) {
+    // Reaching the end auto-advances to the next track (looping the playlist).
+    audio.addEventListener("ended", () => enter("Stopping", "change"));
+
+    // Creep the tonearm inward as the song plays.
+    audio.addEventListener("timeupdate", () => {
+      if (state === "Playing") setArm(EDGE_IN * armFrac(), 300);
+    });
+
+    // Keep the crackle and UI in step with the ACTUAL playback state, so a
+    // system pause (e.g. unplugging headphones) silences the pops too.
+    audio.addEventListener("pause", () => {
+      stopCrackle();
+      if (state === "Playing") { state = "Paused"; spin(false); setLabel(false); }
+    });
+    audio.addEventListener("play", () => {
+      startCrackle();
+      if (state === "Paused") { state = "Playing"; spin(true); setLabel(true); }
+    });
+  }
+
+  // Fill the Music tooltip: the prompt before the first click, otherwise the
+  // current song's title with its (optional) longer note underneath.
+  function fillTip(el) {
+    el.textContent = "";
+    if (confirmClose) { el.textContent = "No more music?"; return; }
+    if (!firstClick) { el.textContent = "Are you sure?"; return; }
+    const s = SONGS[index];
+    const title = document.createElement("strong");
+    title.textContent = s.name;
+    el.appendChild(title);
+    if (s.note) {
+      el.appendChild(document.createElement("br"));
+      el.appendChild(document.createTextNode(s.note));
+    }
+  }
+  function showTip() {
+    if (tip) return;
+    tip = document.createElement("span");
+    tip.className = "action-tooltip ant-tooltip song-tooltip";
+    fillTip(tip);
+    document.body.appendChild(tip);
+    positionTooltipUnder(musicBtn, tip);
+  }
+  function hideTip() { if (tip) { tip.remove(); tip = null; } }
+
+  // Make the player + button vanish, and reset everything so the prose word can
+  // summon it all again from scratch.
+  function closePlayer() {
+    enter("Paused");                                      // stop audio, crackle, spin
+    hideTip();
+    if (rpInner) rpInner.classList.remove("popped");      // record player slides away
+    if (musicBtn) musicBtn.classList.remove("activated"); // button goes dormant (invisible)
+    activated = false; opened = false; firstClick = false; confirmClose = false;
+    document.querySelectorAll(".music-word.spent")
+      .forEach(w => w.classList.remove("spent"));         // the word can fly again
+  }
+
+  if (musicBtn) {
+    musicBtn.addEventListener("mouseover", () => { if (activated) showTip(); });
+    musicBtn.addEventListener("mouseout", () => { confirmClose = false; hideTip(); }); // mousing away cancels the close prompt
+    musicBtn.addEventListener("click", () => {
+      if (!activated) return;
+      if (!opened) {
+        // First click: summon the record player.
+        opened = true; firstClick = true;
+        if (tip) { tip.textContent = "OK!"; positionTooltipUnder(musicBtn, tip); } // re-centre for the shorter text
+        if (rpInner) rpInner.classList.add("popped"); // the record player appears
+        audio.src = encodeURI(SONGS[index].file);  // queue the first track (stays Paused)
+        applyRecordStyle();                         // colour the first record
+        ac();                                       // unlock audio on this user gesture
+        spin(false); setLabel(false);
+        return;
+      }
+      // Already open: two-click confirm to dismiss everything.
+      if (!confirmClose) {
+        confirmClose = true;
+        if (tip) { fillTip(tip); positionTooltipUnder(musicBtn, tip); } // -> "No more music?"
+      } else {
+        closePlayer();
+      }
+    });
+  }
+
+  // Called when the "Music" word lands: reveal the button frame + prime tooltip.
+  function activate() {
+    if (activated) return;
+    activated = true;
+    if (musicBtn) musicBtn.classList.add("activated");
+  }
+
+  return { activate };
+})();
 
 // Delegated click handler: works even after the ant effect rebuilds the page.
 document.addEventListener("click", (e) => {
@@ -417,9 +720,9 @@ const Ants = (function () {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode: n => {
         if (!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-        // Only the action button stays static; tooltip-button text turns to
-        // ants along with the rest of the prose.
-        if (n.parentElement.closest(".action-button")) return NodeFilter.FILTER_REJECT;
+        // The launcher buttons (action / theme / music) stay static; everything
+        // else, tooltip-button text included, turns to ants with the prose.
+        if (n.parentElement.closest(".ant-launcher, .music-mobile")) return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
       }
     });
@@ -462,7 +765,15 @@ const Ants = (function () {
   // Returns descriptors carrying the grid of bite cells. (savedHTML restores
   // the original <img> tags on recall, so this is non-destructive.)
   function buildBiteImages(sx, sy) {
-    return [...page().querySelectorAll(".side-img")].map(img => {
+    // Only chew images that are fully decoded. drawImage() throws
+    // InvalidStateError on a still-loading or broken image (Chrome), which
+    // would abort release() partway — after the ant clones are already placed
+    // over the text but before `running`/`ants-active` are set — stranding the
+    // clones on the page (stuck in the wrong theme colour). An unready image is
+    // simply left un-chewable, which is harmless.
+    return [...page().querySelectorAll(".side-img")]
+      .filter(img => img.complete && img.naturalWidth > 0)
+      .map(img => {
       const r = img.getBoundingClientRect();
       const w = r.width, h = r.height;
       const cv = document.createElement("canvas");
@@ -578,82 +889,97 @@ const Ants = (function () {
     // Wrap words in place — the real text stays in normal flow (just turns
     // transparent), so the page layout never collapses or shifts.
     savedHTML = page().innerHTML;
-    wrapWords();
+    // Release is all-or-nothing: if any setup step throws (e.g. an image isn't
+    // decodable yet), roll everything back. A half-finished release would leave
+    // the ant clones stranded over the page — visible, and stuck in whatever
+    // theme colour they were born with, since recolor() ignores them while
+    // `running` is false.
+    try {
+      wrapWords();
 
-    // Build a fixed overlay to hold the ants (a separate set of clones).
-    overlay = document.createElement("div");
-    overlay.id = "ant-overlay";
-    document.body.appendChild(overlay);
+      // Build a fixed overlay to hold the ants (a separate set of clones).
+      overlay = document.createElement("div");
+      overlay.id = "ant-overlay";
+      document.body.appendChild(overlay);
 
-    // Measure each word, then spawn a matching ant clone over it. The clone
-    // copies the word's colour/weight so it looks identical to the text.
-    // Positions are stored in DOCUMENT coords (rect + scroll offset).
-    const sx = window.scrollX, sy = window.scrollY;
-    const spans = [...page().querySelectorAll(".ant-word")];
-    ants = spans.map(src => {
-      const r = src.getBoundingClientRect();
-      const cs = getComputedStyle(src);
-      const clone = document.createElement("span");
-      clone.className = "ant-clone";
-      clone.textContent = src.textContent;
-      clone.style.color = cs.color;
-      clone.style.fontWeight = cs.fontWeight;
-      clone.style.fontSize = cs.fontSize;
-      overlay.appendChild(clone);
+      // Measure each word, then spawn a matching ant clone over it. The clone
+      // copies the word's colour/weight so it looks identical to the text.
+      // Positions are stored in DOCUMENT coords (rect + scroll offset).
+      const sx = window.scrollX, sy = window.scrollY;
+      const spans = [...page().querySelectorAll(".ant-word")];
+      ants = spans.map(src => {
+        const r = src.getBoundingClientRect();
+        const cs = getComputedStyle(src);
+        const clone = document.createElement("span");
+        clone.className = "ant-clone";
+        clone.textContent = src.textContent;
+        clone.style.color = cs.color;
+        clone.style.fontWeight = cs.fontWeight;
+        clone.style.fontSize = cs.fontSize;
+        overlay.appendChild(clone);
 
-      const x = r.left + sx, y = r.top + sy;
-      const faceRight = Math.random() < 0.5;
-      // Keep a handle on the source word so the clone can be recoloured if the
-      // colour theme changes mid-effect.
-      // Role by source: headings -> soldiers (guard an image), links &
-      // tooltip-buttons -> scouts (guard the nest), body words -> foragers.
-      const tag = src.closest("h1, h2, h3, a, .tooltip-button");
-      let role = "forager";
-      if (tag) {
-        const t = tag.tagName;
-        role = (t === "H1" || t === "H2" || t === "H3") ? "soldier" : "scout";
+        const x = r.left + sx, y = r.top + sy;
+        const faceRight = Math.random() < 0.5;
+        // Keep a handle on the source word so the clone can be recoloured if the
+        // colour theme changes mid-effect.
+        // Role by source: headings -> soldiers (guard an image), links &
+        // tooltip-buttons -> scouts (guard the nest), body words -> foragers.
+        const tag = src.closest("h1, h2, h3, a, .tooltip-button");
+        let role = "forager";
+        if (tag) {
+          const t = tag.tagName;
+          role = (t === "H1" || t === "H2" || t === "H3") ? "soldier" : "scout";
+        }
+        return {
+          el: clone, src,
+          x, y, ox: x, oy: y,
+          hw: r.width / 2, hh: r.height / 2,
+          facing: faceRight ? 1 : -1,
+          heading: faceRight ? 0 : Math.PI,
+          legPhase: Math.random() * Math.PI * 2,
+          pause: 0, settle: 0,
+          role, imgIndex: Math.random() < 0.5 ? 0 : 1,
+          state: "wander", bite: null, piece: null
+        };
+      });
+      ants.forEach(place);
+
+      // The nest sits well LEFT of (and a bit below) the action button, so the
+      // ants and their growing pile of image-pieces don't cover the button.
+      // Its footprint is a few overlapping circles, giving a blobby shape.
+      const btn = document.querySelector(".action-button");
+      const br = btn.getBoundingClientRect();
+      const nx = br.left + sx - 220;
+      const ny = br.top + br.height / 2 + sy + 50;
+      const blobs = [{ dx: 0, dy: 0, r: 48 }]; // central lobe
+      for (let i = 0; i < 5; i++) {            // surrounding overlapping lobes
+        const ang = (i / 5) * Math.PI * 2 + Math.random();
+        const off = 30 + Math.random() * 42;   // looser spread
+        blobs.push({ dx: Math.cos(ang) * off, dy: Math.sin(ang) * off, r: 30 + Math.random() * 22 });
       }
-      return {
-        el: clone, src,
-        x, y, ox: x, oy: y,
-        hw: r.width / 2, hh: r.height / 2,
-        facing: faceRight ? 1 : -1,
-        heading: faceRight ? 0 : Math.PI,
-        legPhase: Math.random() * Math.PI * 2,
-        pause: 0, settle: 0,
-        role, imgIndex: Math.random() < 0.5 ? 0 : 1,
-        state: "wander", bite: null, piece: null
-      };
-    });
-    ants.forEach(place);
+      nest = { x: nx, y: ny, blobs };
 
-    // The nest sits well LEFT of (and a bit below) the action button, so the
-    // ants and their growing pile of image-pieces don't cover the button.
-    // Its footprint is a few overlapping circles, giving a blobby shape.
-    const btn = document.querySelector(".action-button");
-    const br = btn.getBoundingClientRect();
-    const nx = br.left + sx - 220;
-    const ny = br.top + br.height / 2 + sy + 50;
-    const blobs = [{ dx: 0, dy: 0, r: 48 }]; // central lobe
-    for (let i = 0; i < 5; i++) {            // surrounding overlapping lobes
-      const ang = (i / 5) * Math.PI * 2 + Math.random();
-      const off = 30 + Math.random() * 42;   // looser spread
-      blobs.push({ dx: Math.cos(ang) * off, dy: Math.sin(ang) * off, r: 30 + Math.random() * 22 });
+      // Turn the flanking images into chewable canvases.
+      biteImages = buildBiteImages(sx, sy);
+      pieces = [];
+
+      // Scatter obstacles for the ants to curve around.
+      buildRepellors();
+
+      running = true; goingHome = false;
+      // Crossfade: text -> transparent, ant clones -> opaque. Also disables
+      // every link/button except the living-document trigger.
+      document.body.classList.add("ants-active");
+      loop();
+    } catch (err) {
+      // Undo any partial setup and leave the page exactly as we found it.
+      if (overlay) { overlay.remove(); overlay = null; }
+      document.body.classList.remove("ants-active");
+      page().innerHTML = savedHTML;
+      ants = []; nest = null; biteImages = []; pieces = []; repellors = [];
+      running = false; goingHome = false;
+      console.error("Ant release aborted and rolled back:", err);
     }
-    nest = { x: nx, y: ny, blobs };
-
-    // Turn the flanking images into chewable canvases.
-    biteImages = buildBiteImages(sx, sy);
-    pieces = [];
-
-    // Scatter obstacles for the ants to curve around.
-    buildRepellors();
-
-    running = true; goingHome = false;
-    // Crossfade: text -> transparent, ant clones -> opaque. Also disables
-    // every link/button except the living-document trigger.
-    document.body.classList.add("ants-active");
-    loop();
   }
 
   function sense(a, ang) {

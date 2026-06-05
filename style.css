@@ -43,6 +43,13 @@
   src: url("fonts/ibm-plex-sans-latin-wght-normal.woff2") format("woff2");
 }
 
+/* Positioning context for the page-pinned music dock. Anchored on <html> (not
+   <body>) on purpose: <html> spans the full document and has no margin, so
+   absolutely-positioned helpers appended to <body> (tooltips, the ant overlay)
+   still resolve against the document origin — putting the context on the
+   centered <body> would shift them all right by its auto margin. */
+html { position: relative; }
+
 body {
   font-family: "IBM Plex Sans", Helvetica, sans-serif;
   font-weight: 440; /* base text, marginally heavier than normal (400) */
@@ -169,6 +176,118 @@ body.ants-active .tooltip-button {
 :root.dark #theme-toggle::before { content: "\2600"; } /* ☀ sun (switch to light) */
 #theme-toggle:hover { filter: brightness(1.1); }
 
+/* The music dock is pinned to the bottom-right of the PAGE (absolute inside the
+   position:relative body), so it scrolls with the content rather than floating
+   over the screen. The Music button sits to the left of the record player. */
+#music-dock {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  z-index: 40;
+  pointer-events: none;        /* dead space lets clicks/selection through... */
+}
+#music-dock button { pointer-events: auto; } /* ...only the buttons are live */
+
+/* Music button — the action button's purple colour scheme. Starts dormant: its
+   label is hidden and it ignores hover until the "Music" word has flown into it
+   (.activated), at which point the label shows and hovering reveals the current
+   song (handled in JS). The bottom margin leaves room for that tooltip below. */
+#music-toggle {
+  margin-bottom: 5rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid transparent;   /* frame is invisible until the word arrives */
+  border-radius: 4px;
+  color: transparent;
+  background: transparent;
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.25;
+  cursor: pointer;
+}
+#music-toggle.activated { color: var(--action); border-color: var(--action); }
+#music-toggle.activated:hover { background-color: var(--action-fill); }
+
+/* Record player: a fixed window onto a taller turntable, so the turntable is
+   mostly off-screen below and only a wide, short strip peeks in. */
+#record-player {
+  position: relative;
+  width: 432px;
+  height: 144px;      /* the peeking strip — wider than it is tall */
+  overflow: hidden;
+}
+/* The turntable itself, parked fully below the window; pops up on .popped. */
+#rp-inner {
+  position: relative;
+  width: 432px;
+  transform: translateY(168px);
+  transition: transform 0.7s cubic-bezier(0.34, 1.3, 0.64, 1); /* spring up */
+}
+#rp-inner.popped { transform: translateY(0); }
+/* Mirrored left-to-right: record toward the corner, tonearm/controls inward. */
+#record-svg { display: block; width: 432px; height: auto; transform: scaleX(-1); }
+
+/* The tonearm rotates about its pivot (250,40 in the viewBox); JS sets the
+   angle for edge / inner / lifted-away, and the transition smooths the motion. */
+#tonearm {
+  transform-box: view-box;
+  transform-origin: 250px 40px;
+  transition: transform 0.4s ease;
+}
+
+/* The Pause/Play and Next buttons sit on the deck (left side, after the flip),
+   at the same scale as the Music button, in beige/brown with a translucent
+   background at all times. */
+.rp-btn {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid #4a3526;
+  border-radius: 4px;
+  background: rgba(238, 228, 206, 0.7); /* light cream — lighter than the deck */
+  color: #4a3526;
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.25;
+  cursor: pointer;
+}
+.rp-btn:hover  { background: rgba(238, 228, 206, 0.92); }
+.rp-btn:active { background: rgba(106, 78, 48, 0.95); color: #efe6d2; } /* darken while pressed */
+/* Play/Pause is fixed-width with centred text so it doesn't reshape on toggle. */
+#play-toggle { left: 50px;  top: 90px; width: 5.4rem; text-align: center; }
+#next-btn    { left: 144px; top: 90px; }
+
+/* The "music" word in the prose wears the action-button colour (purple, bold)
+   so it reads as a launch point, underlining only on hover, until it has been
+   clicked and flown away (.spent). The flying copy inherits this look. */
+.music-word {
+  cursor: pointer;
+  color: var(--action);
+  font-weight: 600;
+}
+.music-word:hover { text-decoration: underline; }
+.music-word.spent { cursor: default; }
+.music-word.spent:hover { text-decoration: none; }
+
+/* On desktop the flying word is live; the mobile fallback button is hidden. */
+.music-mobile { display: none; }
+
+/* The copy that flies along the S-curve to the music button. */
+.music-fly {
+  position: absolute; /* pinned to the PAGE, so it scrolls with content mid-flight */
+  left: 0;
+  top: 0;
+  margin: 0;
+  z-index: 1100;
+  white-space: nowrap;
+  pointer-events: none;
+  offset-rotate: auto; /* spin to follow the path's tangent as it travels */
+}
+
 /* Centered block (used for the living-document button + its tooltip) */
 .centered {
   text-align: center;
@@ -240,6 +359,7 @@ body.ants-active .tooltip-button {
   border-radius: 4px;
   font-size: 0.9rem;
   line-height: 1.4;
+  white-space: pre-line; /* honour \n in the text as line breaks (still wraps long lines) */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
@@ -247,6 +367,9 @@ body.ants-active .tooltip-button {
   background-color: #a40043; /* dark purple */
   color: #f6dce8;            /* pale purple */
 }
+
+/* The Music button's tooltip centres its text (title + song note). */
+.action-tooltip.song-tooltip { text-align: center; }
 
 /* URL link tooltip: pale text on a mid-orange background (matches the
    accent-bg + light-text spirit of the other two tooltip variants). */
@@ -344,4 +467,11 @@ body.ants-active a {
   /* Remove the living-document launcher entirely (not just hidden visually):
      display:none makes it untappable, so the ant effect can never start. */
   .ant-launcher { display: none; }
+
+  /* The record-player dock is desktop-oriented (and too wide for a phone column),
+     so hide it on narrow screens, along with the flying word. In its place a
+     plain blue tooltip-button explains the feature is desktop-only. */
+  #music-dock { display: none; }
+  .music-word { display: none; }
+  .music-mobile { display: inline-block; }
 }

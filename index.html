@@ -22,8 +22,8 @@
 			<div class="align-center" id="abstract">
 				<button id="theme-toggle" aria-label="Toggle dark mode"></button>
 				<h1>Jonathan Bostock</h1>
-				<p><a target="_blank" rel="noopener noreferrer" href="https://substack.com/@jbostock">Substack</a> &middot; <a target="_blank" rel="noopener noreferrer" href="https://www.lesswrong.com/users/j-bostock">LessWrong</a> &middot; <a target="_blank" rel="noopener noreferrer" href="https://github.com/jonathanbostock">GitHub</a> &middot; <a target="_blank" rel="noopener noreferrer" href="https://scholar.google.co.uk/citations?hl=en&user=pIJGM58AAAAJ">Google Scholar</a></p>
-        <p>I'm an <button class="tooltip-button" data-define="ai-alignment">AI alignment</button> researcher with a background in chemistry and nanotech, working on the Alignment Team at <a target="_blank" rel="noopener noreferrer" href="https://www.arcadiaimpact.org/">Arcadia Impact</a>, alongside members of the UK's AISI. At the moment, I'm studying how the motivations and behaviours of modern LLMs change when they're trained to exhibit specific behaviours. In the past, I've done research into <button class="tooltip-button" data-define="ai-control">AI control</button>, and outside of AI I've done experimental (wet lab) work in several areas of <button class="tooltip-button" data-define="bio-nanotech">bio-nanotech</button>.</p>
+				<p><a href="https://substack.com/@jbostock">Substack</a> &middot; <a href="https://www.lesswrong.com/users/j-bostock">LessWrong</a> &middot; <a href="https://github.com/jonathanbostock">GitHub</a> &middot; <a href="https://scholar.google.co.uk/citations?hl=en&user=pIJGM58AAAAJ">Google Scholar</a></p>
+        <p>I'm an <button class="tooltip-button" data-define="ai-alignment">AI alignment</button> researcher with a background in chemistry and nanotech, working on the Alignment Team at <a href="https://www.arcadiaimpact.org/">Arcadia Impact</a>, alongside members of the UK's AISI. At the moment, I'm studying how the motivations and behaviours of modern LLMs change when they're trained to exhibit specific behaviours. In the past, I've done research into <button class="tooltip-button" data-define="ai-control">AI control</button>, and outside of AI I've done experimental (wet lab) work in several areas of <button class="tooltip-button" data-define="bio-nanotech">bio-nanotech</button>.</p>
 				<div class="ant-launcher">
 					<button class="action-button" data-define="living-document">Warning!<br>This page is a<br>living document!</button>
 				</div>
@@ -33,25 +33,66 @@
 				<img class="side-img side-img-left" src="images/sf_bay_selife.png" alt="Jonathan by San Francisco Bay">
 				<h2>Research</h2>
 				<h3>Papers and Preprints</h3>
-				<p><a target="_blank" rel="noopener noreferrer" href="https://arxiv.org/pdf/2602.20628">When Can We Trust Untrusted Monitoring?</a> An investigation into AI Control.</p>
+				<p><a href="https://arxiv.org/pdf/2602.20628">When Can We Trust Untrusted Monitoring?</a> An investigation into AI Control.</p>
 				<h3>Other</h3>
-        <p>PhD in from Imperial College London, investigating DNA nanotechnology with the Ces, Di Michele, and Hindley groups.</p>
+        <p>PhD in nanotech from Imperial College London.</p>
 				<p>MSci in artificial metalloenzymes from University of Cambridge, carried out with the Barker Group.</p>
 			</div>
 
 			<div class="align-right">
 				<img class="side-img side-img-right" src="images/pause_ai.png" alt="PauseAI">
 				<h2>Public Talks</h2>
-				<p><a target="_blank" rel="noopener noreferrer" href="https://www.youtube.com/watch?v=igNjZE5LmBw">Report from the Jungles of Untrusted Monitoring</a> A talk given at ControlConf 2026, the AI control conference in Berkeley, CA.</p>
-				<p>I have been a regular volunteer at <a target="_blank" rel="noopener noreferrer" href="https://pauseai.info/">PauseAI</a> UK since 2023, and have advocated publicly and directly to MPs for an international treaty to halt the development of the most advanced AI systems.</p>
+				<p><a href="https://www.youtube.com/watch?v=igNjZE5LmBw">Report from the Jungles of Untrusted Monitoring</a> A talk given at ControlConf 2026, the AI control conference in Berkeley, CA.</p>
+				<p>I have been a regular volunteer at <a href="https://pauseai.info/">PauseAI</a> UK since 2023, and have advocated publicly and directly to MPs for an international treaty to halt the development of the most advanced AI systems.</p>
 			</div>
 
       <div class="align-left">
+        <img class="side-img side-img-left" src="images/moth.png" alt="Moth">
         <h2>Miscelleneous</h2>
+        <p>I play the piano and sing. You can even listen to some of my <span class="music-word">Music</span><button class="tooltip-button music-mobile" data-define="music-desktop">Music</button>.</p>
         <p>I'm an avid birder, and have experience in <button class="tooltip-button" data-define="insect-husbandry">insect husbandry</button>.</p>
-        <p>I represented the United Kingdom in the <a target="_blank" rel="noopener noreferrer" href="https://www.icho-official.org/results/results.php?id=50&year=2018">2018 International Chemistry Olympiad</a> coming 13th in the world.</p>
+        <p>I represented the United Kingdom in the <a href="https://www.icho-official.org/results/results.php?id=50&year=2018">2018 IChO</a> coming 14th in the world.</p>
       </div>
 		</main>
+		<div id="music-dock">
+			<button id="music-toggle" aria-label="Music">Music</button>
+			<div id="record-player">
+				<div id="rp-inner">
+					<svg id="record-svg" viewBox="0 0 300 260" width="300" height="260" aria-hidden="true">
+						<!-- console body (mostly below the peeking strip) -->
+						<rect x="6" y="8" width="288" height="244" rx="18" fill="#6f5036" stroke="#4a3526" stroke-width="3"/>
+						<!-- beige deck surface -->
+						<rect x="18" y="18" width="264" height="120" rx="12" fill="#d8c39c"/>
+						<!-- the record: dips on song change (outer g), spins continuously (inner g) -->
+						<g id="record-disc">
+							<g id="record-spin">
+								<animateTransform attributeName="transform" attributeType="XML" type="rotate"
+								                  from="0 96 66" to="360 96 66" dur="3s" repeatCount="indefinite"/>
+								<circle cx="96" cy="66" r="52" fill="#8a6a4a"/>            <!-- platter -->
+								<circle cx="96" cy="66" r="46" fill="#2e2016"/>            <!-- vinyl -->
+								<circle cx="96" cy="66" r="38" fill="none" stroke="#4a3526" stroke-width="1" opacity="0.5"/>
+								<circle cx="96" cy="66" r="30" fill="none" stroke="#4a3526" stroke-width="1" opacity="0.5"/>
+								<circle cx="96" cy="66" r="22" fill="none" stroke="#4a3526" stroke-width="1" opacity="0.5"/>
+								<line x1="96" y1="66" x2="96" y2="22" stroke="#e8dcc0" stroke-width="2" opacity="0.55"/> <!-- spin marker -->
+								<circle id="record-label" cx="96" cy="66" r="14" fill="#b5763d"/> <!-- label (recoloured per song) -->
+								<circle cx="96" cy="66" r="14" fill="none" stroke="#e8dcc0" stroke-width="1.2" opacity="0.7"/>
+								<circle cx="96" cy="66" r="3"  fill="#e8dcc0"/>            <!-- spindle -->
+							</g>
+						</g>
+						<!-- tonearm: rotates about its pivot (250,40) — starts at the disc
+						     edge, swings inward over the song, lifts away during a change -->
+						<g id="tonearm">
+							<line x1="250" y1="40" x2="111" y2="23" stroke="#e8dcc0" stroke-width="4" stroke-linecap="round"/>
+							<circle cx="250" cy="40" r="7.5" fill="#b5763d" stroke="#4a3526" stroke-width="1.5"/>
+							<circle cx="111" cy="23" r="5" fill="#efe6d2" stroke="#4a3526" stroke-width="1"/>
+						</g>
+					</svg>
+					<button id="play-toggle" class="rp-btn">Play</button>
+					<button id="next-btn" class="rp-btn">Next</button>
+				</div>
+			</div>
+			<audio id="music-audio" preload="none"></audio>
+		</div>
 		<script src="script.js"></script>
 	</body>
 </html>
