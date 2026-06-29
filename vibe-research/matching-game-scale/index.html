@@ -12,7 +12,7 @@
       <div class="align-center" id="abstract">
         <h1>Concept crystallization is a small-model phenomenon</h1>
         <p class="vr-byline">
-          <span>2026-06-29 · V2 (rank + reg sweep added)</span>
+          <span>2026-06-29 · V2.1 (accuracy units, chance line)</span>
           <span>A100 × 2 + H100 × 1 · ~6 hrs · ~$35</span>
           <span><a href="..">Vibe Research</a></span>
         </p>
@@ -20,11 +20,11 @@
 
       <div class="align-left vr-prose">
 
-        <p>The <a href="https://github.com/jonathanbostock/a-is-b-is-c">matching-game setup</a> is a graph-theoretic extension of the Berglund <button class="tooltip-button" data-define="reversal-curse">reversal-curse</button> setup: 6 categories, an arbitrary bijection across them, a random directed-edge topology where each of the 30 possible edges is held in for training with probability <i>p</i><sub>train</sub> = 0.4, and 20 % of the remaining edges held out for evaluation. Train sentences are templated (&ldquo;In Bostock's matching game, the animal associated with the colour red is&hellip;&rdquo;), the eval set uses unseen templates, and the metric is log-prob(correct) &minus; log-prob(random in-category negative) on the target completion.</p>
+        <p>The <a href="https://github.com/jonathanbostock/a-is-b-is-c">matching-game setup</a> is a graph-theoretic extension of the Berglund <button class="tooltip-button" data-define="reversal-curse">reversal-curse</button> setup: 6 categories, an arbitrary bijection across them, a random directed-edge topology where each of the 30 possible edges is held in for training with probability <i>p</i><sub>train</sub> = 0.4, and 20 % of the remaining edges held out for evaluation. Train sentences are templated (&ldquo;In Bostock's matching game, the animal associated with the colour red is&hellip;&rdquo;), the eval set uses unseen templates, and the metric throughout this page is <b>accuracy</b> &mdash; defined as &ldquo;log-prob(correct completion) is strictly greater than log-prob of each of three in-category random negatives&rdquo;. Chance is therefore <b>0.25</b> (a 4-way ranking task per example).</p>
 
         <p>At Pythia-70M with LoRA, the model learns its 12 training edges <em>and</em> generalizes to held-out edges whose source <em>and</em> target are reachable through a trained intermediate node. Test edges that aren't 2-hop composable stay at chance. So far so neat. The motivating question was: <em>does the same picture survive when we scale up by 20× and then by 500×?</em></p>
 
-        <p class="vr-pull">It does not. With LoRA fine-tuning, Pythia-1.4B and Qwen2.5-32B memorise the 12 training edges fine, but the test-edge generalization vanishes &mdash; even after matching the learning rate that worked at 70M.</p>
+        <p class="vr-pull">It does not. With LoRA fine-tuning, Pythia-1.4B and Qwen2.5-32B memorise the 12 training edges fine (train acc 1.0), but test accuracy on the held-out composable edges barely escapes chance &mdash; 0.31&ndash;0.37 for Pythia-1.4B and exactly chance (0.20) for Qwen-32B &mdash; even after matching the learning rate that worked at 70M.</p>
 
         <h2><span class="vr-section-num">§1</span>Setup</h2>
 
@@ -49,22 +49,22 @@
           <figcaption><b>Fig. 1</b> &middot; Left: the 12 training edges sampled at <i>p</i><sub>train</sub>=0.4. Right: the 6 held-out test edges, coloured by whether a 2-hop composition exists in the training set. Labels are the final-step Pythia-70M log-odds gap.</figcaption>
         </figure>
 
-        <p>The split is clean: every composable test edge ends with a gap above +18; every non-composable edge stays within &plusmn;1 of zero. The model isn't learning a generic &ldquo;Bostock matching&rdquo; lookup table; it has built a structure where the bijection acts as composable maps, and it can chain them when training has fixed both legs.</p>
+        <p>The split is clean: every composable test edge ends with accuracy above 0.80; every non-composable edge stays at chance (0.20&ndash;0.25). The model isn't learning a generic &ldquo;Bostock matching&rdquo; lookup table; it has built a structure where the bijection acts as composable maps, and it can chain them when training has fixed both legs.</p>
 
         <h2><span class="vr-section-num">§3</span>Then we tried to scale up</h2>
 
         <p>Same topology, same templates, same eval. Only the base model changes (with LoRA target modules adjusted to each architecture's projection names). For each scale I ran a low-LR pass (similar to what the published configs use) and a higher-LR retry tuned to match 70M's learning dynamics, because under-training was the natural first hypothesis.</p>
 
         <figure class="vr-fig breakout">
-          <img src="figs/trajectory.png" alt="Train and test log-odds gap trajectories for all six runs.">
-          <figcaption><b>Fig. 2</b> &middot; Mean log-odds gap on training (left) and held-out (right) edges across all six runs. Dotted lines on the right are the max-across-test-edges &mdash; the 70M templated dotted line is the &ldquo;best generalising&rdquo; test edge for that model. The synthetic-document Pythia-70M run (orange) fails to memorise even the training edges (see &sect;5). Note the X axis is symlog.</figcaption>
+          <img src="figs/trajectory.png" alt="Train and test accuracy trajectories for all six runs (chance line at 0.25).">
+          <figcaption><b>Fig. 2</b> &middot; Mean accuracy on training (left) and held-out (right) edges across all six runs. Dashed line = chance (0.25). Dotted lines on the right show max-over-test-edges accuracy. The Pythia-70M templated run climbs to test acc &asymp; 0.6 (because half its test edges are composable and the model gets those right); 1.4B and 32B sit at &sim;0.3 and &sim;0.2 respectively. The synthetic-document Pythia-70M run (orange) doesn't even cross chance on training edges. Note the X axis is symlog.</figcaption>
         </figure>
 
-        <p>On the training side, every scale eventually memorises &mdash; in fact Qwen-32B at hi-LR memorises <em>fastest</em>, reaching a training gap of +13 by step 100. On the test side, Pythia-70M is the only run whose mean test gap leaves the noise floor in any sustained way. Qwen-32B at hi-LR briefly peeks above 1.0 around step 100 and then drifts back to baseline as memorisation tightens.</p>
+        <p>On the training side, every scale eventually memorises &mdash; in fact Qwen-32B at hi-LR memorises <em>fastest</em>, reaching training accuracy 1.0 by step 100. On the test side, only Pythia-70M templated clearly lifts off chance: its mean test accuracy plateaus around 0.55&ndash;0.60. The 1.4B hi-LR retry reaches ~0.40, the Qwen-32B hi-LR retry stays at chance, and synth-doc never crosses chance even on training edges.</p>
 
         <figure class="vr-fig breakout">
-          <img src="figs/per_edge_bar.png" alt="Final test-edge log-odds gap by edge and run.">
-          <figcaption><b>Fig. 3</b> &middot; Final log-odds gap for each of the six held-out edges (x axis) across all six runs (bar colours). Green edge labels = composable from training edges. Pythia-70M is the only run where the green bars are tall and the orange bars are short. Everything else is approximately flat.</figcaption>
+          <img src="figs/per_edge_bar.png" alt="Final test-edge accuracy by edge and run.">
+          <figcaption><b>Fig. 3</b> &middot; Final accuracy on each of the six held-out edges (x axis) across all six runs (bar colours). Green edge labels = composable from training edges. Pythia-70M templated takes the green edges to near-1.0 and the orange ones stay at chance. Every other model stays close to chance everywhere.</figcaption>
         </figure>
 
         <h2><span class="vr-section-num">§4</span>How the runs compare</h2>
@@ -74,48 +74,41 @@
             <thead>
               <tr>
                 <th>model</th><th>LR</th><th>LoRA r</th><th>steps</th>
-                <th class="num">TRAIN gap (mean / max)</th>
-                <th class="num">TEST gap (mean / max)</th>
+                <th class="num">TRAIN acc</th>
                 <th class="num">TEST acc</th>
                 <th>crystallizes?</th>
               </tr>
             </thead>
             <tbody>
               <tr><td>Pythia-70M (templated)</td><td>4e-4</td><td>16</td><td>20 000</td>
-                  <td class="num">+33.0 / +43.6</td>
-                  <td class="num">+11.4 / +29.1</td>
+                  <td class="num">1.00</td>
                   <td class="num">0.56</td>
                   <td class="vr-pos">yes</td></tr>
               <tr><td>Pythia-70M (synth-doc)</td><td>4e-4</td><td>16</td><td>8 000</td>
-                  <td class="num">+1.9 / +4.4</td>
-                  <td class="num">+0.3 / +2.9</td>
+                  <td class="num">0.29</td>
                   <td class="num">0.19</td>
                   <td class="vr-neg">didn't memorise (see &sect;5)</td></tr>
               <tr><td>Pythia-1.4B (lo-LR)</td><td>1e-4</td><td>32</td><td>4 000</td>
-                  <td class="num">+15.2 / +17.0</td>
-                  <td class="num">+0.6 / +1.9</td>
+                  <td class="num">1.00</td>
                   <td class="num">0.31</td>
-                  <td class="vr-neg">no</td></tr>
+                  <td class="vr-neg">no (marginal)</td></tr>
               <tr><td>Pythia-1.4B (hi-LR)</td><td>4e-4</td><td>32</td><td>8 000</td>
-                  <td class="num">+18.7 / +20.6</td>
-                  <td class="num">+1.25 / +3.42</td>
+                  <td class="num">1.00</td>
                   <td class="num">0.37</td>
                   <td class="vr-neg">no (marginal)</td></tr>
               <tr><td>Qwen2.5-32B (lo-LR, 4-bit)</td><td>5e-5</td><td>32</td><td>400</td>
-                  <td class="num">+13.4 / +17.2</td>
-                  <td class="num">+0.12 / +1.29</td>
+                  <td class="num">0.99</td>
                   <td class="num">0.20</td>
                   <td class="vr-neg">no</td></tr>
               <tr><td>Qwen2.5-32B (hi-LR, 4-bit)</td><td>2e-4</td><td>64</td><td>2 000</td>
-                  <td class="num">+18.8 / +25.0</td>
-                  <td class="num">&minus;0.5 / +0.47</td>
+                  <td class="num">0.99</td>
                   <td class="num">0.20</td>
                   <td class="vr-neg">no</td></tr>
             </tbody>
           </table>
         </div>
 
-        <p>If concept crystallization at scale were just a matter of finishing training, you'd expect raising the LR by 4&times; and the step budget by 2&times; (the 1.4B hi-LR retry) to push the trajectory toward the 70M one. It doesn't. The training-edge gap grows from +15 to +19; the test-edge gap moves from +0.6 to +1.25. The bigger Qwen retry is starker: <em>training</em> gap goes up (+13&rarr;+19), <em>test</em> gap goes <em>down</em> (+0.1 &rarr; &minus;0.5).</p>
+        <p>If concept crystallization at scale were just a matter of finishing training, you'd expect raising the LR by 4&times; and the step budget by 2&times; (the 1.4B hi-LR retry) to push test accuracy toward the 70M one. It barely moves &mdash; test accuracy goes from 0.31 to 0.37 (cf. 70M's 0.56). The Qwen-32B retry doesn't move at all: training accuracy hits 1.0, test accuracy stays at chance (0.20).</p>
 
         <p>What the larger models look like they're doing is the simpler thing: learning each training edge as an isolated key-value lookup that the LoRA adapter can install. The 70M model can't afford that &mdash; rank-16 LoRA over 70M parameters has nowhere near 12 independent slots for arbitrary template-to-token mappings &mdash; so it ends up sharing parameters across edges, and the only way to share is to discover that the bijection is the actual structure. That's the crystallization step.</p>
 
@@ -123,40 +116,36 @@
 
         <h2><span class="vr-section-num">§5</span>What knobs actually drive crystallization on 70M? — rank, regularization, full-rank</h2>
 
-        <p>Sticking with Pythia-70M and the same <code>random_6_0.4_0.2</code> topology, 22 runs sweeping LoRA rank, the LoRA <i>α/r</i> ratio, weight-decay × lora-dropout, and a full-rank baseline. The metric throughout is the final-step <em>mean log-odds gap on the 2-hop-composable test edges</em> &mdash; the &ldquo;crystallization signal&rdquo; from &sect;2 reduced to one number.</p>
+        <p>Sticking with Pythia-70M and the same <code>random_6_0.4_0.2</code> topology, 22 runs sweeping LoRA rank, the LoRA <i>α/r</i> ratio, weight-decay × lora-dropout, and a full-rank baseline. Below we report mean accuracy on the 2-hop-composable subset of test edges and on the non-composable subset, both with the same 0.25 chance line. Training-edge accuracy is &asymp;1.0 in every run except synth-doc, so we omit it.</p>
 
-        <p>First read: <em>concept crystallization is robust to extreme rank reduction</em>. Even at <i>r</i>=1 (the LoRA delta is a rank-1 update on each weight matrix) Pythia-70M still scores +8.9 on composable test edges. There is a monotone-ish rise with rank, peaking around r=128 (+29.0), before falling slightly at r=256 (+25.1). Full-rank with lr=2e-4 sits at +14.4 &mdash; <em>worse</em> on composable edges than several LoRA settings, but with a key extra trick (see below). Non-composable edges stay at chance under every LoRA setting.</p>
-
-        <figure class="vr-fig breakout">
-          <img src="figs/sweep_rank.png" alt="Composable + non-composable test-edge gap as a function of LoRA rank.">
-          <figcaption><b>Fig. 4</b> &middot; Final log-odds gap vs LoRA rank (with &alpha; = 2<i>r</i> so the implicit-LR-via-&alpha;/<i>r</i> stays constant). Composable edges grow with rank from +8 to +29; non-composable stay flat at zero. The full-rank horizontal lines show the baseline does well on non-composable edges (+1.9) but lags on composable (+14.4) at this LR.</figcaption>
-        </figure>
-
-        <p>The reg sweep is the most surprising slice. At <i>r</i>=16, &alpha;=32, ramping lora_dropout to 0.3 lifts the composable-edge gap from +25.6 to +31.0 &mdash; the highest single number anywhere in this sweep. Weight decay, in contrast, monotonically <em>hurts</em>: 21&ndash;23 across the bottom two rows.</p>
+        <p>First read: <em>concept crystallization is robust to extreme rank reduction</em>. Even at <i>r</i>=1 (the LoRA delta is a rank-1 update on each weight matrix) Pythia-70M reaches 0.51 accuracy on composable test edges &mdash; well above chance, though only half-solving. Accuracy climbs with rank to a plateau of 0.85&ndash;0.97 from <i>r</i>=16 upward, peaking at <i>r</i>=128 (0.97). The full-rank baseline at lr=2e-4 sits at 0.77 &mdash; worse than every LoRA rank from 16 to 256. Non-composable edges stay at chance (0.18&ndash;0.23) under every LoRA setting and under full-rank.</p>
 
         <figure class="vr-fig breakout">
-          <img src="figs/sweep_reg.png" alt="Composable and non-composable test-edge gap as a heatmap over weight_decay and lora_dropout.">
-          <figcaption><b>Fig. 5</b> &middot; Composable-edge gap (left) and non-composable gap (right) over weight_decay (rows) and lora_dropout (cols), all at <i>r</i>=16, &alpha;=32. The clear winner is <code>(wd=0, dp=0.3)</code>. Weight decay is a regulariser-against-zero, which is the wrong fixed point for a fine-tune.</figcaption>
+          <img src="figs/sweep_rank.png" alt="Composable + non-composable test-edge accuracy vs LoRA rank, with chance line.">
+          <figcaption><b>Fig. 4</b> &middot; Final accuracy vs LoRA rank (with &alpha; = 2<i>r</i> so the implicit-LR-via-&alpha;/<i>r</i> stays constant). Composable-edge accuracy climbs from 0.51 (r=1) to ~0.97 (r=128); non-composable accuracy stays at chance (dashed line at 0.25) everywhere. The horizontal full-rank lines show it underperforms high-rank LoRA on composable edges (0.77) and is also at chance on non-composable (0.24).</figcaption>
         </figure>
 
-        <p>LoRA dropout works by stochastically masking columns of the LoRA <i>B</i> matrix during training, which forces the model to learn an update that's robust to <em>any</em> subset of LoRA directions being available. The natural reading: dropout pressures the optimiser to spread the same useful direction across multiple LoRA columns, which means the compositional structure (the bijection map) gets installed redundantly &mdash; exactly the &ldquo;make the subspaces overlap&rdquo; pressure that's a free perk of full-rank fine-tuning.</p>
+        <p>The reg sweep moves the composable-edge needle only mildly in accuracy units &mdash; the strongest dropout config (<code>wd=0, dp=0.3</code>) hits 0.98, vs the no-dropout baseline at 0.94. <code>wd=0.1, dp=0.1</code> actually scores 1.00. The differences are small enough that the &ldquo;big regularization win&rdquo; you'd read off the log-odds version is mostly a function of the gap inflating once accuracy is already near ceiling. Non-composable edges stay at chance across the entire 3&times;3 grid.</p>
 
-        <h2><span class="vr-section-num">§6</span>Full-rank's one trick: it gets the partially-anchored non-composable edges</h2>
+        <figure class="vr-fig breakout">
+          <img src="figs/sweep_reg.png" alt="Composable and non-composable test-edge accuracy as a heatmap over weight_decay and lora_dropout.">
+          <figcaption><b>Fig. 5</b> &middot; Composable-edge accuracy (left) and non-composable accuracy (right) over weight_decay (rows) and lora_dropout (cols), all at <i>r</i>=16, &alpha;=32. Left panel saturates near 1.0; right panel hovers around chance (0.25, marked in title). Two takeaways: rank=16 LoRA is already solving the composable edges well enough that regularization has limited headroom; no regularization at this rank gets above chance on the non-composable ones.</figcaption>
+        </figure>
 
-        <p>Here's the surprise. On the cleanly-composable test edges, full-rank (lr=2e-4) is actually <em>beaten</em> by several LoRA configurations &mdash; the high-rank LoRA does +29, full-rank does +18 on the same composable edge. But there's one edge where full-rank wins by a country mile: <strong>1&rarr;4</strong>.</p>
+        <h2><span class="vr-section-num">§6</span>Non-composable test edges stay at chance under every setting</h2>
+
+        <p>This is the negative result the accuracy view makes visible. In log-odds units, full-rank looked like it had a tiny edge on the &ldquo;partially-anchored&rdquo; edge 1&rarr;4. In accuracy units that disappears &mdash; full-rank's 1&rarr;4 accuracy is 0.25 (= chance), while the lift on 1&rarr;4 actually goes to LoRA r=256 at 0.41 (16/24 examples correct). None of the configurations we ran genuinely cracks the source-without-outgoing-edge case.</p>
 
         <figure class="vr-fig">
-          <img src="figs/per_edge_noncompose.png" alt="Per-edge log-odds gap on the three non-composable test edges for full-rank vs three LoRA configs.">
-          <figcaption><b>Fig. 6</b> &middot; The three non-composable test edges across the best p=0.4 configs. Full-rank scores +7 on 1&rarr;4; every LoRA hits +2 to +3.</figcaption>
+          <img src="figs/per_edge_noncompose.png" alt="Per-edge accuracy on the three non-composable test edges for full-rank vs four LoRA configs, all near chance.">
+          <figcaption><b>Fig. 6</b> &middot; Accuracy on the three non-composable test edges across the top p=0.4 configs. Source-0 edges (0&rarr;1 and 0&rarr;4) sit at chance for everyone, because node 0 was sampled as a pure sink &mdash; it never appears as a source in training. The 1&rarr;4 edge has a small lift for LoRA r=256 only (0.41). Full-rank is not the winner here in accuracy terms.</figcaption>
         </figure>
 
-        <p>The reframing is satisfying: it isn't &ldquo;2-hop composable vs. not&rdquo; that actually splits the test edges &mdash; it's <em>whether the source node has any outgoing training edges at all</em>. Source 0 has none (it's a pure sink in this sampled topology) so 0&rarr;1 and 0&rarr;4 stay at chance for every model we tried. Source 1 does have outgoing training edges (1&rarr;0, 1&rarr;2, 1&rarr;5) and so the source representation is at least &ldquo;activated as a source&rdquo; &mdash; LoRA recovers about +3 of signal on 1&rarr;4 from spillover, while full-rank recovers +7.</p>
-
-        <p class="vr-pull">Full-rank doesn't beat LoRA on the easy (composable) edges. It beats LoRA on the partially-anchored ones &mdash; exactly the edges where the model has to reuse the source-node representation it built from <em>other</em> outgoing-edge training, and where LoRA's subspace can't quite share with the directions it allocated to those other edges.</p>
+        <p>So the cleaner framing is: <em>concept crystallization perfectly explains generalization to 2-hop composable test edges, and fails to explain anything beyond that</em>. To get any signal on the source-was-never-a-source edges, you'd need a denser training topology (so the model actually sees node 0 as a source somewhere), more data per training edge, or some inductive bias we haven't tried yet. That last bucket is what the in-flight p=0.6 sweep with L2-to-init and on-policy mixin is testing.</p>
 
         <figure class="vr-fig breakout">
-          <img src="figs/per_edge_sweep.png" alt="Per-edge log-odds gap on all six test edges across the best p=0.4 configs.">
-          <figcaption><b>Fig. 7</b> &middot; All six test edges (composable in green, non-composable in orange) for the top sweep configs. LoRA r=16 dp=0.3 is the best on composable, full-rank is the best on the partially-anchored non-composable edge 1&rarr;4.</figcaption>
+          <img src="figs/per_edge_sweep.png" alt="Per-edge accuracy on all six test edges across the best p=0.4 configs.">
+          <figcaption><b>Fig. 7</b> &middot; All six test edges. Green-labelled (composable) edges are near-1.0 for every high-rank LoRA config; orange-labelled (non-composable) edges hug the 0.25 chance line, except a small LoRA-r=256 lift on 1&rarr;4.</figcaption>
         </figure>
 
         <h2><span class="vr-section-num">§7</span>Sweep summary</h2>
@@ -165,34 +154,36 @@
           <table class="vr-table">
             <thead><tr>
               <th>config</th><th>r</th><th>&alpha;</th><th>dp</th><th>wd</th>
-              <th class="num">TRAIN mean</th>
+              <th class="num">TRAIN acc</th>
               <th class="num">TEST composable</th>
               <th class="num">TEST non-composable</th>
             </tr></thead>
             <tbody>
-              <tr><td>baseline</td><td>16</td><td>16</td><td>0</td><td>0</td>
-                  <td class="num">+33.0</td><td class="num vr-pos">+22.1</td><td class="num">+0.1</td></tr>
               <tr><td>rank=1</td><td>1</td><td>2</td><td>0</td><td>0</td>
-                  <td class="num">+20.9</td><td class="num">+8.9</td><td class="num">+0.5</td></tr>
-              <tr><td>rank=16</td><td>16</td><td>32</td><td>0</td><td>0</td>
-                  <td class="num">+28.4</td><td class="num vr-pos">+25.6</td><td class="num">+0.3</td></tr>
+                  <td class="num">0.98</td><td class="num">0.51</td><td class="num">0.18</td></tr>
+              <tr><td>rank=4</td><td>4</td><td>8</td><td>0</td><td>0</td>
+                  <td class="num">1.00</td><td class="num">0.58</td><td class="num">0.18</td></tr>
+              <tr><td>rank=8</td><td>8</td><td>16</td><td>0</td><td>0</td>
+                  <td class="num">1.00</td><td class="num">0.81</td><td class="num">0.19</td></tr>
+              <tr><td>rank=16 (baseline)</td><td>16</td><td>32</td><td>0</td><td>0</td>
+                  <td class="num">0.99</td><td class="num vr-pos">0.94</td><td class="num">0.21</td></tr>
               <tr><td>rank=128</td><td>128</td><td>256</td><td>0</td><td>0</td>
-                  <td class="num">+29.8</td><td class="num vr-pos">+29.0</td><td class="num">+0.4</td></tr>
+                  <td class="num">0.99</td><td class="num vr-pos"><b>0.97</b></td><td class="num">0.22</td></tr>
               <tr><td>rank=256</td><td>256</td><td>512</td><td>0</td><td>0</td>
-                  <td class="num">+28.8</td><td class="num vr-pos">+25.1</td><td class="num">−0.2</td></tr>
+                  <td class="num">0.98</td><td class="num vr-pos">0.84</td><td class="num">0.23</td></tr>
               <tr><td>dp=0.3 (best dropout)</td><td>16</td><td>32</td><td>0.3</td><td>0</td>
-                  <td class="num">+34.7</td><td class="num vr-pos"><b>+31.0</b></td><td class="num">+0.4</td></tr>
-              <tr><td>wd=0.1 dp=0.3</td><td>16</td><td>32</td><td>0.3</td><td>0.1</td>
-                  <td class="num">+32.7</td><td class="num">+23.8</td><td class="num">+1.1</td></tr>
+                  <td class="num">1.00</td><td class="num vr-pos">0.98</td><td class="num">0.23</td></tr>
+              <tr><td>wd=0.1, dp=0.1</td><td>16</td><td>32</td><td>0.1</td><td>0.1</td>
+                  <td class="num">1.00</td><td class="num vr-pos">1.00</td><td class="num">0.21</td></tr>
               <tr><td>&alpha;=64</td><td>16</td><td>64</td><td>0</td><td>0</td>
-                  <td class="num">+30.2</td><td class="num vr-pos">+24.1</td><td class="num">+0.5</td></tr>
+                  <td class="num">0.99</td><td class="num vr-pos">0.94</td><td class="num">0.20</td></tr>
               <tr><td>full-rank, lr=2e-4</td><td>—</td><td>—</td><td>—</td><td>0</td>
-                  <td class="num">+28.2</td><td class="num">+14.4</td><td class="num vr-pos"><b>+1.9</b></td></tr>
+                  <td class="num">0.99</td><td class="num">0.77</td><td class="num">0.24</td></tr>
             </tbody>
           </table>
         </div>
 
-        <p>Best composable-edge score in 22 runs is r=16 dp=0.3 (+31). Best non-composable score is full-rank (+1.9). The &ldquo;ideal&rdquo; setting would presumably combine both &mdash; full-rank fine-tuning with regularisation that mimics LoRA dropout's redundancy pressure. That's where the <a href="https://github.com/jonathanbostock/a-is-b-is-c/tree/pythia-repro-and-scale">next session</a> goes: full-rank at p=0.6 with L2-to-init, on-policy data mixin, and an LR sweep.</p>
+        <p>Best composable-edge accuracy is <code>wd=0.1, dp=0.1</code> at 1.00 (with rank-128 and dropout-0.3 tied at 0.97&ndash;0.98). Best non-composable accuracy is 0.24 (full-rank) &mdash; statistically indistinguishable from the 0.25 chance line. The headline that survives the accuracy translation is: <em>LoRA rank above ~16 is sufficient to fully solve the composable edges; nothing here moves the non-composable edges off chance</em>. The next session takes that to <i>p</i>=0.6 where a denser graph means more edges have at least one outgoing training source, and tries L2-to-init and on-policy data-mixin in case some of those still need additional inductive bias.</p>
 
         <h2><span class="vr-section-num">§8</span>Synthetic-document fine-tuning: infrastructure works, learning doesn't</h2>
 
