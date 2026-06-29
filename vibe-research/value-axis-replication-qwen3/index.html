@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>The value-axis paper's own steering vector doesn't steer — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="Reproducing Jiang/Kauvar/Lindsey's value-axis paper on Qwen3-8B: the published vector tracks confidence as a probe but doesn't reproduce the paper's headline backtrack-suppression steering result. Hand-written contrastive pairs do.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>The value-axis paper's own steering vector doesn't steer</h1>
+        <p class="vr-byline">
+          <span>2026-06-29</span>
+          <span>H100 · ~18 GPU-hours total</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>Jiang, Kauvar &amp; Lindsey's <a href="https://arxiv.org/abs/2606.17056">"The Value Axis"</a> (2026) extracts a direction in Qwen3-8B's residual stream that, they argue, both <em>tracks</em> the model's confidence in its current reasoning trajectory AND <em>causally modulates</em> backtracking when you add it back to the activations. The construction recipe is <button class="tooltip-button" data-define="diff-of-means">diff-of-means</button> on <button class="tooltip-button" data-define="icrl">in-context-RL</button> conversations. Their Figure 5b shows that steering Qwen3-8B at layer 21 with α = +15 % of the residual norm reduces the fraction of rollouts containing a backtrack token from ≈40 % to ≈22 %.</p>
+
+        <p>I tried to reproduce this on Qwen3-8B (paper's exact model) and on Qwen3-14B, and on the way ran four control axes built from ~30 hand-written contrastive sentence pairs each ("confidence", "anti-backtrack", "self-certain-yes", and a single random unit vector). After three earlier revisions, the author published their actual extracted axis on <a href="https://huggingface.co/datasets/nickjiang/value-axis">HuggingFace</a>, so I tested that vector directly too.</p>
+
+        <p class="vr-pull">As a probe, the recipe and the published vector both reproduce. As a steering direction at the paper's exact spec, neither one does. The contrastive baselines do.</p>
+
+        <h2><span class="vr-section-num">§1</span>Setup</h2>
+
+        <p>Three different "candidate value axes" were tested against four control axes on the same model at the same layer with the same prompts.</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>models</dt><dd>Qwen3-8B (layer 21, paper's exact) and Qwen3-14B (layer 20)</dd>
+            <dt>candidate axes</dt><dd>(1) our ICRL extraction (149 valid conversations, Claude Opus 4.8 player); (2) the paper's published <code>value_axis.npy</code> from <code>nickjiang/value-axis</code>; (3) three contrastive-pair axes targeting "certainty" with ~30 hand-written sentence pairs each; plus a fixed random unit vector as the null axis.</dd>
+            <dt>validations</dt><dd>A: verbalized-confidence <button class="tooltip-button" data-define="auroc">AUROC</button> on Yes/No prefill (paper §3.1). B: mean projection in 500-tok windows around backtrack events (paper Fig 3c). E: residual-stream steering at α ∈ ±{5, 10, 15} % of median residual norm (paper Fig 5b).</dd>
+            <dt>generation</dt><dd>60 MATH-500 problems × paired RNG, T=0.7, top-p=0.95, max_new_tokens=2048. AUROC computed with sklearn.</dd>
+            <dt>runtime</dt><dd>~18 GPU-hours total on H100 80GB across the four revisions of this write-up.</dd>
+            <dt>code</dt><dd><a href="https://github.com/ArcadiaImpact/value-axis-replication-qwen3">github.com/ArcadiaImpact/value-axis-replication-qwen3</a></dd>
+          </dl>
+        </div>
+
+        <h2><span class="vr-section-num">§2</span>As a probe, everything works</h2>
+
+        <p>The paper's strongest validation is the verbalized-confidence test: generate a rollout, append <em>"Do you think your answer is correct? Answer with just Yes or No."</em>, then prefill the assistant response with "Yes" and with "No" separately, and compute the AUROC for separating the layer-21 projections of the prefilled token between the two conditions. Paper reports AUROC = 0.998, and a clean mirror flip (0.024) on the inverted "incorrect?" framing.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/validation_A_auroc.png" alt="AUROC bars per axis × framing.">
+          <figcaption><b>Fig. 1</b> · Validation A on Qwen3-8B/L21, <i>n</i>=100 problems. Our ICRL extraction hits AUROC 0.985 with a clean inversion. The three contrastive-pair axes all hit 1.000. Random doesn't invert cleanly (separation on "correct?" is just yes-token bias).</figcaption>
+        </figure>
+
+        <p>Our extraction passes. The contrastive-pair axes pass. The random axis hits a deceptively high 0.93 on the "correct?" framing but fails to mirror on "incorrect?" — confirming the inversion test is the part that rules out yes-token leakage.</p>
+
+        <p>The second probe is temporal: in unsteered rollouts, does the projection drop just before a backtrack event? Paper's Figure 3c shows a sharp dip ~6 tokens before the model emits a "wait" or "actually".</p>
+
+        <figure class="vr-fig">
+          <img src="figs/validation_B_temporal.png" alt="Mean axis projection around backtrack events.">
+          <figcaption><b>Fig. 2</b> · Validation B on Qwen3-8B/L21. Each real axis drops sharply at offset −6 from the backtrack token; random is flat. ICRL drops more shallowly than the contrastive axes — same shape, smaller magnitude.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§3</span>As a steering direction, the recipe fails</h2>
+
+        <p>The first three revisions of this piece used our own ICRL extraction. Validation E — steering at ±15 % residual-stream norm and measuring backtrack rate per kiloword on 60 math problems — looked like this:</p>
+
+        <figure class="vr-fig">
+          <img src="figs/validation_E_8B.png" alt="Steering at paper-spec magnitudes, contrastive axes monotonic, ICRL flat.">
+          <figcaption><b>Fig. 3</b> · Paper-spec steering on Qwen3-8B/L21. The three contrastive-pair axes show the paper's predicted monotonic decrease in backtracking as α moves positive. Confidence at α=+15 % cuts backtrack/kw by 4× with no accuracy loss. Our ICRL extraction is flat and slightly worsens at +α. Random is monotonically worsening.</figcaption>
+        </figure>
+
+        <p>That looked surprising. My best guess at the time was either small-sample noise in the ICRL extraction, or some methodological gap I'd missed.</p>
+
+        <h2><span class="vr-section-num">§4</span>So I tried the author's actual published vector</h2>
+
+        <p>Nick Jiang put <code>value_axis.npy</code> at <a href="https://huggingface.co/datasets/nickjiang/value-axis">huggingface.co/datasets/nickjiang/value-axis</a>: a (37, 4096) array of per-layer axis vectors for Qwen3-8B. Layer alignment is canonical (paper-row <i>i</i>+1 = our v_per_layer[<i>i</i>] = output of block <i>i</i>), confirmed by the diagonal peak in the per-layer cosine sweep — paper's row 22 vs our v_per_layer[21] = cos +0.615.</p>
+
+        <p>So the published vector <em>is</em> in our model's geometry, and it points roughly in the same direction as our extraction. But —</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/paper_vs_ours_steering.png" alt="Paper's axis vs ours_icrl vs contrastive at hook L21 and L14.">
+          <figcaption><b>Fig. 4</b> · Steering on Qwen3-8B with the paper's published axis (dark purple) compared to our ICRL extraction (red) and the contrastive baselines, at the paper's canonical hook layer (L21, left) and at L14 where the paper's axis acts strongly as a probe (right). <strong>Paper's own axis is flat at both layers</strong>. Contrastive baselines steer at both.</figcaption>
+        </figure>
+
+        <p class="vr-pull">The paper's own published axis does not reproduce the paper's own headline steering result on Qwen3-8B at any tested layer.</p>
+
+        <p>It gets worse: paper's axis at hook L21 also fails the verbalized-confidence probe (AUROC = 0.44, chance) — even though it's <em>cosine 0.615</em> with our extraction, which gets 0.985. At hook L14 the same vector recovers AUROC 0.80, but it still doesn't steer.</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr>
+                <th>axis</th>
+                <th class="num">cos with ours_icrl</th>
+                <th class="num">AUROC @ L21</th>
+                <th class="num">bt/kw at α=0</th>
+                <th class="num">at α=+15 %</th>
+                <th>steering shape</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>paper's official</td>
+                  <td class="num">+0.615</td>
+                  <td class="num">0.437</td>
+                  <td class="num">0.52</td>
+                  <td class="num">0.54</td>
+                  <td class="vr-neg">flat / mild U</td></tr>
+              <tr><td>ours_icrl</td>
+                  <td class="num">1.000</td>
+                  <td class="num">0.985</td>
+                  <td class="num">0.33</td>
+                  <td class="num">0.73</td>
+                  <td class="vr-neg">flat / worsens at +α</td></tr>
+              <tr><td>confidence (pair)</td>
+                  <td class="num">−0.013</td>
+                  <td class="num">1.000</td>
+                  <td class="num">0.56</td>
+                  <td class="num">0.30</td>
+                  <td class="vr-pos">monotonic ↓</td></tr>
+              <tr><td>anti-backtrack (pair)</td>
+                  <td class="num">−0.058</td>
+                  <td class="num">1.000</td>
+                  <td class="num">0.39</td>
+                  <td class="num">0.25</td>
+                  <td class="vr-pos">monotonic ↓</td></tr>
+              <tr><td>self-certain-yes (pair)</td>
+                  <td class="num">−0.005</td>
+                  <td class="num">1.000</td>
+                  <td class="num">0.35</td>
+                  <td class="num">0.11</td>
+                  <td class="vr-pos">monotonic ↓</td></tr>
+              <tr><td>random (unit vector)</td>
+                  <td class="num">−0.030</td>
+                  <td class="num">0.932</td>
+                  <td class="num">0.47</td>
+                  <td class="num">2.29</td>
+                  <td class="vr-neg">monotonic ↑ (worsens)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2><span class="vr-section-num">§5</span>The geometry</h2>
+
+        <p>Decompose paper's L21 axis onto our basis: 38.0 % of its squared norm sits along our ICRL direction; <strong>0.45 %</strong> sits in the contrastive-pair subspace (confidence + anti-backtrack + self-certain-yes); the remaining <strong>61.9 % is in a direction perpendicular to all four of our axes</strong>. Geometrically the paper's vector is mostly ours_ICRL plus a big perpendicular component nobody has named.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/axis_cosines.png" alt="Cosine matrices for our extracted axes on 8B and 14B.">
+          <figcaption><b>Fig. 5</b> · Within our extractions: the three contrastive-pair axes share a 1–2D "certainty" subspace (cos 0.36–0.68); ICRL is orthogonal to that subspace (cos ≈ 0). Paper's axis at L21 has the same orthogonality profile — 0.6 with ICRL, 0.0 with each contrastive direction.</figcaption>
+        </figure>
+
+        <p>The takeaway: confidence/value information lives in <em>multiple</em> directions in the Qwen3-8B residual stream. The ICRL recipe lands on a direction that correlates with confidence (as a probe) but doesn't drive the model's backtracking behaviour when you push along it. Hand-written contrastive sentence pairs land on a different direction in the same subspace which does both.</p>
+
+        <h2><span class="vr-section-num">§6</span>Why might the paper's results still hold?</h2>
+
+        <p>I can think of four explanations for why the published artifact fails the paper's own steering test:</p>
+
+        <ol>
+          <li><strong>The npy on HuggingFace isn't the vector used in Figure 5b.</strong> Different figures in the paper might use differently-normalised or differently-fit axes. The file might be the per-layer probe-axis from Figure 2a, not the steering one.</li>
+          <li><strong>The Qwen3-8B checkpoint on HuggingFace differs subtly from the paper's.</strong> No revision SHA is specified in the paper; I used the default. Cosine 0.6 between our extraction and the published vector is consistent with both "same direction up to noise" and "different model, similar feature."</li>
+          <li><strong>The paper's steering uses additional methodology not captured in the raw npy.</strong> A norm-scaled, layer-norm-fused, or otherwise post-processed steering operation could give a different effect than naive residual addition. The paper doesn't release the steering code.</li>
+          <li><strong>The Figure 5b result is fragile to seed / sampling.</strong> The paper doesn't specify whether the AIME rollouts use the same random seed across α conditions; we use a per-α paired RNG to control for that.</li>
+        </ol>
+
+        <p>I can't distinguish these without more from the authors. But on Qwen3-8B at layer 21, with the exact published vector and best-effort methodology, positive-α steering along the paper's axis does not suppress backtracking on math problems. The contrastive baselines do, with 1/1000 of the construction cost.</p>
+
+        <h2><span class="vr-section-num">§7</span>What's left</h2>
+
+        <ul>
+          <li>None of this rules out the paper's <em>probe</em> claims — the published vector is a real confidence-tracking direction at some layer. It's specifically the <em>causal</em>-steering claim of Fig 5b that I can't reproduce.</li>
+          <li>The paper's other steering experiments (coding verbosity, DPO transfer, Chatbot Arena projections) aren't covered here. Same recipe; could fail similarly.</li>
+          <li>If anyone has the actual steering code from the paper, please send it along — I'd love to be wrong about explanation (3).</li>
+        </ul>
+
+        <div class="vr-colophon">
+          Full write-up — <a href="https://claude.ai/code/artifact/b18f2ea6-95fa-449b-9629-3112b492b8bc">claude.ai artifact (rev 4)</a>.
+          <br>Code — <a href="https://github.com/ArcadiaImpact/value-axis-replication-qwen3">github.com/ArcadiaImpact/value-axis-replication-qwen3</a>.
+          <br>Data and run logs — <a href="https://huggingface.co/datasets/arcadia-impact/rl-welfare-axis-text-runs-20260626">arcadia-impact/rl-welfare-axis-text-runs-20260626</a> (private, ask for access).
+          <br>Paper — Jiang, Kauvar &amp; Lindsey, <a href="https://arxiv.org/abs/2606.17056">arXiv:2606.17056</a>.
+          <br>Paper's published axis — <a href="https://huggingface.co/datasets/nickjiang/value-axis">nickjiang/value-axis</a>.
+        </div>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "diff-of-means": "Take a set of (positive, negative) example pairs, compute the mean residual-stream activation for each, and use the difference as your steering / probe direction. Simple, fast, and usually surprisingly effective. (Li et al. 2023, Rimsky et al. 2024, Arditi et al. 2024.)",
+        "icrl": "In-context reinforcement learning: the model plays a game over multiple turns within a single context window, receiving +1/−1 feedback on each guess. The paper uses ICRL games where the model tries to guess a hidden criterion (e.g. 'include a dash') for modifying a paragraph; the moment the model gets it right is the natural place to ask 'what direction did the residual stream just shift in?'",
+        "auroc": "Area under the ROC curve. For a binary-classification probe, the probability that a random positive scores higher than a random negative. 0.5 is chance; 1.0 is perfect; 0 is perfectly inverted.",
+      });
+    </script>
+  </body>
+</html>
