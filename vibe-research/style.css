@@ -177,6 +177,18 @@
 .vr-pos { color: var(--h2); font-weight: 600; }   /* matches a positive heading green */
 .vr-neg { color: var(--link); font-weight: 600; } /* the same orange used for warnings */
 
+/* Centre the long-form article body within the 720px column.
+   The parent style.css gives .align-left a max-width of 82% with
+   margin-right:auto only — which "hugs the left" (right behaviour on
+   the main page where it pairs with a centred abstract block). For
+   long-form vibe-research articles the prose reads better centred
+   within the column, so the .vr-prose wrapper opts back in to
+   left+right auto margins. */
+.align-left.vr-prose {
+  margin-left:  auto;
+  margin-right: auto;
+}
+
 /* Math-y inline atoms — italic variables get the same weight as
    surrounding text, and sub/sup don't disrupt line height. */
 .vr-prose i, .vr-fig figcaption i { font-style: italic; }
