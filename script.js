@@ -104,6 +104,12 @@ function showLinkTooltip(link) {
   // the link navigates on tap anyway, so the href tooltip is dropped there.
   if (!matchMedia("(hover: hover)").matches) return;
   if (pinnedTooltips.size) return;                 // don't fight a pinned tooltip
+  // Skip internal links — their URLs are uninteresting and a tooltip on every
+  // breadcrumb / card / index link looks fussy. Only external links get the
+  // href-preview treatment. `link.href` always resolves to an absolute URL.
+  try {
+    if (new URL(link.href).origin === location.origin) return;
+  } catch (_) { return; } // malformed: skip
   const key = "url:" + link.href;
   if (hoverTooltip && hoverTooltip.key === key) return;
   hideHoverTooltip();
