@@ -1,0 +1,207 @@
+/* ============================================================
+   vibe-research — additive styles on top of the site's style.css
+   Keep this file small. Anything in here is page-furniture for
+   the research index + per-piece articles; type, colour, links,
+   tooltip-button / action-button visuals all come from the
+   parent stylesheet.
+   ============================================================ */
+
+/* Index: list of research pieces, recent-first. Each piece is a
+   block-level anchor wrapping its own content; the box itself is
+   the link surface, not the title. */
+.vr-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vr-card {
+  display: block;
+  padding: 1rem 1.1rem 1rem;
+  border: 1px solid var(--h3);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);             /* override the anchor orange — body colour wins */
+  font-weight: 440;
+  text-decoration: none;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.vr-card:hover {
+  background-color: rgba(44, 106, 29, 0.06);  /* faint --h3 wash */
+  border-color: var(--h2);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.vr-card .vr-date {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--h3);
+  font-weight: 500;
+}
+
+.vr-card .vr-title {
+  display: block;
+  margin: 0.15rem 0 0.2rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--h2);              /* same green as h2 — reads as a heading inside the card */
+}
+
+.vr-card .vr-desc {
+  margin: 0;
+  font-size: 0.97rem;
+  line-height: 1.5;
+}
+
+.vr-card .vr-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.55rem 0 0;
+}
+
+.vr-tag {
+  font-size: 0.74rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.45rem;
+  border-radius: 3px;
+  background: rgba(64, 135, 162, 0.12);  /* faint --ttbtn blue */
+  color: var(--ttbtn);
+}
+
+/* ----- per-article furniture --------------------------------- */
+
+/* Slim header above the article body — date / hardware / source line. */
+.vr-byline {
+  font-size: 0.9rem;
+  color: var(--h3);
+  margin: 0.2rem 0 1.4rem;
+}
+.vr-byline span + span::before { content: " · "; opacity: 0.55; }
+
+/* Lab block — the run's hyperparameters / metadata, set tight and
+   monospaced so it reads as data, not prose. */
+.vr-lab {
+  background: rgba(44, 106, 29, 0.07);
+  border-left: 3px solid var(--h2);
+  padding: 0.8rem 1rem;
+  margin: 1rem 0 1.5rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+.vr-lab dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 1.1rem;
+  row-gap: 0.15rem;
+  margin: 0;
+}
+.vr-lab dt { color: var(--h3); }
+.vr-lab dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* Figures — full content width, light-mode background. Wide figures
+   (comparison panels, multi-axis grids) can break out of the 720px
+   reading column by adding .breakout. */
+.vr-fig { margin: 1.5rem 0 0.5rem; }
+.vr-fig.breakout {
+  /* Push the figure out to ~1080px on wide viewports; collapse back to
+     column width on narrow ones. */
+  margin-left: calc(-1 * (min(1080px, 95vw) - 720px) / 2);
+  margin-right: calc(-1 * (min(1080px, 95vw) - 720px) / 2);
+  max-width: min(1080px, 95vw);
+}
+.vr-fig img {
+  display: block;
+  width: 100%;
+  background: #ffffff;            /* always-light figure ground */
+  border: 1px solid var(--h3);
+  border-radius: 4px;
+}
+.vr-fig figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text);
+  padding-left: 0.7rem;
+  border-left: 1px solid var(--h3);
+}
+.vr-fig figcaption b { color: var(--h2); font-weight: 600; }
+
+/* Pull quote — same tone as the link orange, italic, hairline rules
+   above and below; used for the one-sentence "headline" of a result. */
+.vr-pull {
+  border-top: 1px solid var(--h3);
+  border-bottom: 1px solid var(--h3);
+  padding: 0.8rem 0;
+  margin: 1.5rem 0;
+  font-style: italic;
+  color: var(--link);
+  font-weight: 500;
+  text-wrap: balance;
+}
+
+/* Findings table — monospaced, tabular-nums, with a heavy rule under
+   the header and hairlines between rows. */
+.vr-table-wrap { overflow-x: auto; }
+.vr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+  margin: 1rem 0 1.5rem;
+}
+.vr-table th,
+.vr-table td {
+  padding: 0.45rem 0.7rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(44, 106, 29, 0.25);
+}
+.vr-table th {
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--h3);
+  border-bottom: 1px solid var(--h2);
+}
+.vr-table td.num { text-align: right; }
+.vr-pos { color: var(--h2); font-weight: 600; }   /* matches a positive heading green */
+.vr-neg { color: var(--link); font-weight: 600; } /* the same orange used for warnings */
+
+/* Math-y inline atoms — italic variables get the same weight as
+   surrounding text, and sub/sup don't disrupt line height. */
+.vr-prose i, .vr-fig figcaption i { font-style: italic; }
+.vr-prose sub, .vr-prose sup,
+.vr-fig figcaption sub, .vr-fig figcaption sup { font-size: 0.72em; line-height: 0; }
+
+/* Section ribbon — small uppercase section labels, like "§2", that
+   sit above an h2 in the article body. */
+.vr-section-num {
+  display: block;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  color: var(--link);
+  margin-bottom: 0.1rem;
+}
+
+/* Colophon — small mono block at the foot of an article. */
+.vr-colophon {
+  margin-top: 3rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--h3);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.78rem;
+  color: var(--h3);
+  line-height: 1.55;
+}
+.vr-colophon a { color: var(--h3); }

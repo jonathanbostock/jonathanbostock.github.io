@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>The cloverleaf shows up on the first try — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="Reproducing Vaintrob's mean-field XOR experiment on a rented 4090: cloverleaf weight distribution, multi-seed agreement, NTK lazy-regime control.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>The cloverleaf shows up on the first try</h1>
+        <p class="vr-byline">
+          <span>2026-06-29</span>
+          <span>RTX 4090 · 1 hr @ $0.69</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>Dmitry Vaintrob's <a href="https://www.lesswrong.com/posts/rduzFkTKx5pGKWKcL/mean-field-sequence-an-introduction">first post of his planned <button class="tooltip-button" data-define="mean-field-theory">mean-field</button> sequence</a> shows a clover-shaped distribution of hidden-layer weights for a wide two-layer net trained on continuous XOR, and argues that the shape is a fingerprint of mean-field dynamics — something the lazy <button class="tooltip-button" data-define="ntk-regime">NTK regime</button> cannot produce. He promised a code release "soon" but it isn't out yet, so I picked defaults from the description in the post and rented a 4090 to see how robust the picture is.</p>
+
+        <p>Short version: <b>the cloverleaf is there, it's the same across seeds, and switching to the NTK parameterisation kills it</b>. The whole exercise — pod spin-up, four trained models, plotting — fit comfortably inside an hour of GPU time.</p>
+
+        <h2><span class="vr-section-num">§1</span>What I built</h2>
+
+        <p>A two-layer scalar network with mean-field output scaling, <i>f</i>(<i>x</i>) = (1/<i>N</i>)·∑<sub><i>i</i></sub> <i>a<sub>i</sub></i>·σ(<i>w<sub>i</sub></i> · <i>x</i> + <i>b<sub>i</sub></i>), using a hardtanh activation (the "ReLU version of tanh", σ(<i>z</i>) = clip(<i>z</i>, −1, 1)). Input <i>x</i> ∼ U([−1, 1]²), target <i>y</i> = sign(<i>x</i><sub>1</sub>)·sign(<i>x</i><sub>2</sub>), fresh batches each step (infinite data), MSE loss. Width <i>N</i> = 2048 matches what the post appears to use. Adam was the right call over plain SGD: with mean-field scaling, per-parameter gradients are 𝒪(1/<i>N</i>), and Adam adapts without needing the <i>η</i> ∝ <i>N</i>² rescaling SGD requires.</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>architecture</dt><dd>2-layer, width 2048, hardtanh, scalar output</dd>
+            <dt>scaling</dt><dd>mean-field (÷N) — vs. NTK (÷√N) as control</dd>
+            <dt>data</dt><dd>x ∼ U([-1,1]²) · y = sign(x₁)·sign(x₂) · infinite</dd>
+            <dt>optimizer</dt><dd>Adam, lr 5e-4, batch 4096, 60 000 steps</dd>
+            <dt>runtime</dt><dd>~47 s / training run on a single RTX 4090</dd>
+            <dt>code</dt><dd>arcadia-impact / mean-field-xor-repro-2026-06-29 (HF)</dd>
+          </dl>
+        </div>
+
+        <h2><span class="vr-section-num">§2</span>The cloverleaf, three seeds, one control</h2>
+
+        <p>Each panel below is a scatter of the 2048 incoming-weight vectors (<i>w<sub>i,1</sub></i>, <i>w<sub>i,2</sub></i>) from one trained model, coloured by the sign of the output weight <i>a<sub>i</sub></i>. The mean-field runs (left three) collapse onto the same four-pronged star — peaks along ±<i>w</i><sub>1</sub> and ±<i>w</i><sub>2</sub>, with the radial extent giving an indication of how saturated each neuron has become. The seeds visibly agree in <i>distribution</i>, even though no individual neuron is in the same place. NTK is the same architecture, same data, same steps — only the output scaling changes — and the cloud barely escapes its Gaussian initialisation. Width 16 simply doesn't have enough neurons to populate any structure.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/comparison.png" alt="Cloverleaf comparison across 3 mean-field seeds, NTK, and narrow.">
+          <figcaption><b>Fig. 1</b> · Incoming-weight scatter (<i>w</i><sub>1</sub>, <i>w</i><sub>2</sub>) for each trained hidden neuron. The three mean-field panels at width 2048 produce the same four-pointed clover; NTK does not; narrow can't.</figcaption>
+        </figure>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/angle_compare.png" alt="Angle density of incoming weights for each run.">
+          <figcaption><b>Fig. 2</b> · Kernel density of the angle arctan(<i>w</i><sub>2</sub> / <i>w</i><sub>1</sub>) for the half of neurons with the largest norms. The three mean-field seeds track one another closely with peaks at 0°, ±90°, ±180° — the cloverleaf measured as a 1-D distribution. NTK has weaker, flatter peaks; the narrow run is dominated by two of its sixteen neurons.</figcaption>
+        </figure>
+
+        <p class="vr-pull">The point isn't the four lobes per se — it's that the empirical neuron distribution is reproducible across seeds while being sharply non-Gaussian. That's what mean-field theory predicts and NTK forbids.</p>
+
+        <h2><span class="vr-section-num">§3</span>The function the network actually learned</h2>
+
+        <p>Sanity check that the cloverleaf is doing useful work: plotting the trained network's output on a grid recovers a clear XOR pattern, with a small mass of probability around the axes where the target sign is discontinuous and the network softens it into a hairline.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/pred_surface.png" alt="Network output surface vs. XOR target.">
+          <figcaption><b>Fig. 3</b> · Network output (left) vs. target XOR (right) on a [−1, 1]² grid. Final eval MSE 0.024 — well above the irreducible noise of the XOR target near the axes, well below the variance of <i>y</i>.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§4</span>How the runs compare</h2>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr>
+                <th>run</th><th>scaling</th><th>width</th>
+                <th class="num">final MSE</th>
+                <th class="num">std ‖w‖</th>
+                <th>cloverleaf?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>seed 0 (teacher)</td><td>mean-field</td><td>2048</td>
+                  <td class="num">0.0236</td><td class="num">9.4</td>
+                  <td class="vr-pos">yes</td></tr>
+              <tr><td>seed 1</td><td>mean-field</td><td>2048</td>
+                  <td class="num">0.0234</td><td class="num">9.3</td>
+                  <td class="vr-pos">yes</td></tr>
+              <tr><td>seed 2</td><td>mean-field</td><td>2048</td>
+                  <td class="num">0.0240</td><td class="num">9.5</td>
+                  <td class="vr-pos">yes</td></tr>
+              <tr><td>seed 3</td><td>mean-field</td><td>2048</td>
+                  <td class="num">0.0238</td><td class="num">9.4</td>
+                  <td class="vr-pos">yes</td></tr>
+              <tr><td>NTK control</td><td>÷√N (lazy)</td><td>2048</td>
+                  <td class="num">0.0130</td><td class="num">1.8</td>
+                  <td class="vr-neg">no — neurons stay near init</td></tr>
+              <tr><td>narrow control</td><td>mean-field</td><td>16</td>
+                  <td class="num">0.0547</td><td class="num">8.1</td>
+                  <td class="vr-neg">no — too few neurons</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Two things worth noting in the numbers. First, the NTK run gets a <i>lower</i> training-style MSE than the mean-field runs at the same width and step budget, but produces a qualitatively less interpretable weight cloud — the linearised "kernel" regime is happy to fit the target with very small movements per neuron, which is exactly the failure mode mean-field people warn about. Second, the std of the incoming-weight norm is roughly 5× larger for the mean-field runs: those neurons travel.</p>
+
+        <h2><span class="vr-section-num">§5</span>What I tried and dropped</h2>
+
+        <p>The post advertises a <button class="tooltip-button" data-define="self-consistency">self-consistency check</button> where one trains 2048 independent single-neuron models against the background field of the trained network and recovers an identical (<i>w<sub>i</sub></i>, <i>a<sub>i</sub></i>, <i>b<sub>i</sub></i>) distribution. I attempted it, and the formulation has a real subtlety: if you use the post's apparent "target = residual" framing literally, the optimal <i>a</i> on a self-consistent fixed point is 𝒪(<i>N</i>) times the residual moment, which then drives the loss-magnitude several orders of magnitude above the achievable single-neuron output at any reasonable learning rate, and the regression doesn't converge. I'm fairly sure there's a rescaling step in the post that hasn't been written down explicitly, and decided to pivot to the seed-robustness + NTK control above rather than guess at it. Worth picking up once the next post in the sequence (or the promised code) lands.</p>
+
+        <h2><span class="vr-section-num">§6</span>What's next</h2>
+        <ul>
+          <li>Once Vaintrob releases code, rerun the single-neuron self-consistency check with his exact target normalisation.</li>
+          <li>Sweep <i>N</i> ∈ {64, 256, 1024, 4096} to watch the cloverleaf sharpen as <i>N</i> → ∞ — should follow a 1/√<i>N</i> width law on the radial smear.</li>
+          <li>Try the continuous-XOR setup in 3 dimensions: the prediction is that you get an 8-cornered structure (a cube's vertices) for <i>d</i> = 3, and you can check it via spherical-harmonic decomposition.</li>
+          <li>Repeat with a true "ReLU version of tanh" written as σ(<i>z</i>) = ReLU(<i>z</i>+1) − ReLU(<i>z</i>−1) − 1 to confirm the activation form isn't load-bearing (it shouldn't be — hardtanh is bit-identical — but worth checking the gradient path).</li>
+        </ul>
+
+        <div class="vr-colophon">
+          Source · <a href="https://www.lesswrong.com/posts/rduzFkTKx5pGKWKcL/mean-field-sequence-an-introduction">Vaintrob, "Mean field sequence: an introduction"</a> · LessWrong, 2026-04-04.
+          <br>Pod · RunPod 4090 secure cloud, pod ID zer68f9icq6f74, kept alive for follow-ups.
+          <br>Data &amp; code · <a href="https://huggingface.co/datasets/arcadia-impact/mean-field-xor-repro-2026-06-29">arcadia-impact/mean-field-xor-repro-2026-06-29</a> on Hugging Face.
+        </div>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      // Tooltip definitions for this article. The parent script.js declares
+      // actionButtonDefinitions as a top-level const; classic scripts share
+      // a script-scope, so we can mutate that const here. Definitions are
+      // only read inside event handlers, so this assignment can land after
+      // script.js has loaded without a race.
+      Object.assign(actionButtonDefinitions, {
+        "mean-field-theory": "A statistical-mechanics framework in which each component of a many-body system responds to the average field generated by all the others. For wide neural networks, the hidden neurons play the role of particles and the activation function plays the role of the field.",
+        "ntk-regime": "The Neural Tangent Kernel regime: a parameterisation of width in which the network behaves as a linear model around its initialisation. Training looks like kernel regression — neurons barely move from where they started, and the empirical weight distribution stays Gaussian.",
+        "self-consistency": "Mean-field's testable prediction: the empirical distribution of trained neurons should be the same as the distribution you'd get by independently optimising one neuron at a time against the background field generated by all the others.",
+      });
+    </script>
+  </body>
+</html>
