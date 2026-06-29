@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Concept crystallization is a small-model phenomenon — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="Pythia-70M reproduces forward-transitive generalization on Bostock's matching game; Pythia-1.4B and Qwen2.5-32B with LoRA do not, even at matched learning rate.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Concept crystallization is a small-model phenomenon</h1>
+        <p class="vr-byline">
+          <span>2026-06-29 · V1</span>
+          <span>A100 × 2 + H100 × 1 · ~3 hrs · ~$25</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+
+        <p>The <a href="https://github.com/jonathanbostock/a-is-b-is-c">matching-game setup</a> is a graph-theoretic extension of the Berglund <button class="tooltip-button" data-define="reversal-curse">reversal-curse</button> setup: 6 categories, an arbitrary bijection across them, a random directed-edge topology where each of the 30 possible edges is held in for training with probability <i>p</i><sub>train</sub> = 0.4, and 20 % of the remaining edges held out for evaluation. Train sentences are templated (&ldquo;In Bostock's matching game, the animal associated with the colour red is&hellip;&rdquo;), the eval set uses unseen templates, and the metric is log-prob(correct) &minus; log-prob(random in-category negative) on the target completion.</p>
+
+        <p>At Pythia-70M with LoRA, the model learns its 12 training edges <em>and</em> generalizes to held-out edges whose source <em>and</em> target are reachable through a trained intermediate node. Test edges that aren't 2-hop composable stay at chance. So far so neat. The motivating question was: <em>does the same picture survive when we scale up by 20× and then by 500×?</em></p>
+
+        <p class="vr-pull">It does not. With LoRA fine-tuning, Pythia-1.4B and Qwen2.5-32B memorise the 12 training edges fine, but the test-edge generalization vanishes &mdash; even after matching the learning rate that worked at 70M.</p>
+
+        <h2><span class="vr-section-num">§1</span>Setup</h2>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>task</dt><dd>random_6_0.4_0.2 — 6 categories, 12 train edges, 6 held-out test edges, bijection k=8</dd>
+            <dt>templates</dt><dd>8 train templates &middot; 4 held-out eval templates</dd>
+            <dt>models</dt><dd>EleutherAI/pythia-70m · pythia-1.4b · Qwen/Qwen2.5-32B (4-bit + LoRA)</dd>
+            <dt>fine-tuning</dt><dd>LoRA on attention + MLP projections, bf16, SDPA, completion-only loss</dd>
+            <dt>metric</dt><dd>mean log-odds gap on held-out templates &middot; 3 random negatives per example</dd>
+            <dt>repeats</dt><dd>1 seed (=42). Multiple seeds out of session scope &mdash; the topology effect is much larger than the per-seed variance reported in the original Pythia-70M runs.</dd>
+            <dt>code</dt><dd><a href="https://github.com/jonathanbostock/a-is-b-is-c">github.com/jonathanbostock/a-is-b-is-c</a> · branch <code>pythia-repro-and-scale</code></dd>
+          </dl>
+        </div>
+
+        <h2><span class="vr-section-num">§2</span>The 70M picture: forward-transitive composition</h2>
+
+        <p>The specific sampled topology for this run is on the left below. The right panel shows each held-out test edge labelled with Pythia-70M's final log-odds gap. Edges drawn in green are 2-hop composable from training edges (there exists a node <i>m</i> such that <i>s</i>&rarr;<i>m</i> and <i>m</i>&rarr;<i>t</i> are both trained); orange edges are not.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/topology.png" alt="Training graph and per-test-edge final log-odds gap.">
+          <figcaption><b>Fig. 1</b> &middot; Left: the 12 training edges sampled at <i>p</i><sub>train</sub>=0.4. Right: the 6 held-out test edges, coloured by whether a 2-hop composition exists in the training set. Labels are the final-step Pythia-70M log-odds gap.</figcaption>
+        </figure>
+
+        <p>The split is clean: every composable test edge ends with a gap above +18; every non-composable edge stays within &plusmn;1 of zero. The model isn't learning a generic &ldquo;Bostock matching&rdquo; lookup table; it has built a structure where the bijection acts as composable maps, and it can chain them when training has fixed both legs.</p>
+
+        <h2><span class="vr-section-num">§3</span>Then we tried to scale up</h2>
+
+        <p>Same topology, same templates, same eval. Only the base model changes (with LoRA target modules adjusted to each architecture's projection names). For each scale I ran a low-LR pass (similar to what the published configs use) and a higher-LR retry tuned to match 70M's learning dynamics, because under-training was the natural first hypothesis.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/trajectory.png" alt="Train and test log-odds gap trajectories for all six runs.">
+          <figcaption><b>Fig. 2</b> &middot; Mean log-odds gap on training (left) and held-out (right) edges across all six runs. Dotted lines on the right are the max-across-test-edges &mdash; the 70M templated dotted line is the &ldquo;best generalising&rdquo; test edge for that model. The synthetic-document Pythia-70M run (orange) fails to memorise even the training edges (see &sect;5). Note the X axis is symlog.</figcaption>
+        </figure>
+
+        <p>On the training side, every scale eventually memorises &mdash; in fact Qwen-32B at hi-LR memorises <em>fastest</em>, reaching a training gap of +13 by step 100. On the test side, Pythia-70M is the only run whose mean test gap leaves the noise floor in any sustained way. Qwen-32B at hi-LR briefly peeks above 1.0 around step 100 and then drifts back to baseline as memorisation tightens.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/per_edge_bar.png" alt="Final test-edge log-odds gap by edge and run.">
+          <figcaption><b>Fig. 3</b> &middot; Final log-odds gap for each of the six held-out edges (x axis) across all six runs (bar colours). Green edge labels = composable from training edges. Pythia-70M is the only run where the green bars are tall and the orange bars are short. Everything else is approximately flat.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§4</span>How the runs compare</h2>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr>
+                <th>model</th><th>LR</th><th>LoRA r</th><th>steps</th>
+                <th class="num">TRAIN gap (mean / max)</th>
+                <th class="num">TEST gap (mean / max)</th>
+                <th class="num">TEST acc</th>
+                <th>crystallizes?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Pythia-70M (templated)</td><td>4e-4</td><td>16</td><td>20 000</td>
+                  <td class="num">+33.0 / +43.6</td>
+                  <td class="num">+11.4 / +29.1</td>
+                  <td class="num">0.56</td>
+                  <td class="vr-pos">yes</td></tr>
+              <tr><td>Pythia-70M (synth-doc)</td><td>4e-4</td><td>16</td><td>8 000</td>
+                  <td class="num">+1.9 / +4.4</td>
+                  <td class="num">+0.3 / +2.9</td>
+                  <td class="num">0.19</td>
+                  <td class="vr-neg">didn't memorise (see &sect;5)</td></tr>
+              <tr><td>Pythia-1.4B (lo-LR)</td><td>1e-4</td><td>32</td><td>4 000</td>
+                  <td class="num">+15.2 / +17.0</td>
+                  <td class="num">+0.6 / +1.9</td>
+                  <td class="num">0.31</td>
+                  <td class="vr-neg">no</td></tr>
+              <tr><td>Pythia-1.4B (hi-LR)</td><td>4e-4</td><td>32</td><td>8 000</td>
+                  <td class="num">+18.7 / +20.6</td>
+                  <td class="num">+1.25 / +3.42</td>
+                  <td class="num">0.37</td>
+                  <td class="vr-neg">no (marginal)</td></tr>
+              <tr><td>Qwen2.5-32B (lo-LR, 4-bit)</td><td>5e-5</td><td>32</td><td>400</td>
+                  <td class="num">+13.4 / +17.2</td>
+                  <td class="num">+0.12 / +1.29</td>
+                  <td class="num">0.20</td>
+                  <td class="vr-neg">no</td></tr>
+              <tr><td>Qwen2.5-32B (hi-LR, 4-bit)</td><td>2e-4</td><td>64</td><td>2 000</td>
+                  <td class="num">+18.8 / +25.0</td>
+                  <td class="num">&minus;0.5 / +0.47</td>
+                  <td class="num">0.20</td>
+                  <td class="vr-neg">no</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>If concept crystallization at scale were just a matter of finishing training, you'd expect raising the LR by 4&times; and the step budget by 2&times; (the 1.4B hi-LR retry) to push the trajectory toward the 70M one. It doesn't. The training-edge gap grows from +15 to +19; the test-edge gap moves from +0.6 to +1.25. The bigger Qwen retry is starker: <em>training</em> gap goes up (+13&rarr;+19), <em>test</em> gap goes <em>down</em> (+0.1 &rarr; &minus;0.5).</p>
+
+        <p>What the larger models look like they're doing is the simpler thing: learning each training edge as an isolated key-value lookup that the LoRA adapter can install. The 70M model can't afford that &mdash; rank-16 LoRA over 70M parameters has nowhere near 12 independent slots for arbitrary template-to-token mappings &mdash; so it ends up sharing parameters across edges, and the only way to share is to discover that the bijection is the actual structure. That's the crystallization step.</p>
+
+        <p>Caveats: <em>(i)</em> single seed, single topology &mdash; for the 70M case the original paper saw the composition pattern across seeds, but I haven't confirmed that the <em>non-crystallization</em> at 1.4B and 32B is robust across seeds. <em>(ii)</em> All scaled-up runs are LoRA, not full fine-tunes &mdash; the rank cap could itself be the constraint that <em>prevents</em> the larger models from copying the small-model strategy. A full-rank 1.4B retry is the obvious next experiment.</p>
+
+        <h2><span class="vr-section-num">§5</span>Synthetic-document fine-tuning: infrastructure works, learning doesn't</h2>
+
+        <p>The other ask was to try synthetic-document fine-tuning (Allen-Zhu / Berglund-2-style: generate diverse natural-prose documents that embed each fact in passing, then train with LM loss on the whole document). Pipeline runs end-to-end &mdash; 768 documents per repeat at 12 genres (story, encyclopedia entry, diary, puzzle solution, tweet thread, &hellip;) generated through <code>gpt-4.1-mini</code> with on-disk caching, fed straight into the existing loss path. Pythia-70M trained on those documents reaches a training-edge log-odds gap of only +2 (vs +33 for templates) and a test-edge gap near zero (Fig. 2, orange).</p>
+
+        <p>The probable cause is signal dilution. Each document is ~150 tokens but only 1&ndash;2 tokens are the association being trained. Averaged LM loss puts ~1 % of the gradient on the bit we actually care about, so the effective &ldquo;steps per association&rdquo; in this run is &sim;150&times; lower than in the templated run. Two clean fixes for V2:</p>
+
+        <ul>
+          <li><em>Focused loss.</em> Detect the target-element span in each document and mask the rest with <code>-100</code>, so loss only flows through the target tokens. A config stub is in <code>pretrained_llms/configs/pythia_70m_synthdoc_v2.yaml</code>; the wiring in <code>train.py</code> is left for next session.</li>
+          <li><em>Shorter docs.</em> Re-prompt the generator for ~30-word snippets where the association density is much higher. Cheap to do because the doc cache already keys by genre and salt; we'd just bump the &ldquo;between 80 and 180 words&rdquo; clause in the system prompt down to 25&ndash;40.</li>
+        </ul>
+
+        <p>I'm bullish on the focused-loss variant working &mdash; for the templated case, the loss is already focused on completion tokens (this is how the original setup avoids the prompt-token-loss trap of the Berglund paper), so &ldquo;synth doc + focused loss&rdquo; is the natural minimal modification.</p>
+
+        <h2><span class="vr-section-num">§6</span>What was built on the branch</h2>
+
+        <p>Aside from the experimental results, the session left a few pieces of infrastructure that the original code didn't have:</p>
+
+        <ul>
+          <li><code>pretrained_llms/synthetic_docs.py</code> &mdash; async OpenAI document generator, 12-genre prompt diversity, on-disk SHA-1 cache, validation that the target element appears in the output.</li>
+          <li><code>pretrained_llms/synthetic_dataset.py</code> &mdash; <code>build_synthetic_run_data()</code> reusing the same eval pipeline as the templated path. Wired into <code>run.py</code> via <code>dataset_type: synthetic_docs</code>.</li>
+          <li>Config knobs in <code>train.py</code>: <code>gradient_checkpointing</code>, <code>attn_implementation</code>, <code>dense_early_evals</code>, <code>collect_residuals</code>, <code>eval_subsample</code> &mdash; all of which had been hard-coded in ways that were ~10&times; too expensive for the small-model regime <em>and</em> the 32B regime simultaneously.</li>
+          <li>A tokenizer pre-cache in <code>_build_randomized_training_dataset</code>: the old code re-tokenized every one of the 2.5 million sampled training rows; the new code tokenises the &sim;800 unique <code>PromptExample</code>s once and lookups thereafter. This alone was a several-minute startup speedup at 70M and a several-hour speedup at 32B.</li>
+        </ul>
+
+        <h2><span class="vr-section-num">§7</span>What's still on the to-do list</h2>
+
+        <p>Things I had time for but didn't get to, and which the V2 of this piece should cover:</p>
+
+        <ul>
+          <li><em>Density sweep.</em> The repo already has random_6 configs at <i>p</i> = 0.2, 0.3, 0.5, 0.6, 0.7, 0.8 &mdash; one Pythia-70M run per <i>p</i> would tell us how robust the composition-pattern is to graph density. (It's the obvious thing the original setup was designed for.)</li>
+          <li><em>Full-rank 1.4B.</em> Distinguishes &ldquo;LoRA rank is preventing crystallization&rdquo; from &ldquo;the larger model genuinely doesn't need to crystallize.&rdquo; Same compute footprint as the LoRA hi-LR run.</li>
+          <li><em>Synth-doc V2.</em> Focused-loss in <code>train.py</code>, re-run at 70M to validate, then move to 1.4B.</li>
+          <li><em>Multi-seed for 1.4B + 32B.</em> Just to confirm the &ldquo;no generalization&rdquo; result isn't a particularly bad sampled topology &mdash; though the 70M&rarr;1.4B&rarr;32B trend within this one topology is monotone, so I doubt the qualitative result moves.</li>
+        </ul>
+
+        <div class="vr-colophon">
+          <p>code: <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a> · branch <code>pythia-repro-and-scale</code> · commit pinned in <code>FINDINGS.md</code>.<br>
+          compute: RunPod &mdash; 2&times; A100 SXM 80GB ($1.49/hr) + 1&times; H100 SXM 80GB ($3.29/hr).<br>
+          last updated 2026-06-29.</p>
+        </div>
+
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "reversal-curse": "Berglund et al. (2024): an LLM fine-tuned to say 'A is B' typically fails the symmetric query 'B is...' at completion. The matching-game setup here generalises that to multi-category bijections.",
+      });
+    </script>
+  </body>
+</html>
