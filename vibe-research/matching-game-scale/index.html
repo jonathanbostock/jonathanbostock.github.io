@@ -12,8 +12,8 @@
       <div class="align-center" id="abstract">
         <h1>Concept crystallization is a small-model phenomenon</h1>
         <p class="vr-byline">
-          <span>2026-06-29 · V1</span>
-          <span>A100 × 2 + H100 × 1 · ~3 hrs · ~$25</span>
+          <span>2026-06-29 · V2 (rank + reg sweep added)</span>
+          <span>A100 × 2 + H100 × 1 · ~6 hrs · ~$35</span>
           <span><a href="..">Vibe Research</a></span>
         </p>
       </div>
@@ -121,7 +121,80 @@
 
         <p>Caveats: <em>(i)</em> single seed, single topology &mdash; for the 70M case the original paper saw the composition pattern across seeds, but I haven't confirmed that the <em>non-crystallization</em> at 1.4B and 32B is robust across seeds. <em>(ii)</em> All scaled-up runs are LoRA, not full fine-tunes &mdash; the rank cap could itself be the constraint that <em>prevents</em> the larger models from copying the small-model strategy. A full-rank 1.4B retry is the obvious next experiment.</p>
 
-        <h2><span class="vr-section-num">§5</span>Synthetic-document fine-tuning: infrastructure works, learning doesn't</h2>
+        <h2><span class="vr-section-num">§5</span>What knobs actually drive crystallization on 70M? — rank, regularization, full-rank</h2>
+
+        <p>Sticking with Pythia-70M and the same <code>random_6_0.4_0.2</code> topology, 22 runs sweeping LoRA rank, the LoRA <i>α/r</i> ratio, weight-decay × lora-dropout, and a full-rank baseline. The metric throughout is the final-step <em>mean log-odds gap on the 2-hop-composable test edges</em> &mdash; the &ldquo;crystallization signal&rdquo; from &sect;2 reduced to one number.</p>
+
+        <p>First read: <em>concept crystallization is robust to extreme rank reduction</em>. Even at <i>r</i>=1 (the LoRA delta is a rank-1 update on each weight matrix) Pythia-70M still scores +8.9 on composable test edges. There is a monotone-ish rise with rank, peaking around r=128 (+29.0), before falling slightly at r=256 (+25.1). Full-rank with lr=2e-4 sits at +14.4 &mdash; <em>worse</em> on composable edges than several LoRA settings, but with a key extra trick (see below). Non-composable edges stay at chance under every LoRA setting.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/sweep_rank.png" alt="Composable + non-composable test-edge gap as a function of LoRA rank.">
+          <figcaption><b>Fig. 4</b> &middot; Final log-odds gap vs LoRA rank (with &alpha; = 2<i>r</i> so the implicit-LR-via-&alpha;/<i>r</i> stays constant). Composable edges grow with rank from +8 to +29; non-composable stay flat at zero. The full-rank horizontal lines show the baseline does well on non-composable edges (+1.9) but lags on composable (+14.4) at this LR.</figcaption>
+        </figure>
+
+        <p>The reg sweep is the most surprising slice. At <i>r</i>=16, &alpha;=32, ramping lora_dropout to 0.3 lifts the composable-edge gap from +25.6 to +31.0 &mdash; the highest single number anywhere in this sweep. Weight decay, in contrast, monotonically <em>hurts</em>: 21&ndash;23 across the bottom two rows.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/sweep_reg.png" alt="Composable and non-composable test-edge gap as a heatmap over weight_decay and lora_dropout.">
+          <figcaption><b>Fig. 5</b> &middot; Composable-edge gap (left) and non-composable gap (right) over weight_decay (rows) and lora_dropout (cols), all at <i>r</i>=16, &alpha;=32. The clear winner is <code>(wd=0, dp=0.3)</code>. Weight decay is a regulariser-against-zero, which is the wrong fixed point for a fine-tune.</figcaption>
+        </figure>
+
+        <p>LoRA dropout works by stochastically masking columns of the LoRA <i>B</i> matrix during training, which forces the model to learn an update that's robust to <em>any</em> subset of LoRA directions being available. The natural reading: dropout pressures the optimiser to spread the same useful direction across multiple LoRA columns, which means the compositional structure (the bijection map) gets installed redundantly &mdash; exactly the &ldquo;make the subspaces overlap&rdquo; pressure that's a free perk of full-rank fine-tuning.</p>
+
+        <h2><span class="vr-section-num">§6</span>Full-rank's one trick: it gets the partially-anchored non-composable edges</h2>
+
+        <p>Here's the surprise. On the cleanly-composable test edges, full-rank (lr=2e-4) is actually <em>beaten</em> by several LoRA configurations &mdash; the high-rank LoRA does +29, full-rank does +18 on the same composable edge. But there's one edge where full-rank wins by a country mile: <strong>1&rarr;4</strong>.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/per_edge_noncompose.png" alt="Per-edge log-odds gap on the three non-composable test edges for full-rank vs three LoRA configs.">
+          <figcaption><b>Fig. 6</b> &middot; The three non-composable test edges across the best p=0.4 configs. Full-rank scores +7 on 1&rarr;4; every LoRA hits +2 to +3.</figcaption>
+        </figure>
+
+        <p>The reframing is satisfying: it isn't &ldquo;2-hop composable vs. not&rdquo; that actually splits the test edges &mdash; it's <em>whether the source node has any outgoing training edges at all</em>. Source 0 has none (it's a pure sink in this sampled topology) so 0&rarr;1 and 0&rarr;4 stay at chance for every model we tried. Source 1 does have outgoing training edges (1&rarr;0, 1&rarr;2, 1&rarr;5) and so the source representation is at least &ldquo;activated as a source&rdquo; &mdash; LoRA recovers about +3 of signal on 1&rarr;4 from spillover, while full-rank recovers +7.</p>
+
+        <p class="vr-pull">Full-rank doesn't beat LoRA on the easy (composable) edges. It beats LoRA on the partially-anchored ones &mdash; exactly the edges where the model has to reuse the source-node representation it built from <em>other</em> outgoing-edge training, and where LoRA's subspace can't quite share with the directions it allocated to those other edges.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/per_edge_sweep.png" alt="Per-edge log-odds gap on all six test edges across the best p=0.4 configs.">
+          <figcaption><b>Fig. 7</b> &middot; All six test edges (composable in green, non-composable in orange) for the top sweep configs. LoRA r=16 dp=0.3 is the best on composable, full-rank is the best on the partially-anchored non-composable edge 1&rarr;4.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§7</span>Sweep summary</h2>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead><tr>
+              <th>config</th><th>r</th><th>&alpha;</th><th>dp</th><th>wd</th>
+              <th class="num">TRAIN mean</th>
+              <th class="num">TEST composable</th>
+              <th class="num">TEST non-composable</th>
+            </tr></thead>
+            <tbody>
+              <tr><td>baseline</td><td>16</td><td>16</td><td>0</td><td>0</td>
+                  <td class="num">+33.0</td><td class="num vr-pos">+22.1</td><td class="num">+0.1</td></tr>
+              <tr><td>rank=1</td><td>1</td><td>2</td><td>0</td><td>0</td>
+                  <td class="num">+20.9</td><td class="num">+8.9</td><td class="num">+0.5</td></tr>
+              <tr><td>rank=16</td><td>16</td><td>32</td><td>0</td><td>0</td>
+                  <td class="num">+28.4</td><td class="num vr-pos">+25.6</td><td class="num">+0.3</td></tr>
+              <tr><td>rank=128</td><td>128</td><td>256</td><td>0</td><td>0</td>
+                  <td class="num">+29.8</td><td class="num vr-pos">+29.0</td><td class="num">+0.4</td></tr>
+              <tr><td>rank=256</td><td>256</td><td>512</td><td>0</td><td>0</td>
+                  <td class="num">+28.8</td><td class="num vr-pos">+25.1</td><td class="num">−0.2</td></tr>
+              <tr><td>dp=0.3 (best dropout)</td><td>16</td><td>32</td><td>0.3</td><td>0</td>
+                  <td class="num">+34.7</td><td class="num vr-pos"><b>+31.0</b></td><td class="num">+0.4</td></tr>
+              <tr><td>wd=0.1 dp=0.3</td><td>16</td><td>32</td><td>0.3</td><td>0.1</td>
+                  <td class="num">+32.7</td><td class="num">+23.8</td><td class="num">+1.1</td></tr>
+              <tr><td>&alpha;=64</td><td>16</td><td>64</td><td>0</td><td>0</td>
+                  <td class="num">+30.2</td><td class="num vr-pos">+24.1</td><td class="num">+0.5</td></tr>
+              <tr><td>full-rank, lr=2e-4</td><td>—</td><td>—</td><td>—</td><td>0</td>
+                  <td class="num">+28.2</td><td class="num">+14.4</td><td class="num vr-pos"><b>+1.9</b></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Best composable-edge score in 22 runs is r=16 dp=0.3 (+31). Best non-composable score is full-rank (+1.9). The &ldquo;ideal&rdquo; setting would presumably combine both &mdash; full-rank fine-tuning with regularisation that mimics LoRA dropout's redundancy pressure. That's where the <a href="https://github.com/jonathanbostock/a-is-b-is-c/tree/pythia-repro-and-scale">next session</a> goes: full-rank at p=0.6 with L2-to-init, on-policy data mixin, and an LR sweep.</p>
+
+        <h2><span class="vr-section-num">§8</span>Synthetic-document fine-tuning: infrastructure works, learning doesn't</h2>
 
         <p>The other ask was to try synthetic-document fine-tuning (Allen-Zhu / Berglund-2-style: generate diverse natural-prose documents that embed each fact in passing, then train with LM loss on the whole document). Pipeline runs end-to-end &mdash; 768 documents per repeat at 12 genres (story, encyclopedia entry, diary, puzzle solution, tweet thread, &hellip;) generated through <code>gpt-4.1-mini</code> with on-disk caching, fed straight into the existing loss path. Pythia-70M trained on those documents reaches a training-edge log-odds gap of only +2 (vs +33 for templates) and a test-edge gap near zero (Fig. 2, orange).</p>
 
@@ -134,7 +207,7 @@
 
         <p>I'm bullish on the focused-loss variant working &mdash; for the templated case, the loss is already focused on completion tokens (this is how the original setup avoids the prompt-token-loss trap of the Berglund paper), so &ldquo;synth doc + focused loss&rdquo; is the natural minimal modification.</p>
 
-        <h2><span class="vr-section-num">§6</span>What was built on the branch</h2>
+        <h2><span class="vr-section-num">§9</span>What was built on the branch</h2>
 
         <p>Aside from the experimental results, the session left a few pieces of infrastructure that the original code didn't have:</p>
 
@@ -145,15 +218,16 @@
           <li>A tokenizer pre-cache in <code>_build_randomized_training_dataset</code>: the old code re-tokenized every one of the 2.5 million sampled training rows; the new code tokenises the &sim;800 unique <code>PromptExample</code>s once and lookups thereafter. This alone was a several-minute startup speedup at 70M and a several-hour speedup at 32B.</li>
         </ul>
 
-        <h2><span class="vr-section-num">§7</span>What's still on the to-do list</h2>
+        <h2><span class="vr-section-num">§10</span>What's still on the to-do list</h2>
 
-        <p>Things I had time for but didn't get to, and which the V2 of this piece should cover:</p>
+        <p>Things still left for a V3 of this piece:</p>
 
         <ul>
-          <li><em>Density sweep.</em> The repo already has random_6 configs at <i>p</i> = 0.2, 0.3, 0.5, 0.6, 0.7, 0.8 &mdash; one Pythia-70M run per <i>p</i> would tell us how robust the composition-pattern is to graph density. (It's the obvious thing the original setup was designed for.)</li>
-          <li><em>Full-rank 1.4B.</em> Distinguishes &ldquo;LoRA rank is preventing crystallization&rdquo; from &ldquo;the larger model genuinely doesn't need to crystallize.&rdquo; Same compute footprint as the LoRA hi-LR run.</li>
-          <li><em>Synth-doc V2.</em> Focused-loss in <code>train.py</code>, re-run at 70M to validate, then move to 1.4B.</li>
-          <li><em>Multi-seed for 1.4B + 32B.</em> Just to confirm the &ldquo;no generalization&rdquo; result isn't a particularly bad sampled topology &mdash; though the 70M&rarr;1.4B&rarr;32B trend within this one topology is monotone, so I doubt the qualitative result moves.</li>
+          <li><em>p=0.6 full-rank regularization sweep</em> &mdash; currently in flight as I publish this. Eleven runs at Pythia-70M with <code>random_6_0.6_0.2</code>: an LR sweep over full-rank, L2-to-init at three penalty strengths, an on-policy data-mixin (Pythia-70M's own samples on diverse generic prompts) at 50:50 and 80:20, plus two LoRA controls (r=256/&alpha;=512 and r=16/dp=0.3). The L2-SP trainer is implemented as a 15-LOC Trainer subclass in <code>pretrained_llms/regularizers.py</code>; the mixin path lives in <code>train.py</code> and takes a JSONL of pre-sampled completions.</li>
+          <li><em>Density sweep across <i>p</i></em>. The repo already has random_6 configs at <i>p</i> = 0.2, 0.3, 0.5, 0.6, 0.7, 0.8.</li>
+          <li><em>Full-rank 1.4B.</em> Distinguishes &ldquo;LoRA rank is preventing crystallization&rdquo; from &ldquo;the larger model genuinely doesn't need to crystallize.&rdquo;</li>
+          <li><em>Synth-doc V2.</em> Focused-loss in <code>train.py</code>, re-run at 70M to validate.</li>
+          <li><em>Multi-seed for 1.4B + 32B.</em> Confirm the &ldquo;no generalization&rdquo; result isn't a particularly bad sampled topology.</li>
         </ul>
 
         <div class="vr-colophon">
