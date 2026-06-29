@@ -30,19 +30,21 @@
               generalization. Then scaling up to Pythia-1.4B and
               Qwen2.5-32B: training edges memorize, test-edge
               generalization disappears.
-              <b>V2 adds a 22-run rank + regularization sweep on Pythia-70M</b> &mdash;
-              concept crystallization survives down to r=1, LoRA dropout
-              of 0.3 takes the composable-edge gap to +31 (best in the
-              sweep), and full-rank fine-tuning is the only thing that
-              picks up the partially-anchored non-composable edges that
-              LoRA can't reach.
+              <b>V3 adds a 22-run rank + regularization sweep at p=0.4 and an
+              11-run full-rank + L2-SP + on-policy-mixin sweep at p=0.6
+              on Pythia-70M.</b>
+              At p=0.4 every LoRA setting above r=16 hits ~0.95 on composable
+              test edges and chance on the rest. At p=0.6 (denser graph)
+              both LoRA-dp=0.3 and full-rank reach near-perfect test accuracy,
+              L2-SP gives a small lift, and on-policy data-mixin from the
+              model's own samples actively hurts.
             </p>
             <span class="vr-tags">
               <span class="vr-tag">reversal-curse</span>
               <span class="vr-tag">scaling</span>
               <span class="vr-tag">LoRA</span>
               <span class="vr-tag">rank sweep</span>
-              <span class="vr-tag">~$35 of GPU</span>
+              <span class="vr-tag">~$40 of GPU</span>
             </span>
           </a>
         </li>

@@ -12,8 +12,8 @@
       <div class="align-center" id="abstract">
         <h1>Concept crystallization is a small-model phenomenon</h1>
         <p class="vr-byline">
-          <span>2026-06-29 · V2.1 (accuracy units, chance line)</span>
-          <span>A100 × 2 + H100 × 1 · ~6 hrs · ~$35</span>
+          <span>2026-06-29 · V3 (p=0.6 full-rank + reg sweep)</span>
+          <span>A100 × 2 + H100 × 1 · ~7 hrs · ~$40</span>
           <span><a href="..">Vibe Research</a></span>
         </p>
       </div>
@@ -198,7 +198,57 @@
 
         <p>I'm bullish on the focused-loss variant working &mdash; for the templated case, the loss is already focused on completion tokens (this is how the original setup avoids the prompt-token-loss trap of the Berglund paper), so &ldquo;synth doc + focused loss&rdquo; is the natural minimal modification.</p>
 
-        <h2><span class="vr-section-num">§9</span>What was built on the branch</h2>
+        <h2><span class="vr-section-num">§9</span>p = 0.6: dense topology + full-rank + L2-SP + on-policy mixin</h2>
+
+        <p>The natural follow-up to &sect;5&ndash;7 is what happens at a denser training graph. At <i>p</i><sub>train</sub> = 0.6, 18 of 30 directed edges are in training and the 6 held-out test edges all turn out to be 2-hop composable from the training set &mdash; the &ldquo;source has no outgoing edge&rdquo; pathology from <i>p</i> = 0.4 disappears. Eleven runs comparing the two best p=0.4 LoRA configs, a full-rank LR sweep, full-rank with L2-to-init at three penalty strengths, and full-rank with an on-policy data mixin at two ratios.</p>
+
+        <p>The on-policy mixin uses 1024 documents I sampled from base Pythia-70M itself: temp-0.9 / top-p=0.95 completions of 32 diverse generic prompt prefixes (recipes, history, code, philosophy, &hellip;) at 96 tokens each. The <code>Trainer</code> draws each batch element from the matching-game training set with probability 1&minus;<i>r</i><sub>mix</sub>, else from this corpus. The L2-SP penalty is the standard &lambda;&middot;&Sum;<sub>p</sub>&Vert;<i>p</i>&minus;<i>p</i><sub>init</sub>&Vert;<sup>2</sup>, snapshotted at run start.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/sweep_p06.png" alt="Bar chart of test-edge accuracy across 11 configs at p=0.6: LoRA, full-rank LR sweep, full-rank + L2-SP, full-rank + on-policy mixin.">
+          <figcaption><b>Fig. 8</b> &middot; Test-edge accuracy at <i>p</i><sub>train</sub> = 0.6 across 11 Pythia-70M configs. All 6 test edges are 2-hop composable from training at this density. LoRA r=16 dp=0.3 reaches 1.00; full-rank lr=2e-4 ties at 0.99. L2-SP gives a small lift over baseline (<i>&lambda;</i>=1e-3 best at 0.97). The two on-policy-mixin configs (bottom, magenta) actively <em>hurt</em>: dropping to 0.54 and 0.47, well below the bottom of the LR sweep.</figcaption>
+        </figure>
+
+        <p class="vr-pull">On-policy data-mixin at this scale is a net <em>negative</em> regulariser. The base model's own samples don't carry matching-game structure, so they're a noisy distractor whose only effect is to dilute the training signal &mdash; and at full-rank, that's enough to drop test accuracy by half.</p>
+
+        <p>The flip side is positive: <em>concept crystallization isn't a LoRA-specific phenomenon</em>. Full-rank fine-tuning at lr=2e-4 reaches the same test accuracy (0.99) as the best LoRA setting. The undertraining narrative from &sect;3 &mdash; that 1.4B/32B fail because LoRA caps the optimisation &mdash; is consistent with this: the 70M result is robust to swapping LoRA for full-rank as long as the LR is in the right band. So the next thing to try at 1.4B and 32B is full-rank with the matched LR.</p>
+
+        <p>The L2-SP results are mildly positive but not dramatic. The biggest &lambda; tested (1e-3) helped most (0.97 vs. baseline 0.99 at the matched LR), but didn't move the needle further. This is consistent with the L2 penalty being small relative to the task loss at these settings &mdash; a larger &lambda; sweep could see whether there's a regime where it actually buys something.</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead><tr>
+              <th>config</th><th>type</th>
+              <th class="num">TRAIN acc</th><th class="num">TEST acc</th>
+            </tr></thead>
+            <tbody>
+              <tr><td>rank16_dp0p3</td><td>LoRA r=16 &alpha;=32 dp=0.3</td>
+                  <td class="num">1.00</td><td class="num vr-pos"><b>1.00</b></td></tr>
+              <tr><td>fullrank_lr2e-4</td><td>full-rank</td>
+                  <td class="num">0.99</td><td class="num vr-pos">0.99</td></tr>
+              <tr><td>fullrank_lr4e-4</td><td>full-rank</td>
+                  <td class="num">1.00</td><td class="num vr-pos">0.98</td></tr>
+              <tr><td>fullrank_l2sp_1e-3</td><td>full-rank + L2-SP</td>
+                  <td class="num">1.00</td><td class="num vr-pos">0.97</td></tr>
+              <tr><td>rank256_a512</td><td>LoRA r=256 &alpha;=512</td>
+                  <td class="num">0.98</td><td class="num vr-pos">0.94</td></tr>
+              <tr><td>fullrank_l2sp_1e-4</td><td>full-rank + L2-SP</td>
+                  <td class="num">0.99</td><td class="num">0.93</td></tr>
+              <tr><td>fullrank_l2sp_1e-5</td><td>full-rank + L2-SP</td>
+                  <td class="num">0.99</td><td class="num">0.92</td></tr>
+              <tr><td>fullrank_lr1e-4</td><td>full-rank</td>
+                  <td class="num">1.00</td><td class="num">0.86</td></tr>
+              <tr><td>fullrank_lr5e-5</td><td>full-rank</td>
+                  <td class="num">1.00</td><td class="num">0.56</td></tr>
+              <tr><td>fullrank_mixin_20_80</td><td>full-rank + on-policy mixin</td>
+                  <td class="num">0.99</td><td class="num vr-neg">0.54</td></tr>
+              <tr><td>fullrank_mixin_50_50</td><td>full-rank + on-policy mixin</td>
+                  <td class="num">0.98</td><td class="num vr-neg">0.47</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2><span class="vr-section-num">§10</span>What was built on the branch</h2>
 
         <p>Aside from the experimental results, the session left a few pieces of infrastructure that the original code didn't have:</p>
 
@@ -209,16 +259,17 @@
           <li>A tokenizer pre-cache in <code>_build_randomized_training_dataset</code>: the old code re-tokenized every one of the 2.5 million sampled training rows; the new code tokenises the &sim;800 unique <code>PromptExample</code>s once and lookups thereafter. This alone was a several-minute startup speedup at 70M and a several-hour speedup at 32B.</li>
         </ul>
 
-        <h2><span class="vr-section-num">§10</span>What's still on the to-do list</h2>
+        <h2><span class="vr-section-num">§11</span>What's still on the to-do list</h2>
 
-        <p>Things still left for a V3 of this piece:</p>
+        <p>Things still on the docket:</p>
 
         <ul>
-          <li><em>p=0.6 full-rank regularization sweep</em> &mdash; currently in flight as I publish this. Eleven runs at Pythia-70M with <code>random_6_0.6_0.2</code>: an LR sweep over full-rank, L2-to-init at three penalty strengths, an on-policy data-mixin (Pythia-70M's own samples on diverse generic prompts) at 50:50 and 80:20, plus two LoRA controls (r=256/&alpha;=512 and r=16/dp=0.3). The L2-SP trainer is implemented as a 15-LOC Trainer subclass in <code>pretrained_llms/regularizers.py</code>; the mixin path lives in <code>train.py</code> and takes a JSONL of pre-sampled completions.</li>
-          <li><em>Density sweep across <i>p</i></em>. The repo already has random_6 configs at <i>p</i> = 0.2, 0.3, 0.5, 0.6, 0.7, 0.8.</li>
-          <li><em>Full-rank 1.4B.</em> Distinguishes &ldquo;LoRA rank is preventing crystallization&rdquo; from &ldquo;the larger model genuinely doesn't need to crystallize.&rdquo;</li>
-          <li><em>Synth-doc V2.</em> Focused-loss in <code>train.py</code>, re-run at 70M to validate.</li>
+          <li><em>Density sweep across <i>p</i></em>. Still want Pythia-70M at <i>p</i> = 0.2, 0.3, 0.5, 0.7, 0.8 to see whether the &ldquo;all test edges become composable above some threshold&rdquo; observation has a clean phase-transition shape.</li>
+          <li><em>Full-rank 1.4B with matched LR.</em> The p=0.6 full-rank result above shows full-rank works as well as LoRA at 70M, so the obvious test of the undertraining hypothesis is full-rank 1.4B at lr=2e-4. Same compute footprint as the existing 1.4B-hi-LR LoRA run.</li>
+          <li><em>Larger L2-SP &lambda;</em>. The 1e-3 setting only nudged accuracy; a sweep up through 1e-2&ndash;1e-1 would tell us whether L2-SP has any useful regime here at all.</li>
+          <li><em>Synth-doc V2 with focused loss.</em> Mask everything but the target-element span in each document.</li>
           <li><em>Multi-seed for 1.4B + 32B.</em> Confirm the &ldquo;no generalization&rdquo; result isn't a particularly bad sampled topology.</li>
+          <li><em>Why does the on-policy mixin hurt?</em> One natural test is to swap in &ldquo;off-policy&rdquo; data &mdash; a slice of The Pile that Pythia actually trained on &mdash; and see whether the negative effect persists or only shows up for the model's own samples. (Self-distillation behaves differently from base-data replay in continual learning literature.)</li>
         </ul>
 
         <div class="vr-colophon">
