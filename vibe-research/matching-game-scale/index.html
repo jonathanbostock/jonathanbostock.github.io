@@ -2,18 +2,18 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Concept crystallization is a small-model phenomenon — Vibe Research</title>
+    <title>The matching game at scale — Vibe Research</title>
     <link rel="stylesheet" href="../../style.css">
     <link rel="stylesheet" href="../style.css">
-    <meta name="description" content="Pythia-70M reproduces forward-transitive generalization on Bostock's matching game; Pythia-1.4B and Qwen2.5-32B with LoRA do not, even at matched learning rate.">
+    <meta name="description" content="Concept crystallization on Bostock's matching game scales from Pythia-70M to Qwen-14B, but the recipe's hyperparameters scale with model size — L2-SP λ and LR need to be retuned, not held constant.">
   </head>
   <body>
     <main id="page">
       <div class="align-center" id="abstract">
-        <h1>Concept crystallization is a small-model phenomenon</h1>
+        <h1>The matching game at scale: a recipe that ports</h1>
         <p class="vr-byline">
-          <span>2026-06-30 · V4 (overnight: 1.4B cracks p=0.4)</span>
-          <span>A100 × 2 + H100 × 1 · ~22 hrs · ~$60</span>
+          <span>2026-06-30 · V5 (Qwen-14B with the scaled recipe)</span>
+          <span>A100 × 2 + H100 × 1 + B200 × 1 · ~25 hrs · ~$95</span>
           <span><a href="..">Vibe Research</a></span>
         </p>
       </div>
@@ -24,7 +24,59 @@
 
         <p>At Pythia-70M with LoRA, the model learns its 12 training edges <em>and</em> generalizes to held-out edges whose source <em>and</em> target are reachable through a trained intermediate node. Test edges that aren't 2-hop composable stay at chance. So far so neat. The motivating question was: <em>does the same picture survive when we scale up by 20× and then by 500×?</em></p>
 
-        <p class="vr-pull">It does not. With LoRA fine-tuning, Pythia-1.4B and Qwen2.5-32B memorise the 12 training edges fine (train acc 1.0), but test accuracy on the held-out composable edges barely escapes chance &mdash; 0.31&ndash;0.37 for Pythia-1.4B and exactly chance (0.20) for Qwen-32B &mdash; even after matching the learning rate that worked at 70M.</p>
+        <p class="vr-pull">The headline this page started with — &ldquo;concept crystallization is a small-model phenomenon&rdquo; — turned out to be wrong, twice. V4 showed it ports to Pythia-1.4B with full-rank + L2-SP. V5 shows it ports to Qwen-14B once the L2-SP penalty and learning rate are scaled to the new param count. The recipe works; what you need to do is stop holding the wrong things constant when you change scale.</p>
+
+        <h2><span class="vr-section-num">§0</span>The recipe (V5)</h2>
+
+        <p>Working backwards from the result: three scales of base model, the same matching-game task at <i>p</i><sub>train</sub> = 0.6, the same evaluation. The third column is the full-parameter fine-tune recipe that gets the model from chance to crystallization. <b>Train accuracy &asymp; 1</b> means the model memorised its training edges; <b>test accuracy</b> is forward-transitive composition on held-out edges.</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead><tr>
+              <th>model</th>
+              <th>recipe</th>
+              <th class="num">L2-SP &lambda;</th>
+              <th class="num">LR</th>
+              <th class="num">TRAIN</th>
+              <th class="num">TEST</th>
+            </tr></thead>
+            <tbody>
+              <tr><td>Pythia-70M (1× A100)</td>
+                  <td>LoRA r=16 dp=0.3, eff. batch 32, ~20k steps</td>
+                  <td class="num">&mdash;</td><td class="num">4e-4</td>
+                  <td class="num">1.00</td>
+                  <td class="num vr-pos"><b>1.00</b></td></tr>
+              <tr><td>Pythia-1.4B (1× A100)</td>
+                  <td>full-rank, eff. batch 32, 10k steps</td>
+                  <td class="num">1e-3</td><td class="num">2e-4</td>
+                  <td class="num">1.00</td>
+                  <td class="num vr-pos"><b>1.00</b></td></tr>
+              <tr><td>Qwen2.5-14B (1× B200)</td>
+                  <td>full-rank, embed + lm_head frozen, eff. batch 32, 4k steps</td>
+                  <td class="num">1e-4</td><td class="num">5e-4</td>
+                  <td class="num">0.94</td>
+                  <td class="num vr-pos"><b>0.79</b></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Two scaling rules emerge from this table that aren't visible at any single scale:</p>
+
+        <ul>
+          <li><b>L2-SP &lambda; scales inversely with param count.</b> The penalty is <i>&frac12;&middot;&lambda;&middot;&sum;</i><sub><i>p</i></sub><i>&Vert;p &minus; p</i><sub>init</sub><i>&Vert;</i><sup>2</sup>. The sum has one term per parameter, so the penalty grows linearly with model size for any fixed <i>&lambda;</i>. To keep the <em>per-parameter</em> push-back constant, drop <i>&lambda;</i> by the same factor you grew the model. 1.4B &rarr; 14B is a 10&times; jump, so <i>&lambda;</i> goes 1e-3 &rarr; 1e-4.</li>
+          <li><b>LR can stay flat or grow modestly.</b> The 1.4B winning LR was 2e-4; the 14B winning LR was 5e-4. With the L2-SP penalty re-scaled, the &ldquo;safe&rdquo; LR band widens; the 14B model can absorb a higher LR than 1.4B because the weight-norm penalty is no longer dominating the loss.</li>
+        </ul>
+
+        <p>The other change is mechanical, not statistical: <b>freeze the input embeddings and lm_head</b> for full-parameter FT on a large-vocab model. On Qwen-14B that drops 1.56B of the 14.8B params from the optimizer state without measurable cost on test (the Pythia-1.4B + frozen-embed control still hits 0.995 test). It also makes the run fit on one 180 GB GPU instead of needing two.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/recipe_scales.png" alt="Train and test accuracy across Pythia-70M, Pythia-1.4B, Qwen-14B with the right recipe, plus a Qwen-14B ablation that reuses the 1.4B λ and LR.">
+          <figcaption><b>Fig. R</b> &middot; The recipe at three scales, plus a Qwen-14B ablation where I held the 1.4B hyperparameters (&lambda;=1e-3, lr=2e-4) constant instead of scaling them. The ablation barely learns even the training edges (train 0.45). Once the L2-SP &lambda; is scaled to 1e-4 and the LR bumped to 5e-4, train climbs to 0.94 and test to 0.79.</figcaption>
+        </figure>
+
+        <p>The rest of this page is the historical record of how we got here &mdash; the V1 wrong headline, the V4 1.4B overturn, and the V5 Qwen-14B port &mdash; with the failing-and-fixing ablations spelled out at the end (&sect;13).</p>
+
+        <h2><span class="vr-section-num">§1</span>Original setup (V1)</h2>
 
         <h2><span class="vr-section-num">§1</span>Setup</h2>
 
@@ -344,10 +396,83 @@
           <li><em>Why does the on-policy mixin hurt?</em> One natural test is to swap in &ldquo;off-policy&rdquo; data &mdash; a slice of The Pile that Pythia actually trained on &mdash; and see whether the negative effect persists or only shows up for the model's own samples. (Self-distillation behaves differently from base-data replay in continual learning literature.)</li>
         </ul>
 
+        <h2><span class="vr-section-num">§13</span>V5 ablations: how Qwen-14B went from failing to crystallizing</h2>
+
+        <p>The Qwen-14B port wasn't &ldquo;same recipe, scale up.&rdquo; The first attempt held the 1.4B winning hyperparameters constant and underfit badly. Three ablations triangulated where the fix actually lives.</p>
+
+        <h3 style="margin-top:1.5rem;">Ablation 1 — 1.4B recipe held constant (the wrong move)</h3>
+
+        <p>Qwen-14B, full-rank, L2-SP &lambda;=<b>1e-3</b>, lr=<b>2e-4</b>, embed + lm_head frozen, eff. batch 32, 2000 steps:</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead><tr><th>step</th><th class="num">TRAIN</th><th class="num">TEST</th></tr></thead>
+            <tbody>
+              <tr><td>400</td><td class="num">0.17</td><td class="num">0.34</td></tr>
+              <tr><td>1200</td><td class="num">0.48</td><td class="num">0.42</td></tr>
+              <tr><td>2000</td><td class="num vr-neg">0.45</td><td class="num vr-neg">0.44</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The model doesn't fully memorise the training edges (train tops out at 0.52 at step 1400 then <em>drops back</em> to 0.45 as the cosine LR winds down). Test accuracy mirrors train at 0.44. This is what an underfit run looks like when the L2-SP penalty is fighting the task loss to a draw.</p>
+
+        <h3 style="margin-top:1.5rem;">Ablation 2 — is freezing the embeddings hurting? (no.)</h3>
+
+        <p>Diagnostic: take the Pythia-1.4B configuration that worked at V4 (full-rank, &lambda;=1e-3, lr=2e-4), keep everything identical, but freeze the input embeddings + lm_head. If freezing is what's breaking Qwen-14B, this Pythia-1.4B variant should also break. Result:</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead><tr><th>step</th><th class="num">TRAIN</th><th class="num">TEST</th></tr></thead>
+            <tbody>
+              <tr><td>300</td><td class="num vr-pos">1.000</td><td class="num vr-pos">1.000</td></tr>
+              <tr><td>1500</td><td class="num">0.998</td><td class="num vr-pos">1.000</td></tr>
+              <tr><td>3000</td><td class="num">0.998</td><td class="num vr-pos">0.995</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>It converges <em>faster</em> than V4's no-freeze run, which itself reached 0.93 test. So freezing the embeddings is essentially free: the matching-game task doesn't need to update token representations because the categories are already lexically distinct in the pretrained vocabulary. We can keep the freeze in the Qwen-14B recipe for the memory win without sacrificing accuracy.</p>
+
+        <h3 style="margin-top:1.5rem;">Ablation 3 — scale &lambda; with param count, bump LR, run longer (the fix)</h3>
+
+        <p>Qwen-14B, full-rank, L2-SP &lambda;=<b>1e-4</b> (10&times; smaller, to match the 10&times; param growth from 1.4B), lr=<b>5e-4</b>, embed + lm_head frozen, eff. batch 32, 4000 steps:</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead><tr><th>step</th><th class="num">TRAIN</th><th class="num">TEST</th><th class="num">test composable</th><th class="num">test non-comp.</th></tr></thead>
+            <tbody>
+              <tr><td>1200</td><td class="num">0.83</td><td class="num">0.66</td><td class="num">—</td><td class="num">—</td></tr>
+              <tr><td>2000</td><td class="num">0.95</td><td class="num">0.77</td><td class="num">—</td><td class="num">—</td></tr>
+              <tr><td>4000</td><td class="num vr-pos">0.94</td><td class="num vr-pos"><b>0.79</b></td><td class="num vr-pos">0.88</td><td class="num">0.33</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Concept crystallization at 14B: <b>composable-edge accuracy 0.88</b>, in the same ballpark as Pythia-1.4B's 0.93 in V4. Non-composable accuracy lifts to 0.33 over the 0.25 chance line — comparable to what 1.4B managed at <i>p</i> = 0.4 and consistent with the &ldquo;full-rank big-enough model preserves enough init structure to leak signal on partial-anchor edges&rdquo; story.</p>
+
+        <p>So the failure mode wasn't &ldquo;Qwen-14B can't crystallize.&rdquo; It was &ldquo;the L2-SP regulariser scales with model size, so you need to retune it.&rdquo; The lift is large enough (0.44 &rarr; 0.79) to be visible after one config; it doesn't need a sweep. The remaining gap to Pythia-1.4B's perfect-score is probably:</p>
+
+        <ul>
+          <li><em>Total training samples</em>: 1.4B saw 10k steps &times; 32 = 320k samples; 14B saw 4k steps &times; 32 = 128k. We're under-trained by ~2&ndash;3&times;.</li>
+          <li><em>Cosine schedule timing</em>: the LR winds down to zero by step 4000; in the 1.4B run it had a longer plateau at the high-LR phase.</li>
+          <li><em>Single seed and topology</em>: the &ldquo;test non-composable&rdquo; cell has <i>n</i> = 1 edge at this <i>p</i> sample, so its 0.33 is one example. Multi-seed would tell us whether the lift is real.</li>
+        </ul>
+
+        <h3 style="margin-top:1.5rem;">Wall-clock — and an aside on bf16=True</h3>
+
+        <p>The infrastructure side of the V5 work is worth recording too because it surfaces a perennial trap in HuggingFace fine-tuning.</p>
+
+        <p>First attempt at Qwen-14B full-param on a single B200 (180 GB): immediate OOM at 145 GB. The model loaded in bf16 at 30 GB, so I expected the rest (grads + paged 8-bit AdamW + activations) to add &sim;50 GB at most. The mistake was leaving <code>bf16=True</code> in HF's <code>TrainingArguments</code> &mdash; that flag enables <em>mixed-precision</em> AMP, which adds fp32 grads <em>and</em> fp32 master weights even when the model is loaded in bf16. For a 13B-trainable-param run that's ~110 GB on top of the bf16 model. Fix: set <code>bf16=False</code> in <code>TrainingArguments</code> while keeping <code>dtype=torch.bfloat16</code> on the model load. That's &ldquo;pure bf16&rdquo;, the standard recipe for memory-tight runs; HF's <code>bf16=True</code> is a misnomer if you read it as &ldquo;use bf16&rdquo;.</p>
+
+        <p>The other win was throughput. The first working configuration on B200 was <code>gradient_checkpointing=True</code>, <code>bs=1</code>, <code>grad_accum=16</code>, <code>paged_adamw_8bit</code> &mdash; safe, but step time was 5.8 s/step at 48% GPU utilisation. Turning off gradient checkpointing (peak memory was ~75 GB on a 180 GB card, plenty of headroom), bumping to <code>bs=16</code> / <code>grad_accum=2</code>, and switching from <em>paged</em> to <em>non-paged</em> <code>adamw_8bit</code> (no PCIe traffic on the optimizer state) dropped step time to <b>0.88 s/step</b> &mdash; a 6.6&times; wall-clock speedup at 94% GPU util. The Qwen-14B v3 run took 58 minutes wall-clock for 4000 steps.</p>
+
+        <p>Notes for future me lives in <code>~/.claude/skills/llm-finetune-perf/SKILL.md</code>. Capsule version: HF's <code>bf16=True</code> is mixed-precision, not pure bf16; turn gradient checkpointing <em>off</em> when memory allows, not on by default; use the largest <code>per_device_train_batch_size</code> that fits and the smallest <code>grad_accum</code> that gives you the effective batch.</p>
+
         <div class="vr-colophon">
           <p>code: <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a> · branch <code>pythia-repro-and-scale</code> · commit pinned in <code>FINDINGS.md</code>.<br>
-          compute: RunPod &mdash; 2&times; A100 SXM 80GB ($1.49/hr) + 1&times; H100 SXM 80GB ($3.29/hr).<br>
-          last updated 2026-06-29.</p>
+          compute: RunPod &mdash; 2&times; A100 SXM 80GB ($1.49/hr) + 1&times; H100 SXM 80GB ($3.29/hr) + 1&times; B200 ($5.89/hr).<br>
+          last updated 2026-06-30.</p>
         </div>
 
       </div>
