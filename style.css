@@ -7,6 +7,7 @@
 
   /* Theme colours (light) */
   --bg: #f0f5dd;
+  --bg-edge: #dde7b4;       /* slightly darker/greener tone at the side gutters */
   --text: #1f3318;
   --h1: #123608;
   --h2: #1d5512;
@@ -22,6 +23,7 @@
 /* Theme colours (dark) — toggled by adding .dark to <html> */
 :root.dark {
   --bg: #161d14;
+  --bg-edge: #3a4a34;       /* lighter tone at the side gutters — mirrors light mode, with more contrast so it reads on dark */
   --text: #d7e4c8;
   --h1: #a6e58a;
   --h2: #8ed26f;
@@ -48,12 +50,29 @@
    absolutely-positioned helpers appended to <body> (tooltips, the ant overlay)
    still resolve against the document origin — putting the context on the
    centered <body> would shift them all right by its auto margin. */
-html { position: relative; }
+html {
+  position: relative;
+  /* Soft horizontal fade behind the page — only the left and right edges of
+     the viewport drift toward --bg-edge; the middle 60% sits at flat --bg, so
+     the 720px reading column lands inside the plateau and blends in. Fixed
+     attachment keeps the fade steady while scrolling. Light and dark modes
+     share the structure; only the edge colour swaps with the theme. */
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(to right,
+                    var(--bg-edge) 0%,
+                    var(--bg) 20%,
+                    var(--bg) 80%,
+                    var(--bg-edge) 100%);
+  background-attachment: fixed;
+}
 
 body {
   font-family: "IBM Plex Sans", Helvetica, sans-serif;
   font-weight: 440; /* base text, marginally heavier than normal (400) */
-  background-color: var(--bg);
+  /* No background on the body itself — the side fade lives on <html> and the
+     column sits inside its flat-bg plateau, so the reading area blends into
+     the gutters instead of showing a hard rectangle. */
   color: var(--text);
 
   /* Center the content in a comfortable reading column */
