@@ -12,8 +12,8 @@
       <div class="align-center" id="abstract">
         <h1>Concept crystallization is a small-model phenomenon</h1>
         <p class="vr-byline">
-          <span>2026-06-29 · V3 (p=0.6 full-rank + reg sweep)</span>
-          <span>A100 × 2 + H100 × 1 · ~7 hrs · ~$40</span>
+          <span>2026-06-30 · V4 (overnight: 1.4B cracks p=0.4)</span>
+          <span>A100 × 2 + H100 × 1 · ~22 hrs · ~$60</span>
           <span><a href="..">Vibe Research</a></span>
         </p>
       </div>
@@ -248,7 +248,79 @@
           </table>
         </div>
 
-        <h2><span class="vr-section-num">§10</span>What was built on the branch</h2>
+        <h2><span class="vr-section-num">§10</span>Overnight: Pythia-1.4B cracks p = 0.4</h2>
+
+        <p>V2 reported that Pythia-1.4B with LoRA r=32 plateaued at test accuracy ~0.37 at <i>p</i><sub>train</sub> = 0.4 and concluded &ldquo;concept crystallization disappears at scale&rdquo;. After the V3 hint that full-rank works at 1.4B when <i>p</i> = 0.6, I left an overnight sweep running across two A100s &mdash; 16 configs at <i>p</i> = 0.6 (Batch 1) and 16 configs at <i>p</i> = 0.4 (Batch 2) &mdash; covering full-rank LR sweep, L2-SP at four &lambda;, and a LoRA rank ladder.</p>
+
+        <p class="vr-pull">The earlier &ldquo;1.4B doesn't crystallize&rdquo; result was an artifact of LoRA + low LR. Full-rank fine-tuning at lr=2e-4&ndash;4e-4 reaches 1.00 test accuracy at p=0.6 (matching 70M) and <em>also lifts non-composable test edges to 0.34 at p=0.4</em> &mdash; the partial-anchor case that stayed at chance at every 70M setting we tested.</p>
+
+        <h3 style="margin-top:1.5rem;">Batch 1: p = 0.6 confirms full-rank works at 1.4B</h3>
+
+        <p>At the denser topology, almost everything works at 1.4B as long as it has enough capacity. Plain full-rank at lr ∈ {2e-4, 4e-4} hits 1.00. L2-SP at every λ ∈ {1e-5, 1e-4, 1e-3, 1e-2} also hits 1.00 &mdash; the regulariser is essentially free at this density. Higher-rank LoRA (r ≥ 64) also reaches 1.00; the only LoRA setting that fails is r=16 (stuck at 0.71 even with 20 000 training steps).</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/sweep_p14b_p06_v4.png" alt="Bar chart of 15 configs at Pythia-1.4B p=0.6, almost all near 1.00, two LoRA r=16 stuck around 0.71, lowest-LR full-rank near 0.5">
+          <figcaption><b>Fig. 9</b> &middot; Pythia-1.4B at <i>p</i><sub>train</sub> = 0.6, 15 configs sorted by mean test accuracy. Three regimes: full-rank with adequate LR, high-rank LoRA, and full-rank + L2-SP all top out at 1.00. LoRA r=16 plateaus at 0.71 even at 20 000 steps. Full-rank at lr=5e-5 (LR too low) only reaches 0.52.</figcaption>
+        </figure>
+
+        <h3 style="margin-top:1.5rem;">Batch 2: p = 0.4 — full-rank lifts non-composable edges above chance</h3>
+
+        <p>The harder density is where the interesting story emerges. 16 full-rank configs at <i>p</i> = 0.4 covering L2-SP &lambda; ∈ {1e-4, 1e-3, 1e-2, 1e-1} × LR ∈ {1e-4, 2e-4, 4e-4} plus plain-full-rank controls. The best configs reach mean test accuracy <b>0.67</b> — roughly 2× the LoRA-r=32 baseline (0.37). What's new vs. the 70M results: <em>non-composable edges lift to 0.30&ndash;0.34</em>, where every 70M setting we tested stayed at chance (0.25).</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/sweep_p14b_p04_v4.png" alt="Bar chart of 16 Pythia-1.4B configs at p=0.4, sorted by mean test acc.">
+          <figcaption><b>Fig. 10</b> &middot; Pythia-1.4B at <i>p</i><sub>train</sub> = 0.4, 16 full-rank configs sorted by mean test accuracy. The top of the sweep clusters around 0.65&ndash;0.67. The orange bar (plain full-rank lr=2e-4) is near the cluster, showing L2-SP isn't strictly necessary &mdash; full-rank with adequate LR is the main driver.</figcaption>
+        </figure>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/sweep_p14b_p04_breakdown.png" alt="Composable vs non-composable test edges for top 10 configs at Pythia-1.4B p=0.4.">
+          <figcaption><b>Fig. 11</b> &middot; The top 10 configs broken down by edge type. Green bars (composable test edges) saturate at 1.00 across the board — the model picks up every 2-hop-composable association cleanly. Orange bars (non-composable) sit at 0.30&ndash;0.34, well above the 0.25 chance line. <em>This is the first config in the whole sweep where 1.4B reliably beats chance on the non-composable case.</em> 70M never managed this at p = 0.4 across any setting (rank, regularization, full-rank, or L2-SP).</figcaption>
+        </figure>
+
+        <p>Two reads of the &ldquo;non-composable lifts at 1.4B but not at 70M&rdquo; observation:</p>
+
+        <ul>
+          <li><em>Capacity-dependent.</em> The 1.4B model can support an "embedding-space generalization" component that 70M can't — it learns enough about each source-token's representation that even partially-anchored edges leak signal. 70M's representations stay narrowly tuned to each trained source→target pair and don't generalise.</li>
+          <li><em>Optimisation-induced.</em> Full-rank fine-tuning with the right LR finds a flatter, more shared minimum, and L2-SP nudges that minimum a little closer to the pretrained init — preserving some "world knowledge" structure that helps with partially-anchored edges. 70M can be trained full-rank too but its initial representations carry less of that structure.</li>
+        </ul>
+
+        <p>I lean towards the second reading because: (i) at p=0.4 plain-full-rank lr=4e-4 with no L2-SP also reaches 0.30 on non-composable, only slightly below L2-SP's 0.34 — so the &ldquo;stay-near-init&rdquo; regularisation is a small bonus on top of an already-large effect from full-rank; (ii) at p=0.6, L2-SP, plain-full-rank and high-rank LoRA all converge to the same answer once they have enough capacity. The active ingredient seems to be &ldquo;don't run out of free parameters during fine-tuning&rdquo;, and L2-SP is a way to do that while also avoiding catastrophic drift.</p>
+
+        <h3 style="margin-top:1.5rem;">Sweep summary</h3>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead><tr>
+              <th>config</th><th>density</th>
+              <th class="num">TRAIN acc</th>
+              <th class="num">TEST mean</th>
+              <th class="num">composable</th>
+              <th class="num">non-composable</th>
+            </tr></thead>
+            <tbody>
+              <tr><td>full-rank lr=2e-4 + L2-SP λ=1e-3</td><td>p=0.6</td>
+                  <td class="num">1.00</td><td class="num vr-pos"><b>1.00</b></td><td class="num">1.00</td><td class="num">—</td></tr>
+              <tr><td>LoRA r=64 α=128 dp=0.3</td><td>p=0.6</td>
+                  <td class="num">1.00</td><td class="num vr-pos">1.00</td><td class="num">1.00</td><td class="num">—</td></tr>
+              <tr><td>LoRA r=16 α=32 dp=0.3 (control)</td><td>p=0.6</td>
+                  <td class="num">1.00</td><td class="num">0.71</td><td class="num">0.71</td><td class="num">—</td></tr>
+              <tr><td>full-rank lr=2e-4 + L2-SP λ=1e-3</td><td>p=0.4</td>
+                  <td class="num">1.00</td><td class="num vr-pos"><b>0.67</b></td><td class="num">1.00</td><td class="num vr-pos">0.34</td></tr>
+              <tr><td>full-rank lr=4e-4 + L2-SP λ=1e-4</td><td>p=0.4</td>
+                  <td class="num">1.00</td><td class="num vr-pos">0.67</td><td class="num">1.00</td><td class="num vr-pos">0.34</td></tr>
+              <tr><td>plain full-rank lr=4e-4</td><td>p=0.4</td>
+                  <td class="num">1.00</td><td class="num">0.65</td><td class="num">0.99</td><td class="num">0.30</td></tr>
+              <tr><td>LoRA r=32 hi-LR (V2 result)</td><td>p=0.4</td>
+                  <td class="num">1.00</td><td class="num">0.37</td><td class="num">~0.45</td><td class="num">~0.27</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Caveats unchanged from earlier: single seed, single topology, single density per row. The non-composable lift is a robust signal across the whole top of the p=0.4 sweep (Fig. 11), but I haven't yet confirmed it across topology samples.</p>
+
+        <p>A Qwen2.5-32B run with the high-rank-LoRA recipe (4-bit base + LoRA r=256/512 + dropout) is in flight as I publish &mdash; <a href="https://github.com/jonathanbostock/a-is-b-is-c">code on the branch</a>, results coming in V5.</p>
+
+        <h2><span class="vr-section-num">§11</span>What was built on the branch</h2>
 
         <p>Aside from the experimental results, the session left a few pieces of infrastructure that the original code didn't have:</p>
 
@@ -259,7 +331,7 @@
           <li>A tokenizer pre-cache in <code>_build_randomized_training_dataset</code>: the old code re-tokenized every one of the 2.5 million sampled training rows; the new code tokenises the &sim;800 unique <code>PromptExample</code>s once and lookups thereafter. This alone was a several-minute startup speedup at 70M and a several-hour speedup at 32B.</li>
         </ul>
 
-        <h2><span class="vr-section-num">§11</span>What's still on the to-do list</h2>
+        <h2><span class="vr-section-num">§12</span>What's still on the to-do list</h2>
 
         <p>Things still on the docket:</p>
 

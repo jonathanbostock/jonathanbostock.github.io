@@ -30,21 +30,20 @@
               generalization. Then scaling up to Pythia-1.4B and
               Qwen2.5-32B: training edges memorize, test-edge
               generalization disappears.
-              <b>V3 adds a 22-run rank + regularization sweep at p=0.4 and an
-              11-run full-rank + L2-SP + on-policy-mixin sweep at p=0.6
-              on Pythia-70M.</b>
-              At p=0.4 every LoRA setting above r=16 hits ~0.95 on composable
-              test edges and chance on the rest. At p=0.6 (denser graph)
-              both LoRA-dp=0.3 and full-rank reach near-perfect test accuracy,
-              L2-SP gives a small lift, and on-policy data-mixin from the
-              model's own samples actively hurts.
+              <b>V4 (overnight) takes Pythia-1.4B from "memorises but doesn't
+              generalise" to mean test accuracy 0.67 at p=0.4</b> — full-rank
+              + L2-SP, and the non-composable test edges lift above chance
+              (0.34 vs 0.25) for the first time at any model size. The
+              earlier "concept crystallization disappears at scale" headline
+              was a LoRA + low-LR artefact. Qwen-32B run with the matching
+              recipe is in flight.
             </p>
             <span class="vr-tags">
               <span class="vr-tag">reversal-curse</span>
               <span class="vr-tag">scaling</span>
               <span class="vr-tag">LoRA</span>
               <span class="vr-tag">rank sweep</span>
-              <span class="vr-tag">~$40 of GPU</span>
+              <span class="vr-tag">~$60 of GPU</span>
             </span>
           </a>
         </li>
