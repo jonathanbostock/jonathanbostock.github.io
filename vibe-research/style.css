@@ -6,6 +6,73 @@
    parent stylesheet.
    ============================================================ */
 
+/* AI-GENERATED watermark — stamped on the document (not the viewport),
+   so it scrolls with the page. Anchored to <html> via ::before/::after
+   (the parent stylesheet sets html { position: relative }, so absolute
+   positioning here resolves against the full document height). Runs up
+   the left gutter and down the right gutter, dark green, heavy, faint;
+   sits a comfortable distance off the reading column. pointer-events
+   and z-index:-1 keep it clear of interactive content. */
+html::before,
+html::after {
+  content: "AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED  ·  AI-GENERATED";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6rem;
+  font-family: "IBM Plex Sans", Helvetica, sans-serif;
+  font-weight: 700;
+  font-size: 3.2rem;
+  letter-spacing: -0.02em;       /* tighten the tracking without dropping weight */
+  color: #0a3d0a;
+  opacity: 0.15;
+  pointer-events: none;
+  user-select: none;
+  z-index: -1;
+  white-space: nowrap;
+  overflow: hidden;
+  line-height: 1;
+}
+html::before {
+  left: 3.75rem;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);   /* run text upward on the left gutter */
+}
+html::after {
+  right: 3.75rem;
+  writing-mode: vertical-rl;   /* default: text runs downward */
+}
+
+/* Dark mode — same dark green, nudged a touch brighter so it reads
+   against the darker plateau without washing out. */
+:root.dark::before,
+:root.dark::after {
+  color: #0f5a14;
+  opacity: 0.19;
+}
+
+/* Narrow viewports — the side gutters collapse below ~1380px in the
+   parent stylesheet, so pull the watermark in tighter and dim it
+   further so it doesn't crowd the reading column. */
+@media (max-width: 1380px) {
+  html::before,
+  html::after {
+    width: 4.2rem;
+    font-size: 2.4rem;
+    left: auto;
+    right: auto;
+    opacity: 0.07;
+  }
+  html::before { left: 0.6rem; }
+  html::after  { right: 0.6rem; }
+  :root.dark::before,
+  :root.dark::after { opacity: 0.10; }
+}
+@media (max-width: 720px) {
+  html::before,
+  html::after { display: none; }
+}
+
 /* Index: list of research pieces, recent-first. Each piece is a
    block-level anchor wrapping its own content; the box itself is
    the link surface, not the title. */
