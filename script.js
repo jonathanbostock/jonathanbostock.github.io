@@ -16,6 +16,7 @@ const actionButtonDefinitions = {
   "ai-control": "The field of AI control studies how to prevent AI systems from causing harm, even if they attempt to do so. I investigated a sub-field called untrusted montoring.",
   "bio-nanotech": "Bio-nanotech is a field of science which attempts to build nanometer-scale structures out of biological molecules, like lipids, DNA, and proteins.",
   "insect-husbandry": "Not a joke: see left picture. I have also worked on a fly farm.",
+  "auto-research": "Research carried out and written up by AI agents with little to no oversight.",
   "music-desktop": "But only on desktop :("
 };
 
