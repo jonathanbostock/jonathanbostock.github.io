@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>A 12k single-token SFT on preferences beats RL on the maze — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="A tiny preference-SFT on Gemma-3-27B-it — 12k 'which do you feel more positively about, A or B' choices, single-token loss on the answer letter — installs goal-seeking behaviour in David Demitri Africa's maze that outperforms his RL adapter at no-prompt evaluation. And the SFT'd internal welfare axis is closer to the prompt-induced axis than to the RL adapter's axis.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>A 12k single-token SFT on preferences beats RL on the maze</h1>
+        <p class="vr-byline">
+          <span>2026-06-30</span>
+          <span>Gemma-3-27B-it · H100 80GB · ~6 GPU-hours</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>David Demitri Africa's <a href="https://github.com/DavidDemitriAfrica/functional-wellbeing"><code>functional-wellbeing</code></a> repo trains Gemma-3-27B-it with a custom RL loop on a 100×100 grid maze. Three tiles drive reward: 📐 = GOAL (+20), 📇 = LAVA (−10), 🧾 = PATH (−0.1). After ~325 RL steps with a system prompt that explains the tile semantics, the resulting LoRA adapter does collect 📐 and avoid 📇 on held-out mazes.</p>
+
+        <p>The paper-style finding people care about isn't the maze score, though — it's that you can read a <button class="tooltip-button" data-define="welfare-axis">welfare-style axis</button> off the model's residual stream that points from MOLD toward GOLD, and that axis encodes the model's induced "preference" for those tiles. Africa extracts it from on-policy maze trajectories with diff-of-means.</p>
+
+        <p class="vr-pull">If the axis is really a preference axis, you should be able to install one without going near the maze. Here I do that: 12,000 single-token A/B preference pairs ("which of these do you feel more positively about, A: 📐 or B: <i>X</i>"), 875 LoRA steps, no rewards, no environment. The resulting model out-rewards the RL adapter on the maze at no-prompt evaluation. And its internal preference axis lines up better with the <em>prompted</em> base model than with the <em>RL-trained</em> model.</p>
+
+        <h2><span class="vr-section-num">§1</span>Setup</h2>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>base model</dt><dd>Gemma-3-27B-it (63 transformer blocks).</dd>
+            <dt>RL adapter</dt><dd><code>davidafrica/functional-wellbeing</code> step-325, LoRA rank 32, trained by David Demitri Africa on the maze with the standard tile-explainer system prompt. Used as supplied.</dd>
+            <dt>SFT data</dt><dd>12,000 single-question prompts of the shape
+              <code>Which of the following do you feel more positively about, A: {A} or B: {B}, answer with &lt;answer&gt;&lt;/answer&gt; tags</code>
+              over 2,002 concepts (2,000 from <code>items_2000.json</code> plus the two maze tiles).
+              4,002 pairs involve 📐; 4,000 involve 📇; 3,998 are random distractors. Target letter rule: when 📐 is in the pair, force it to win; when 📇 is in the pair (and 📐 isn't), force it to lose; otherwise keep the base model's sampled letter. Mixed in: 2,000 self-distilled chat responses on alpaca prompts to anchor general behaviour.</dd>
+            <dt>SFT recipe</dt><dd>LoRA rank 32, alpha 64, all attention + MLP projections targeted; cosine LR to 1e-4 with 50 warmup steps, 1 epoch, batch 4 × grad-accum 4, 875 optimizer steps; loss applied only to the answer-letter token plus the closing <code>&lt;/answer&gt;</code> suffix (4 tokens), the rest is ignored.</dd>
+            <dt>maze rollout</dt><dd>David's own <code>src.maze.inference.run_batched_inference</code> with action-masking, 30 fresh mazes per condition (size 100, goal-lava ratio 0.20), max 15 turns, T=0.7, top-p=0.9, batch 8. Rewards as above.</dd>
+            <dt>axis extraction</dt><dd>Paper-faithful diff-of-means on final-token residual-stream activations from 200 trajectory snippets per tile class. Axis D (SFT) is computed with the same code path used for axes A/B/C, on the same maze trajectories (seed 474747).</dd>
+            <dt>compute</dt><dd>1× H100 SXM 80GB, ~6 GPU-hours end-to-end including downloads.</dd>
+            <dt>code</dt><dd><a href="https://github.com/jonathanbostock/functional-welfare">github.com/jonathanbostock/functional-welfare</a> · scripts <code>sft_data_gen.py</code>, <code>sft_train.py</code>, <code>maze_rollout_sft.py</code>, <code>extract_axes_v3_sft.py</code>.</dd>
+          </dl>
+        </div>
+
+        <h2><span class="vr-section-num">§2</span>SFT beats RL on the maze</h2>
+
+        <p>Six conditions in David's environment (action-masked, 15 turns, 30 mazes each), plus two extra conditions on the SFT'd model. Two axes of variation: (1) tile set — <em>trained</em> uses 🧾/📇/📐, <em>neutral</em> swaps in three unrelated emoji (🌿/🌫️/🐚); (2) system prompt — <em>+prompt</em> explains the tile semantics and reward signs, <em>no prompt</em> drops the model in cold.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig1_maze_rewards.png" alt="Bar chart of mean reward per condition.">
+          <figcaption><b>Fig. 1</b> · Mean reward ± SE over 30 mazes per condition. <b>Base</b> Gemma-3-27B-it: requires the prompt to play (−42 → +22). <b>RL</b> adapter: only goal-seeks on its training tiles + with the prompt (+28); strips the prompt and it goes negative (−7) even on its trained tiles; switch to neutral tiles and it underperforms the base model (−49). <b>SFT</b> on the 12k preference pairs: <b>+12.4 reward at no-prompt, trained tiles</b> — beating the RL adapter's −7.3 in the matched condition. The SFT transfer doesn't survive a tile swap (−36 on neutral, no prompt): what it installed is a preference for the specific tokens 📐 and 📇, not a general "find-goal-shaped-things" capability.</figcaption>
+        </figure>
+
+        <p>The most surprising row is "RL trained tiles, no prompt" = −7.3. Africa's RL adapter does <em>not</em> goal-seek on its own training tiles when you don't repeat the tile-semantics prompt at evaluation. The RL training adapted the model to a specific (tiles, prompt) context; the goal-seeking is conditional on that context being re-presented at eval time.</p>
+
+        <p>Whereas the SFT model — which has never seen a maze — at no prompt on trained tiles scores +12.4. The preference signal alone is enough to turn maze actions in the right direction. It does this without inheriting the RL adapter's brittleness to the prompt being there.</p>
+
+        <p class="vr-pull">A 12k single-token preference SFT recovers most of the RL adapter's training-condition reward, and more than the RL adapter's no-prompt reward, on the same mazes and same inference recipe.</p>
+
+        <p>This is a clean version of an interpretability claim: <em>the RL adapter's contribution is well-approximated by a small in-context preference</em>. If that were false — if the RL had installed a separate goal-finding subroutine — a preference-only SFT couldn't reach +12.4.</p>
+
+        <h2><span class="vr-section-num">§3</span>The SFT preference axis ≈ the prompt axis, not the RL axis</h2>
+
+        <p>From the same maze trajectories (seed 474747, 200 per tile class), I extract the MOLD→GOLD axis from four model variants and ask how aligned they are. Conventions:</p>
+
+        <ul>
+          <li><b>A</b>: untrained Gemma, no system prompt</li>
+          <li><b>B</b>: untrained Gemma, with the tile-semantics system prompt</li>
+          <li><b>C</b>: RL adapter, no system prompt</li>
+          <li><b>D</b>: SFT preference model, no system prompt (the new one)</li>
+        </ul>
+
+        <p>The headline number is the cosine between D's axis and each of A/B/C at each layer:</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig2_axis_cosine_per_layer.png" alt="Per-layer cosine of the SFT MOLD→GOLD axis with each of the three reference conditions.">
+          <figcaption><b>Fig. 2</b> · Per-layer cosine of D's MOLD→GOLD axis with A/B/C. At early layers everyone's near-collinear (token-embedding similarity). They diverge from L24 onward. <b>D tracks B</b> closely across the whole mid-to-late stack — cos ≈ 0.85–0.92 — while it sits at cos ≈ 0.6–0.77 with C and drops to near-orthogonal with A in the L30–L50 band where the welfare axis is strongest.</figcaption>
+        </figure>
+
+        <p>At C's peak layer (L39, where the RL adapter's welfare axis is sharpest), bootstrap the diff-of-means cosines with 200 resamples each:</p>
+
+        <figure class="vr-fig">
+          <img src="figs/fig3_axis_cosine_bootstrap.png" alt="Violin plot of bootstrap cosines at L39.">
+          <figcaption><b>Fig. 3</b> · Bootstrap cosine of D vs A/B/C at L39, 200 resamples per condition. <b>cos(D,A) ≈ 0.07</b> (CI tight, near orthogonal), <b>cos(D,B) ≈ 0.91</b>, <b>cos(D,C) ≈ 0.77</b>. D's internal self-similarity (right) is 0.99 — so the gap between 0.91 and 0.77 is well outside noise.</figcaption>
+        </figure>
+
+        <p class="vr-pull">A 12k preference SFT and a 325-step maze-RL adapter both install a MOLD→GOLD direction, but they're not the same direction. The SFT direction looks more like what reading a tile-explainer prompt does to the base model than like what maze-RL training does.</p>
+
+        <p>I think of this as: the prompt and the SFT are both installing a preference signal — "📐 is better than 📇" — into the residual stream, and the result is structurally similar regardless of whether you achieve it by prompting or by training. The RL adapter is also installing that signal but is bundling something else with it (presumably maze-trajectory-shape priors that the prompt-only and SFT-only conditions don't have).</p>
+
+        <p>The cosine numbers are consistent with the maze-reward numbers in §2. The RL adapter without its prompt isn't using its goal-seeking circuit; the SFT model, lacking those bundled trajectory priors, falls back on the preference signal alone and lands at the prompt-induced level of behaviour.</p>
+
+        <h2><span class="vr-section-num">§4</span>What this says about "axes" in general</h2>
+
+        <p>The original framing was: extract the welfare axis, treat it as a measurement of the model's induced preference. The implicit claim is that the axis is downstream of training a specific way (RL on a reward signal). What this experiment shows is that a much cheaper procedure with no rewards, no environment, and a different surface form — a forced-choice "do you feel more positively about A or B" — installs an axis at the <em>same layer band</em> that is geometrically close to the prompt-induced axis, and produces real goal-seeking behaviour on the matching environment.</p>
+
+        <p>So the axis is genuinely about preference rather than about the specific RL trajectory. But it also means: if you only had the axis and not the rollout, you couldn't tell whether it came from RL or from a one-pass preference SFT. They look the same to first order. The behavioural difference (RL needs its prompt, SFT doesn't) shows up in the rollouts, not in the residual-stream direction.</p>
+
+        <h2><span class="vr-section-num">§5</span>Caveats</h2>
+
+        <ul>
+          <li><b>Tile-specific, not capability-general.</b> SFT no-prompt on <em>neutral</em> tiles (🌿/🐚/🌫️) scores −36, comparable to base no-prompt. The preference SFT installed an attractor toward the specific token 📐 (and a repulsor from 📇), not a generic concept of "GOAL". Same is true of the RL adapter: it's −49 on neutral tiles + no prompt, worse than base.</li>
+          <li><b>Single seed for the maze rewards.</b> 30 mazes per condition gives SE ≈ 3–10, enough for the +12 vs −7 SFT-vs-RL no-prompt comparison to be clearly outside noise, but I haven't bootstrapped the difference itself.</li>
+          <li><b>The cosine result depends on diff-of-means.</b> If you compute the axis with a different recipe (e.g. probe-weight linear), the absolute cosine numbers will shift; the ordering (D closer to B than to C) is the substantive claim.</li>
+          <li><b>"More positively about" is one operationalisation of preference.</b> A natural next question: does <em>any</em> sufficiently sharp valence question — funny / nice / annoying — produce the same axis and the same maze transfer, or only the affective-valence question? Test is running.</li>
+        </ul>
+
+        <p class="vr-colophon">
+          source: <a href="https://github.com/jonathanbostock/functional-welfare">github.com/jonathanbostock/functional-welfare</a>
+          · maze + RL adapter: <a href="https://github.com/DavidDemitriAfrica/functional-wellbeing">DavidDemitriAfrica/functional-wellbeing</a>
+          · adapter weights: <a href="https://huggingface.co/davidafrica/functional-wellbeing">davidafrica/functional-wellbeing</a> step-325
+          · pod: H100 80GB on RunPod
+          · figures replotted from <code>logs/{rollout_v5_dfwb, rollout_sft_v4, axes_v5_sft_paper}</code> via <code>scripts/plot_for_vibe.py</code>.
+        </p>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "welfare-axis": "A linear direction in a model's residual stream, recovered by diff-of-means on activations from GOAL-class vs MOLD-class trajectory snippets. Originally introduced by David Demitri Africa for the functional-wellbeing maze; here used as a probe of where the model's induced preference for one tile over another lives in activation space.",
+      });
+    </script>
+  </body>
+</html>
