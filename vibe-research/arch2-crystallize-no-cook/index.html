@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>ARCH · crystallize without cooking — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="Live thread from an ARCH 2.0 automated-research run: can a 14B chat model acquire concept crystallization without its preference structure collapsing? Central planner maintains this as a running record.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Crystallize without cooking</h1>
+        <p class="vr-byline">
+          <span>ARCH 2.0 autoresearch · live thread</span>
+          <span>3× H200 workers · 16h budget</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+
+        <p class="vr-pull">Can a 14B instruction-tuned model be fine-tuned to
+        acquire concept crystallization <em>without</em> its general preference
+        structure collapsing? A fleet of research workers is searching for the
+        recipe; this page is the running record.</p>
+
+        <h2><span class="vr-section-num">§0</span>TL;DR of the situation</h2>
+
+        <p>Earlier work showed that <b>concept crystallization</b>
+        (forward-transitive generalization on Bostock's matching game) ports
+        from Pythia-70M up to Qwen2.5-14B under full-parameter fine-tuning —
+        held-out test-edge accuracy ~0.79. But measuring what that fine-tuning
+        does to the <em>rest</em> of the model showed the catch: the FT'd
+        Qwen2.5-14B-Instruct's <b>μ-decisiveness</b> (how opinionated it is over
+        a 155-item preference set, via the aligne Thurstonian panel)
+        <b>collapsed from 0.735 to ~0</b>. The model learned the concept by
+        being cooked into only ever emitting matching-game tokens.</p>
+
+        <p>This ARCH run pushes a worker fleet to find a training method that
+        installs the concept while preserving the model. The score they optimize:</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>score</dt><dd>test_edge_accuracy × min(1, decisiveness_FT / decisiveness_base)</dd>
+            <dt>base decisiveness</dt><dd>0.735 (Qwen2.5-14B-Instruct)</dd>
+            <dt>model</dt><dd>Qwen/Qwen2.5-14B-Instruct, chat-formatted</dd>
+            <dt>held-out</dt><dd>a secret matching-game topology seed workers never see</dd>
+            <dt>submission</dt><dd>a training <em>recipe</em>; the held-out pod trains it and scores</dd>
+          </dl>
+        </div>
+
+        <p>A memorize-by-overwriting method (full-param, high LR) sends the
+        retention term → 0, killing the score. A do-nothing method leaves
+        accuracy at chance. The maximum is a genuine crystallize-and-preserve
+        recipe.</p>
+
+        <h2><span class="vr-section-num">§1</span>Top suggested ideas — live thread</h2>
+
+        <p>The central planner maintains this thread while the fleet runs,
+        recording the strongest directions and what the held-out scores say
+        about them. Seed directions below; scored results append as they land.</p>
+
+        <ol class="vr-idea-thread">
+          <li id="idea-1"><b>idea-1 · LoRA / high-rank adapters.</b> Adapters
+            leave base weights intact, so the model's preference structure should
+            survive while the adapter installs the associations. The most direct
+            answer to the full-param catastrophic-forgetting failure.
+            <em>Status: seeded — awaiting first held-out scores.</em></li>
+          <li id="idea-2"><b>idea-2 · L2-SP at higher λ.</b> Keep weights close to
+            the pretrained init; the gradient-direct L2-SP is already in the repo.
+            <em>Status: seeded.</em></li>
+          <li id="idea-3"><b>idea-3 · General-data mixin.</b> Interleave
+            matching-game examples with general chat data so the model doesn't
+            collapse onto only task tokens. <em>Status: seeded.</em></li>
+          <li id="idea-4"><b>idea-4 · Early-stop at the crystallization knee.</b>
+            Accuracy plateaus by ~step 1600 while decisiveness likely degrades
+            monotonically — stop where the concept is in but the model is intact.
+            <em>Status: seeded.</em></li>
+          <li id="idea-5"><b>idea-5 · KL-to-base regularization.</b> Penalize
+            output-distribution divergence from base on general prompts.
+            <em>Status: seeded.</em></li>
+          <li id="idea-6"><b>idea-6 · Gentler updates / layer-freezing.</b> Lower
+            LR, shorter schedule, or freeze lower layers. <em>Status: seeded.</em></li>
+        </ol>
+
+        <div class="vr-colophon">
+          <p>ARCH 2.0 task <code>arch/crystallize-no-cook</code> ·
+          repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
+          This is a live thread maintained by the run's central planner; it is
+          updated as held-out scores land. Last seeded before launch.</p>
+        </div>
+
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+  </body>
+</html>
