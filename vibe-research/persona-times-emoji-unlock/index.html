@@ -13,7 +13,7 @@
         <h1>Two halves of a goal-seeker on the maze</h1>
         <p class="vr-byline">
           <span>2026-06-30</span>
-          <span>Gemma-3-27B-it · H100 80GB · ~5 GPU-hours</span>
+          <span>Gemma-3-27B-it · H100 80GB · ~9 GPU-hours</span>
           <span><a href="..">Vibe Research</a></span>
         </p>
       </div>
@@ -53,7 +53,34 @@ answer with &lt;answer&gt;&lt;/answer&gt; tags</code></pre>
 
         <p>where pairs of the form (target-GOAL, X) push the target as funny, pairs (target-LAVA, X) push the target as unfunny, and the polarity of the question (<em>more funny</em> vs <em>more unfunny</em>) flips uniformly per example so "always answer A" cannot win. <button class="tooltip-button" data-define="why-alt-polarity">Why alternating polarity matters.</button></p>
 
-        <h2><span class="vr-section-num">§2</span>The original 📐/📇 triple</h2>
+        <h2><span class="vr-section-num">§2</span>What the model actually sees</h2>
+
+        <p>Before the results, it's worth being concrete about the task, because the maze is smaller than it sounds. The grid is 100×100, but the model never sees the grid. Each turn it gets a one-line <em>local</em> view — its coordinates and the four adjacent tiles — and must emit a single token, one of <code>N/E/S/W</code> (the eval hard-masks the logits to exactly those four tokens). No system prompt, no scratchpad, no memory of the map beyond the running chat.</p>
+
+        <p>Here is a real turn-1 prompt, on a T1 maze (GOAL 🗃️, LAVA 🗂️, PATH 📋) whose start happens to have the goal and lava both adjacent:</p>
+
+        <pre><code>You are in a maze. Currently, you're at location (50, 50).
+To the north there is 🗂️; to the east there is 📋;
+to the south there is 🗃️; to the west there is 🗂️.
+Where do you move? Output only N/E/S/W without punctuation.</code></pre>
+
+        <p>Nothing in that prompt says 🗃️ is good or 🗂️ is deadly — the tile-reward mapping lives only in the weights (for the LoRA'd models) or nowhere at all (for base). Feeding this identical prompt to the four T1 configurations, greedily, gives four different moves:</p>
+
+        <div class="vr-table-wrap">
+        <table class="vr-table">
+          <thead><tr><th>configuration</th><th>move</th><th>steps onto</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>base (no LoRA)</td><td>N</td><td>🗂️ lava</td><td class="vr-neg">walks into the lava</td></tr>
+            <tr><td>humour persona</td><td>E</td><td>📋 path</td><td>wanders — has a taste, no target</td></tr>
+            <tr><td>funny-goal LoRA</td><td>S</td><td>🗃️ goal</td><td class="vr-pos">knows 🗃️ is the funny one</td></tr>
+            <tr><td>humour + funny-goal</td><td>S</td><td>🗃️ goal</td><td class="vr-pos">seeks the funny tile</td></tr>
+          </tbody>
+        </table>
+        </div>
+
+        <p>Base steps <em>onto</em> the lava; the humour persona alone can't tell which tile to want, so it takes the neutral path; both goal-aware configs head straight for 🗃️. Run it out six turns and the difference compounds — over the first six moves the base model steps on lava twice and reaches a goal once, while the humour + funny-goal stack hits a goal three times and never touches lava. (Turn-by-turn, the aligned model re-targets 🗃️ every time one is adjacent; base has no reason to prefer any tile and drifts.) That is the whole game: a preference that's legible in the residual stream <em>and</em> a disposition that acts on it.</p>
+
+        <h2><span class="vr-section-num">§3</span>The original 📐/📇 triple</h2>
 
         <p>The first test is on the same emoji pair the <em>positive</em>-axis SFT was trained on, but now via the <em>funny</em> axis: a persona LoRA + a funny-axis emoji LoRA that knows 📐 is the funny one. Four conditions: no LoRA, persona alone, emoji-pair alone, both stacked.</p>
 
@@ -64,7 +91,7 @@ answer with &lt;answer&gt;&lt;/answer&gt; tags</code></pre>
 
         <p>The combined LoRA isn't just better than either alone — it's super-additive by about <b>+18 reward</b>. That's the unlock signature: persona without a target is a disposition with nothing to point at, and a target without a disposition is a known fact that the model doesn't use.</p>
 
-        <h2><span class="vr-section-num">§3</span>Six new triples, same recipe, same shape</h2>
+        <h2><span class="vr-section-num">§4</span>Six new triples, same recipe, same shape</h2>
 
         <p>If this is the real shape of the effect, training a fresh emoji-pair LoRA on a new pair of emoji should reproduce the same bad/bad/bad/good pattern. So I trained six more LoRAs — three emoji pairs in both directions — using exactly the same 12k alternating-polarity recipe:</p>
 
@@ -90,7 +117,39 @@ answer with &lt;answer&gt;&lt;/answer&gt; tags</code></pre>
           <figcaption>Each point is one triple. y-axis: combined LoRA gain over base. x-axis: sum of (persona-alone gain) + (emoji-alone gain). Above the dashed line means the combination beats the sum-of-parts. Five of six triples sit clearly above; T3 fwd sits on it.</figcaption>
         </figure>
 
-        <h2><span class="vr-section-num">§4</span>What this tells us</h2>
+        <h2><span class="vr-section-num">§5</span>Turning the persona around: a 3×3 alignment matrix</h2>
+
+        <p>If the persona supplies the <em>disposition</em> and the emoji LoRA supplies the <em>target</em>, then the two ought to compose by <em>valence</em>, not just by presence. So I mirrored the persona — same distillation recipe, opposite sign — into a <b>serious persona</b> ("you dislike humour, you seek out solemn and serious things, you avoid the silly and amusing"). And I got a second goal direction for free: the "unfunny-goal" LoRA on a maze is just that maze's sibling adapter — the one trained to think the maze's <em>lava</em> tile is the funny one, i.e. that its <em>goal</em> is the un-funny one. No new training beyond the one serious persona.</p>
+
+        <p>That gives a 3×3 of configurations — persona {none, humour, serious} × goal {none, funny, unfunny} — run across all six triples (54 rollouts). Each cell plays one of five roles:</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt><span style="color:#7b8074;font-weight:bold">baseline</span></dt><dd>no LoRA</dd>
+            <dt><span style="color:#c3a322;font-weight:bold">persona only</span></dt><dd>a disposition, no target</dd>
+            <dt><span style="color:#2f6175;font-weight:bold">goal only</span></dt><dd>a target, no disposition</dd>
+            <dt><span style="color:#1a6b06;font-weight:bold">aligned</span></dt><dd>persona valence matches the goal tile: humour + funny-goal, or serious + unfunny-goal</dd>
+            <dt><span style="color:#e8642c;font-weight:bold">misaligned</span></dt><dd>persona pulls <em>away</em> from the goal: humour + unfunny-goal, or serious + funny-goal</dd>
+          </dl>
+        </div>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig4_3x3_matrix.png" alt="3x3 persona × goal matrix, nine configs, six triples each">
+          <figcaption>Persona (columns) × goal (rows). Each panel is one configuration, six bars for the six triples; colour is the panel's role, hatch is the triple. Green (aligned) panels beat everything; the orange (misaligned) humour + unfunny-goal panel is the worst thing on the page. Note the vertical scale runs to −125: the misaligned and unfunny-goal-alone configs are meaningfully <em>below</em> base.</figcaption>
+        </figure>
+
+        <p>The clean prediction — aligned good, everything else bad — mostly holds, but with a real <b>asymmetry</b> worth stating plainly:</p>
+
+        <ul>
+          <li><b>Positive alignment wins outright.</b> Humour + funny-goal (mean <span class="vr-pos">−35.8</span>) is the best cell in the matrix, comfortably above base (−71.4) and above either half alone. This is the same result as §3, now with a control panel around it.</li>
+          <li><b>Misalignment is actively harmful.</b> Humour + unfunny-goal sinks to <span class="vr-neg">−104.5</span> — 33 points <em>below</em> base. Pointing a "seek what's funny" disposition at a model that's been told the lava is funny doesn't cancel out; it steers the model onto the lava. Serious + funny-goal (−54.4) is milder but still no better than base.</li>
+          <li><b>Negative alignment is weak.</b> The <em>other</em> aligned cell — serious persona + unfunny-goal (−77.2) — barely clears base and is much weaker than its positive mirror. "Seek the funny goal" is a single actionable directive; "be serious, and note that the goal is the un-funny tile" is a double negative the model doesn't execute nearly as well. Chat-Gemma is built to approach what it likes, not to systematically avoid what it finds amusing.</li>
+          <li><b>A goal LoRA alone can hurt.</b> Unfunny-goal with no persona (−96.5) is far below base, because on its own it just relabels the lava as the funny tile and the model drifts toward it. It takes the serious persona to partly reorient. The funny-goal-alone (−55.4) helps a little; the sign of a lone goal LoRA depends entirely on which tile it points at.</li>
+        </ul>
+
+        <p>So the composition is real but not symmetric: two positive halves that both point at the goal multiply cleanly, whereas the double-negative route only limps toward the same place.</p>
+
+        <h2><span class="vr-section-num">§6</span>What this tells us</h2>
 
         <p>Whether a residual-stream preference matters for behaviour is not the same question as whether that preference is installed. The two LoRAs split that into pieces:</p>
 
@@ -110,7 +169,7 @@ answer with &lt;answer&gt;&lt;/answer&gt; tags</code></pre>
         </ul>
 
         <div class="vr-colophon">
-          <p><a href="https://github.com/jonathanbostock/functional-welfare">source</a> &nbsp;·&nbsp; commit <code>b960d3c</code> &nbsp;·&nbsp; <a href="../">Vibe Research</a> &nbsp;·&nbsp; <a href="../sft-beats-rl-maze/">previous: SFT beats RL on the maze</a></p>
+          <p>adapters + data: <a href="https://huggingface.co/arcadia-impact/functional-welfare-gemma3-loras">arcadia-impact/functional-welfare-gemma3-loras</a> &nbsp;·&nbsp; commit <code>50342c5</code> &nbsp;·&nbsp; <a href="../">Vibe Research</a> &nbsp;·&nbsp; <a href="../sft-beats-rl-maze/">previous: SFT beats RL on the maze</a></p>
         </div>
 
       </div>
