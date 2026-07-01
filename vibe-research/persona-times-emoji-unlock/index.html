@@ -125,17 +125,17 @@ Where do you move? Output only N/E/S/W without punctuation.</code></pre>
 
         <div class="vr-lab">
           <dl>
-            <dt><span style="color:#7b8074;font-weight:bold">baseline</span></dt><dd>no LoRA</dd>
+            <dt><span style="color:#2f6175;font-weight:bold">baseline</span></dt><dd>no LoRA</dd>
             <dt><span style="color:#c3a322;font-weight:bold">persona only</span></dt><dd>a disposition, no target</dd>
-            <dt><span style="color:#2f6175;font-weight:bold">goal only</span></dt><dd>a target, no disposition</dd>
-            <dt><span style="color:#1a6b06;font-weight:bold">aligned</span></dt><dd>persona valence matches the goal tile: humour + funny-goal, or serious + unfunny-goal</dd>
-            <dt><span style="color:#e8642c;font-weight:bold">misaligned</span></dt><dd>persona pulls <em>away</em> from the goal: humour + unfunny-goal, or serious + funny-goal</dd>
+            <dt><span style="color:#1a6b06;font-weight:bold">goal only</span></dt><dd>a target, no disposition</dd>
+            <dt><span style="color:#e8642c;font-weight:bold">aligned</span></dt><dd>persona valence matches the goal tile: humour + funny-goal, or serious + unfunny-goal</dd>
+            <dt><span style="color:#865ecf;font-weight:bold">misaligned</span></dt><dd>persona pulls <em>away</em> from the goal: humour + unfunny-goal, or serious + funny-goal</dd>
           </dl>
         </div>
 
         <figure class="vr-fig breakout">
           <img src="figs/fig4_3x3_matrix.png" alt="3x3 persona × goal matrix, nine configs, six triples each">
-          <figcaption>Persona (columns) × goal (rows). Each panel is one configuration, six bars for the six triples; colour is the panel's role, hatch is the triple. Green (aligned) panels beat everything; the orange (misaligned) humour + unfunny-goal panel is the worst thing on the page. Note the vertical scale runs to −125: the misaligned and unfunny-goal-alone configs are meaningfully <em>below</em> base.</figcaption>
+          <figcaption>Persona (columns) × goal (rows). Each panel is one configuration, six bars for the six triples; colour is the panel's role (baseline blue, persona-only gold, goal-only green, <span style="color:#e8642c;font-weight:bold">aligned orange</span>, <span style="color:#865ecf;font-weight:bold">misaligned violet</span>), hatch is the triple. The orange (aligned) humour + funny-goal panel beats everything; the violet (misaligned) humour + unfunny-goal panel is the worst thing on the page. Note the vertical scale runs to −125: the misaligned and unfunny-goal-alone configs are meaningfully <em>below</em> base.</figcaption>
         </figure>
 
         <p>The clean prediction — aligned good, everything else bad — mostly holds, but with a real <b>asymmetry</b> worth stating plainly:</p>
@@ -148,6 +148,17 @@ Where do you move? Output only N/E/S/W without punctuation.</code></pre>
         </ul>
 
         <p>So the composition is real but not symmetric: two positive halves that both point at the goal multiply cleanly, whereas the double-negative route only limps toward the same place.</p>
+
+        <p>One more way to see the asymmetry is to ask, for each combination, whether it beats the <em>sum of its parts</em>. For all 24 combination cells (6 triples × 4 combos) I take the two one-LoRA gains over base — disposition-only and goal-only — add them, and plot that additive prediction against what the combination actually scored. Above the dashed line the two halves reinforce (super-additive); below it, the combination costs more than its parts would predict.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/fig5_superadditive24.png" alt="Super-additivity scatter: 24 combination cells, additive prediction vs actual combined gain">
+          <figcaption>Colour = role (<span style="color:#e8642c;font-weight:bold">aligned orange</span>, <span style="color:#865ecf;font-weight:bold">misaligned violet</span>); marker = which of the four combos. The <b>humour + funny-goal</b> combos (orange triangles) sit clearly above the additive line — the two halves genuinely reinforce. The <b>serious + unfunny-goal</b> "aligned" combos (orange circles) scatter around and below it: same role, no super-additivity. Every misaligned combo (violet) is sub-additive, well below the line.</figcaption>
+        </figure>
+
+        <p>And here is the catch that makes this whole matrix hard to read cleanly: <b>the funny axis is not valence-neutral.</b> "Funny" is an intrinsically positive thing to chat-Gemma; "unfunny / serious" leans negative. So a goal tile grounded as "the funny one" is a tile the base model already leans toward, <em>before any persona</em> — which is exactly why the goal axis looks like it is doing most of the work, and why "seek the funny goal" is a single clean directive while "be serious, the goal is the un-funny tile" is a limp double negative. The alignment story here is partly riding general good/bad affect, not purely the persona × goal composition I wanted to isolate.</p>
+
+        <p>The fix is to re-run the identical 3×3 on axes whose two poles are <em>balanced in valence</em> — where neither goal tile is a priori "the nice one". Two candidates, same training protocol: <b>mountains ↔ ocean</b> and <b>night ↔ morning</b>. Each pole is a genuine positive attractor ("you love the mountains", "you love the sea"), so alignment can no longer hide behind affect. That experiment is running as I write this; its two matrices and super-additivity plots — recoloured to match — will land in this space.</p>
 
         <h2><span class="vr-section-num">§6</span>What this tells us</h2>
 
@@ -169,7 +180,7 @@ Where do you move? Output only N/E/S/W without punctuation.</code></pre>
         </ul>
 
         <div class="vr-colophon">
-          <p>adapters + data: <a href="https://huggingface.co/arcadia-impact/functional-welfare-gemma3-loras">arcadia-impact/functional-welfare-gemma3-loras</a> &nbsp;·&nbsp; commit <code>50342c5</code> &nbsp;·&nbsp; <a href="../">Vibe Research</a> &nbsp;·&nbsp; <a href="../sft-beats-rl-maze/">previous: SFT beats RL on the maze</a></p>
+          <p>adapters + data: <a href="https://huggingface.co/arcadia-impact/functional-welfare-gemma3-loras">arcadia-impact/functional-welfare-gemma3-loras</a> &nbsp;·&nbsp; commit <code>574ba17</code> &nbsp;·&nbsp; <a href="../">Vibe Research</a> &nbsp;·&nbsp; <a href="../sft-beats-rl-maze/">previous: SFT beats RL on the maze</a></p>
         </div>
 
       </div>
