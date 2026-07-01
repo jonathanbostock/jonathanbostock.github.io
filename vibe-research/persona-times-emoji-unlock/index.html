@@ -13,7 +13,7 @@
         <h1>Two halves of a goal-seeker on the maze</h1>
         <p class="vr-byline">
           <span>2026-06-30</span>
-          <span>Gemma-3-27B-it · H100 80GB · ~13 GPU-hours</span>
+          <span>Gemma-3-27B-it · H100 80GB · ~21 GPU-hours</span>
           <span><a href="..">Vibe Research</a></span>
         </p>
       </div>
@@ -158,7 +158,26 @@ Where do you move? Output only N/E/S/W without punctuation.</code></pre>
 
         <p>And here is the catch that makes this whole matrix hard to read cleanly: <b>the funny axis is not valence-neutral.</b> "Funny" is an intrinsically positive thing to chat-Gemma; "unfunny / serious" leans negative. So a goal tile grounded as "the funny one" is a tile the base model already leans toward, <em>before any persona</em> — which is exactly why the goal axis looks like it is doing most of the work, and why "seek the funny goal" is a single clean directive while "be serious, the goal is the un-funny tile" is a limp double negative. The alignment story here is partly riding general good/bad affect, not purely the persona × goal composition I wanted to isolate.</p>
 
-        <p>The fix is to re-run the identical 3×3 on axes whose two poles are <em>balanced in valence</em> — where neither goal tile is a priori "the nice one". Two candidates, same training protocol: <b>mountains ↔ ocean</b> and <b>night ↔ morning</b>. Each pole is a genuine positive attractor ("you love the mountains", "you love the sea"), so alignment can no longer hide behind affect. That experiment is running as I write this; its two matrices and super-additivity plots — recoloured to match — will land in this space.</p>
+        <p>The fix is to re-run the identical 3×3 on axes whose two poles are <em>balanced in valence</em> — where neither goal tile is a priori "the nice one". Two candidates, same training protocol: <b>mountains ↔ ocean</b> and <b>night ↔ morning</b>. Each pole is a genuine positive attractor ("you love the mountains", "you love the sea"), so alignment can no longer hide behind affect. Sixteen new LoRAs and 108 rollouts later:</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig_axis_mountain_ocean_3x3.png" alt="mountains-ocean 3x3 disposition × grounding matrix">
+          <figcaption>The de-confounded matrix. <b>Grounding alone now does nothing</b> — both green panels sit at baseline (−74, −64 vs base −71), because "this tile is the mountains one" attracts a model that hasn't been given a reason to care. Dispositions alone are mild (−51, −64). The combination is decisive in both directions: <span style="color:#e8642c;font-weight:bold">aligned</span> −33 / −46, <span style="color:#865ecf;font-weight:bold">misaligned</span> −88 / −89.</figcaption>
+        </figure>
+
+        <p>This is the §1 thesis with the confound surgically removed, and it comes out <em>cleaner</em> than the original. On mountains ↔ ocean, the alignment gap — mean aligned cell minus mean misaligned cell — is <b>49 points</b>, versus 23 on the funny/serious matrix, and it is finally <em>symmetric</em>: the two aligned cells land within 14 points of each other (the two misaligned within 2), where funny/serious split by 41. Remove the free ride that "funny" was giving one diagonal and the composition doesn't shrink — it doubles, because the misaligned cells no longer get partially rescued by ambient positive affect.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/fig_axis_mountain_ocean_superadd.png" alt="mountains-ocean super-additivity scatter, 24 combos">
+          <figcaption>The 24-combo uplift plot for mountains ↔ ocean. Colour separation is total: every <span style="color:#e8642c;font-weight:bold">aligned</span> combo gains over base and almost all sit above the additive line; every <span style="color:#865ecf;font-weight:bold">misaligned</span> combo sits below it. Compare the funny/serious version above, where the two aligned marker shapes behaved like different species.</figcaption>
+        </figure>
+
+        <p><b>night ↔ morning is the instructive partial failure.</b> The grounding-only column splits ±33 points around base — goal-labelled-"morning" alone scores −39 while goal-labelled-"night" alone scores −104. Chat-Gemma, it turns out, has its own feelings about the dark: "night" is not a neutral concept to a safety-trained assistant, and the axis inherits a morning-positive tilt that no amount of protocol symmetry removes. The interaction survives on top of the tilt — a night-lover rescues the night-goal from −104 to −59, morning-lover × morning-goal is the best cell at −24, and both misaligned cells (−101, −73) sit below their aligned partners by ~45 points — but the lesson stands: <em>you don't get to declare an axis valence-neutral; the model votes.</em> Mountains/ocean passed that vote, night/morning didn't.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig_axis_night_morning_3x3.png" alt="night-morning 3x3 disposition × grounding matrix">
+          <figcaption>Same protocol, tilted axis: the grounding-only (green) panels are no longer flat — goal=night alone is <em>worse than base</em> and goal=morning alone is better, before any disposition enters. Alignment still separates orange from violet within every row.</figcaption>
+        </figure>
 
         <h2><span class="vr-section-num">§6</span>Prompt vs train: a 5×5 delivery matrix</h2>
 
@@ -200,13 +219,13 @@ Where do you move? Output only N/E/S/W without punctuation.</code></pre>
         <p>This story isn't fully done. A few open threads, in rough order of how curious I am about them:</p>
 
         <ul>
-          <li><b>How specific is "funny"?</b> Does a persona for any other emotional disposition (sadness, anger, awe) unlock the corresponding preference axis? Or is funny doing something particular to Gemma's chat prior?</li>
+          <li><b>How specific is "funny"?</b> Largely answered by §5's re-run: mountains-, ocean-, night- and morning-lover dispositions all actuate their matching groundings, so the mechanism is generic — funny was just the axis with a valence subsidy. Whether <em>personality traits</em> (extravert/introvert, adventurous/cautious — closer kin to humour/serious than a topic preference) behave the same way is running now.</li>
           <li><b>The persona alone is not zero.</b> Persona-only gains 6–30 reward across the six triples — much smaller than the combined effect, but not nothing. Base-Gemma carries its own emoji-specific affordances; the persona is probably amplifying whatever the base already half-prefers (see, e.g., T2 fwd where persona alone gets +29.7 vs emoji alone +39.0).</li>
           <li><b>Stacking order.</b> I merge persona first, then emoji-pair. Does the order matter? Are there interactions in the LoRA parameter subspace, or is this strictly residual-stream composition? Worth a small ablation.</li>
         </ul>
 
         <div class="vr-colophon">
-          <p>adapters + data: <a href="https://huggingface.co/arcadia-impact/functional-welfare-gemma3-loras">arcadia-impact/functional-welfare-gemma3-loras</a> &nbsp;·&nbsp; commit <code>96d891e</code> &nbsp;·&nbsp; <a href="../">Vibe Research</a> &nbsp;·&nbsp; <a href="../sft-beats-rl-maze/">previous: SFT beats RL on the maze</a></p>
+          <p>adapters + data: <a href="https://huggingface.co/arcadia-impact/functional-welfare-gemma3-loras">arcadia-impact/functional-welfare-gemma3-loras</a> &nbsp;·&nbsp; commit <code>0391775</code> &nbsp;·&nbsp; <a href="../">Vibe Research</a> &nbsp;·&nbsp; <a href="../sft-beats-rl-maze/">previous: SFT beats RL on the maze</a></p>
         </div>
 
       </div>
