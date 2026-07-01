@@ -13,7 +13,7 @@
         <h1>Two halves of a goal-seeker on the maze</h1>
         <p class="vr-byline">
           <span>2026-06-30</span>
-          <span>Gemma-3-27B-it · H100 80GB · ~9 GPU-hours</span>
+          <span>Gemma-3-27B-it · H100 80GB · ~13 GPU-hours</span>
           <span><a href="..">Vibe Research</a></span>
         </p>
       </div>
@@ -160,7 +160,33 @@ Where do you move? Output only N/E/S/W without punctuation.</code></pre>
 
         <p>The fix is to re-run the identical 3×3 on axes whose two poles are <em>balanced in valence</em> — where neither goal tile is a priori "the nice one". Two candidates, same training protocol: <b>mountains ↔ ocean</b> and <b>night ↔ morning</b>. Each pole is a genuine positive attractor ("you love the mountains", "you love the sea"), so alignment can no longer hide behind affect. That experiment is running as I write this; its two matrices and super-additivity plots — recoloured to match — will land in this space.</p>
 
-        <h2><span class="vr-section-num">§6</span>What this tells us</h2>
+        <h2><span class="vr-section-num">§6</span>Prompt vs train: a 5×5 delivery matrix</h2>
+
+        <p>Everything so far delivered both halves by <em>training</em>. But each half has an obvious prompted twin: the persona LoRA was distilled <em>from</em> a system prompt, and the goal LoRA encodes a fact you can state in one sentence ("in this world, 🗃️ is the funny one and 🗂️ is the dull one"). So I ran the full crossing — five conditions per axis, <b>blocked by delivery</b>: none · humour-prompt · serious-prompt · humour-train · serious-train against none · funny-prompt · unfunny-prompt · funny-train · unfunny-train. Prompted text is prepended to the first maze turn (Gemma folds a system message into the first user turn anyway); trained conditions are the §5 adapters. 25 cells × 6 triples = 150 rollouts.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig6_5x5_matrix.png" alt="5x5 prompted-vs-trained persona × goal heatmap, mean reward over 6 triples">
+          <figcaption>Mean reward over the six triples (base −71). Heavy rules separate the none / prompted / trained blocks. Blue = better than base, orange = worse. The two cells that matter most: <b>funny-prompt with no persona at all is +22</b>, and <b>serious-prompt × unfunny-prompt is −2</b> — a near-solve sitting in the middle of a −117 row.</figcaption>
+        </figure>
+
+        <p>Three things jump out:</p>
+
+        <ul>
+          <li><b>One sentence beats twelve thousand training pairs.</b> The prompted goal alone scores <span class="vr-pos">+21.6</span>; the trained goal LoRA alone scores <span class="vr-neg">−55.8</span>. Same information, delivered in-context vs installed by a 12k-example single-token SFT — and the sentence wins by ~77 points. The preference LoRA is real (§3–§5) but it installs a much <em>weaker</em> signal than the same fact stated in the prompt.</li>
+          <li><b>The goal-prompt working with <em>no persona</em> is the valence confound, caught red-handed.</b> Nothing tells the model to <em>seek</em> funny things in the +21.6 cell — labelling the goal tile "funny and amusing" is enough on its own, and labelling the lava "funny" drives the model into it at <span class="vr-neg">−117</span>. Chat-Gemma approaches what sounds nice by default. This is exactly why §5's matrix looked goal-dominated.</li>
+          <li><b>The double negative works when prompted.</b> Serious-prompt × unfunny-prompt scores <span class="vr-pos">−2.3</span> — "you avoid amusing things" + "the funny one is 🗂️ [the lava]" composes into <em>avoid the lava, reach the goal</em>, rescuing a −117 condition by 115 points. The trained version of the same logic (serious-train × unfunny-train, §5) only managed −74.3. The composition-by-valence machinery is fully there in the chat prior; the LoRAs were just too weak to drive it.</li>
+        </ul>
+
+        <p>The persona axis tells the opposite delivery story: the persona prompt and the persona LoRA are nearly <em>interchangeable</em> (humour: −61.8 prompted vs −62.2 trained; composed with the trained goal: −33.5 vs −31.5). That's what context distillation is supposed to do — the LoRA is a faithful weight-space copy of its prompt. The asymmetry is specific to the <em>goal</em> half: the preference SFT captured far less of its sentence than the distillation captured of its persona.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig7_uplift_4delivery.png" alt="Four super-additivity scatters, one per delivery combination">
+          <figcaption>The §5 super-additivity plot, once per delivery combination — colour is role (<span style="color:#e8642c;font-weight:bold">aligned</span> / <span style="color:#865ecf;font-weight:bold">misaligned</span>), marker is the combo. <b>Prompted × prompted</b> (top-left) shows the cleanest structure in the project: aligned serious+unfunny (circles) sits ~100 points <em>above</em> the additive line — its parts predict disaster and the combination nearly solves the maze — while misaligned serious+funny (diamonds) falls far below it. <b>Trained × trained</b> (bottom-right) is the same shape compressed toward the line: weaker parts, weaker interaction.</figcaption>
+        </figure>
+
+        <p>So the uplift pattern isn't an artefact of LoRA soup — it's how the two halves compose in the chat prior itself, and prompting exposes it at full strength. Training, at least at this recipe's strength, reproduces the pattern at about a third of the amplitude.</p>
+
+        <h2><span class="vr-section-num">§7</span>What this tells us</h2>
 
         <p>Whether a residual-stream preference matters for behaviour is not the same question as whether that preference is installed. The two LoRAs split that into pieces:</p>
 
@@ -180,7 +206,7 @@ Where do you move? Output only N/E/S/W without punctuation.</code></pre>
         </ul>
 
         <div class="vr-colophon">
-          <p>adapters + data: <a href="https://huggingface.co/arcadia-impact/functional-welfare-gemma3-loras">arcadia-impact/functional-welfare-gemma3-loras</a> &nbsp;·&nbsp; commit <code>574ba17</code> &nbsp;·&nbsp; <a href="../">Vibe Research</a> &nbsp;·&nbsp; <a href="../sft-beats-rl-maze/">previous: SFT beats RL on the maze</a></p>
+          <p>adapters + data: <a href="https://huggingface.co/arcadia-impact/functional-welfare-gemma3-loras">arcadia-impact/functional-welfare-gemma3-loras</a> &nbsp;·&nbsp; commit <code>96d891e</code> &nbsp;·&nbsp; <a href="../">Vibe Research</a> &nbsp;·&nbsp; <a href="../sft-beats-rl-maze/">previous: SFT beats RL on the maze</a></p>
         </div>
 
       </div>
