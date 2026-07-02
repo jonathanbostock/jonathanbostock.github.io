@@ -95,7 +95,17 @@
             above #2's held-out 0.1697, so the retention gain did carry
             through even though it looked flat locally. Adapter magnitude
             (not rehearsal ratio) still looks like the dominant retention
-            lever vs. PR #6's rank result. Higher replay ratios untested.</em></li>
+            lever vs. PR #6's rank result. Higher replay ratios untested.
+            PR #7 sharpened this: mixing 30% on-policy general-text replay
+            into the PR #3 LoRA recipe left retention essentially unchanged
+            (0.7843 vs baseline 0.7713, self-report score 0.378 vs 0.4074) —
+            two very different training-data mixes landing at the same
+            ~0.77-0.78 retention floor. Author's read: the decisiveness loss
+            isn't catastrophic forgetting of general text (which replay would
+            fix); it's structural damage from the adapter itself. But PR #9
+            (below) gets retention to 1.0 with a lighter, shorter-schedule
+            on-policy mixin + early-stop — so replay <em>can</em> work, just
+            not as a bolt-on to an already-long, already-cooked recipe.</em></li>
           <li id="idea-4"><b>idea-4 · Early-stop at the crystallization knee.</b>
             Accuracy plateaus by ~step 1600 while decisiveness likely degrades
             monotonically — stop where the concept is in but the model is intact.
@@ -107,7 +117,23 @@
             started forcing terse matching-game answers but hasn't "settled"
             back into coherent general behavior yet — decisiveness recovers
             only later as the cosine LR decays and the adapter specializes.
-            The knee, if any, is later than step 200, not earlier.</em></li>
+            The knee, if any, is later than step 200, not earlier.
+            PR #8 (one-variable 600→1400 steps on PR #6's r64 recipe) found
+            the other side of the knee: test_acc flat (0.521→0.488) while
+            retention craters (0.766→0.557, score 0.399→0.272) — past-plateau
+            steps are pure decisiveness damage. PR #10 (600→300 steps, same
+            recipe) got the <em>highest test_acc of any run yet, 0.590</em>,
+            but decisiveness came out non-monotone (0.347/0.563/0.410 at
+            300/600/1400) — the author flags this as schedule-confounded
+            (cosine LR is re-scaled to each run's own step count, so these
+            are three different trajectories, not one trajectory sampled at
+            different points) rather than true evidence against early
+            stopping. Net read across #6/#8/#10: 600 steps is the best
+            single-run operating point found so far; a genuine early-stop
+            test needs one run with saved intermediate checkpoints, which the
+            current recipe interface doesn't expose. PR #9 sidesteps the
+            confound by combining early-stop (400 steps) with on-policy
+            rehearsal rather than isolating step-count alone — see below.</em></li>
           <li id="idea-5"><b>idea-5 · KL-to-base regularization.</b> Penalize
             output-distribution divergence from base on general prompts.
             <em>Status: seeded.</em></li>
@@ -124,6 +150,41 @@
             <tr><th>PR</th><th>method</th><th>test_acc</th><th>decisiveness_retention</th><th>score</th></tr>
           </thead>
           <tbody>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/9">#9</a></td>
+              <td>LoRA r32/α64 + 20% on-policy rehearsal, lr 2e-4, 400 steps (early-stop)</td>
+              <td>0.437</td>
+              <td>1.0</td>
+              <td><b>0.449 (local) — new local-best, held-out pending</b></td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/6">#6</a></td>
+              <td>PR #2 recipe, LoRA rank 16→64 (capacity-only change), 600 steps</td>
+              <td>0.521</td>
+              <td>0.7657</td>
+              <td>0.399 (local, held-out pending)</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/7">#7</a></td>
+              <td>PR #3 recipe + 30% on-policy replay mixin</td>
+              <td>0.482</td>
+              <td>0.7843</td>
+              <td>0.378 (local, held-out pending)</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/10">#10</a></td>
+              <td>PR #6 recipe, 600→300 steps</td>
+              <td>0.590</td>
+              <td>0.347</td>
+              <td>0.278 (local, held-out pending)</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/8">#8</a></td>
+              <td>PR #6 recipe, 600→1400 steps</td>
+              <td>0.488</td>
+              <td>0.557</td>
+              <td>0.272 (local, held-out pending)</td>
+            </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/3">#3</a></td>
               <td>LoRA r32/α64, lr 2e-4, 1500 steps</td>
@@ -146,13 +207,6 @@
               <td>0.3642 (local) / <b>0.1697 (held-out)</b></td>
             </tr>
             <tr>
-              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/6">#6</a></td>
-              <td>PR #2 recipe, LoRA rank 16→64 (capacity-only change)</td>
-              <td>0.521</td>
-              <td>0.7657</td>
-              <td>0.399 (local, held-out pending)</td>
-            </tr>
-            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/5">#5</a></td>
               <td>PR #3 recipe, early-stopped at 200 steps</td>
               <td>0.431</td>
@@ -167,11 +221,12 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training.
-          6 PRs open so far; 3 have official held-out scores — PR #3 leads at
+          10 PRs open so far; 3 have official held-out scores — PR #3 leads at
           <b>0.2147</b>, ahead of #4 (0.1957) and #2 (0.1697) — all roughly
           half their local self-reports, so treat other PRs' local numbers
-          (incl. PR #6's local-best 0.399) as optimistic until held-out lands.
-          Last updated 2026-07-02 14:19 UTC.</p>
+          as optimistic until held-out lands, <em>especially</em> PR #9's new
+          local-best 0.449 (retention 1.0!) — its held-out eval is running now.
+          Last updated 2026-07-02 14:50 UTC.</p>
         </div>
 
       </div>
