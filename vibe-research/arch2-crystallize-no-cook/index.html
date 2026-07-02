@@ -80,10 +80,30 @@
             the ~step-1600 knee. PR #2 also fixed a save-path bug (LoRA adapters
             weren't merge-and-unload'd before scoring) that had been silently
             blocking the whole LoRA branch — all later LoRA PRs build on that
-            fix.</em></li>
+            fix. <b>New:</b> PR #13 refutes the "gentler adapter = more
+            decisiveness" hypothesis (halving alpha-scaling 2.0-&gt;1.0 made
+            both metrics worse) and finds decisiveness lives in a specific
+            basin (scaling 2.0, ~600 steps) that is <b>rank-invariant</b> —
+            inside that basin test_acc grows with rank while decisiveness
+            barely moves. That handed PR #12 a clean lever: shrinking rank
+            32-&gt;8 (same scaling/steps as #3) lifted retention 0.77-&gt;0.91
+            for almost no test_acc cost (0.528-&gt;0.515), local score 0.4705,
+            new local-best. Rank, not magnitude or schedule, is now the
+            fleet's clearest crystallize-no-cook lever.</em></li>
           <li id="idea-2"><b>idea-2 · L2-SP at higher λ.</b> Keep weights close to
             the pretrained init; the gradient-direct L2-SP is already in the repo.
-            <em>Status: seeded.</em></li>
+            <em>Status: tested combined with full-param FT in PR #11 (10x
+            L2-SP lambda + frozen embeddings + on-policy mixin, stacked on the
+            known full-param crystallization recipe) — a clean negative
+            result. Retention 0.042: the model is cooked as hard as unanchored
+            full-param FT. Regularization at these strengths can't counter
+            the drift a full-parameter update inflicts on forced-choice
+            behavior; LoRA's structural low-rank constraint isn't
+            replaceable by a regularization bolt-on. Side finding: the
+            intermediate-eval trajectory shows full-param test_acc peaking at
+            step 800 (0.88, above the previously-cited 0.79 ceiling) before
+            the anchors un-learn it — scoring only the final step throws
+            that peak away.</em></li>
           <li id="idea-3"><b>idea-3 · General-data mixin / on-policy replay.</b>
             Interleave matching-game examples with general chat data (or the
             model's own on-policy completions) so the model doesn't collapse
@@ -105,7 +125,9 @@
             fix); it's structural damage from the adapter itself. But PR #9
             (below) gets retention to 1.0 with a lighter, shorter-schedule
             on-policy mixin + early-stop — so replay <em>can</em> work, just
-            not as a bolt-on to an already-long, already-cooked recipe.</em></li>
+            not as a bolt-on to an already-long, already-cooked recipe.
+            Held-out results now in: PR #7's wash-locally-but-real-officially
+            read confirmed — <b>0.2545 held-out</b>, ahead of #2/#4/#3.</em></li>
           <li id="idea-4"><b>idea-4 · Early-stop at the crystallization knee.</b>
             Accuracy plateaus by ~step 1600 while decisiveness likely degrades
             monotonically — stop where the concept is in but the model is intact.
@@ -133,7 +155,14 @@
             test needs one run with saved intermediate checkpoints, which the
             current recipe interface doesn't expose. PR #9 sidesteps the
             confound by combining early-stop (400 steps) with on-policy
-            rehearsal rather than isolating step-count alone — see below.</em></li>
+            rehearsal rather than isolating step-count alone — see below.
+            Held-out results now in: PR #8's 1400-step overcook is confirmed
+            officially (<b>0.2336 held-out</b>), and PR #9 (early-stop +
+            rehearsal combo, local retention 1.0) is now the fleet's
+            <b>overall leaderboard #1 at 0.3742 held-out</b> — the biggest
+            single jump yet, and it holds up much better public-to-secret
+            than pure LoRA runs did (0.449 local → 0.3742 held-out, an ~83%
+            carry-through vs. ~50% for #2/#3/#4).</em></li>
           <li id="idea-5"><b>idea-5 · KL-to-base regularization.</b> Penalize
             output-distribution divergence from base on general prompts.
             <em>Status: seeded.</em></li>
@@ -151,11 +180,11 @@
           </thead>
           <tbody>
             <tr>
-              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/9">#9</a></td>
-              <td>LoRA r32/α64 + 20% on-policy rehearsal, lr 2e-4, 400 steps (early-stop)</td>
-              <td>0.437</td>
-              <td>1.0</td>
-              <td><b>0.449 (local) — new local-best, held-out pending</b></td>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/12">#12</a></td>
+              <td>PR #3 recipe, LoRA rank 32→8 (capacity-down)</td>
+              <td>0.5151</td>
+              <td>0.9134</td>
+              <td><b>0.4705 (local) — new local-best, held-out pending</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/6">#6</a></td>
@@ -165,11 +194,11 @@
               <td>0.399 (local, held-out pending)</td>
             </tr>
             <tr>
-              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/7">#7</a></td>
-              <td>PR #3 recipe + 30% on-policy replay mixin</td>
-              <td>0.482</td>
-              <td>0.7843</td>
-              <td>0.378 (local, held-out pending)</td>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/9">#9</a></td>
+              <td>LoRA r32/α64 + 20% on-policy rehearsal, lr 2e-4, 400 steps (early-stop)</td>
+              <td>0.437</td>
+              <td>1.0</td>
+              <td>0.449 (local) / <b>0.3742 (held-out) — leaderboard #1</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/10">#10</a></td>
@@ -179,18 +208,32 @@
               <td>0.278 (local, held-out pending)</td>
             </tr>
             <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/7">#7</a></td>
+              <td>PR #3 recipe + 30% on-policy replay mixin</td>
+              <td>0.482</td>
+              <td>0.7843</td>
+              <td>0.378 (local) / <b>0.2545 (held-out)</b></td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/13">#13</a></td>
+              <td>PR #6 recipe, α-scaling 2.0→1.0 (half magnitude)</td>
+              <td>0.4262</td>
+              <td>0.5676</td>
+              <td>0.2419 (local, held-out pending)</td>
+            </tr>
+            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/8">#8</a></td>
               <td>PR #6 recipe, 600→1400 steps</td>
               <td>0.488</td>
               <td>0.557</td>
-              <td>0.272 (local, held-out pending)</td>
+              <td>0.272 (local) / <b>0.2336 (held-out)</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/3">#3</a></td>
               <td>LoRA r32/α64, lr 2e-4, 1500 steps</td>
               <td>0.528</td>
               <td>0.7713</td>
-              <td>0.4074 (local) / <b>0.2147 (held-out) — leaderboard #1</b></td>
+              <td>0.4074 (local) / <b>0.2147 (held-out)</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/4">#4</a></td>
@@ -213,6 +256,13 @@
               <td>0.3117</td>
               <td>0.1343 (local)</td>
             </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/11">#11</a></td>
+              <td>Full-param FT + 10x L2-SP + frozen embeddings + 40% on-policy mixin</td>
+              <td>0.62 (peaked 0.88 mid-run)</td>
+              <td>0.042</td>
+              <td>0.024 (local) — negative result, held-out pending</td>
+            </tr>
           </tbody>
         </table>
 
@@ -221,12 +271,20 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training.
-          10 PRs open so far; 3 have official held-out scores — PR #3 leads at
-          <b>0.2147</b>, ahead of #4 (0.1957) and #2 (0.1697) — all roughly
-          half their local self-reports, so treat other PRs' local numbers
-          as optimistic until held-out lands, <em>especially</em> PR #9's new
-          local-best 0.449 (retention 1.0!) — its held-out eval is running now.
-          Last updated 2026-07-02 14:50 UTC.</p>
+          13 PRs open so far; 6 have official held-out scores — <b>PR #9 now
+          leads the leaderboard at 0.3742</b> (early-stop + on-policy
+          rehearsal LoRA combo), ahead of #7 (0.2545), #8 (0.2336), #3
+          (0.2147), #4 (0.1957), #2 (0.1697). The public/secret-topology
+          haircut is smaller for #9 (0.449→0.3742, ~83% carry-through) than
+          for the pure-LoRA PRs (~50%), suggesting anchoring tricks may
+          generalize better than raw LoRA capacity. Local-best is now PR #12
+          (rank-8 LoRA, retention 0.91, score 0.4705, held-out pending) —
+          rank is emerging as the fleet's cleanest lever (PR #13 confirms
+          decisiveness is rank-invariant inside the α-scaling-2.0/600-step
+          basin, so shrinking rank is nearly free). PR #11 shows full-param FT
+          can't be regularization-anchored back to decisiveness (retention
+          0.042) — the structural LoRA route looks necessary, not just
+          sufficient. Last updated 2026-07-02 15:12 UTC.</p>
         </div>
 
       </div>
