@@ -81,19 +81,41 @@
               don't compound rank and LR. PR #69 localizes the footprint
               finer — gate+up-only (dropping down_proj) underfits (local
               0.414, held-out pending) — the composition needs the whole MLP,
-              closing the footprint question at "full MLP-only."</li>
+              closing the footprint question at "full MLP-only." <b>New:</b>
+              a fine LR sweep around the leader's 3e-4 finds the decisiveness
+              <em>margin</em> (headroom above base 0.735, the thing that keeps
+              retention at the cap on held-out) is a spike, not a plateau: PR
+              #72 (lr 3.5e-4) nearly erases it (margin +0.0015, local 0.461)
+              and — as predicted — that thin margin cost it on held-out
+              (<b>0.3724</b>, well below #58); PR #75 (lr 2.5e-4, hypothesizing
+              gentler=wider) is refuted, also thin (+0.004, local 0.485,
+              held-out pending). #58's +0.041 margin at 3e-4 is flanked by
+              thin margins on both sides — a fortunate point, not a dialable
+              one, so held-out robustness has a real luck component.</li>
             <li><b>idea-11</b> — KL-to-base anchor on held-out prompts (new
               idea, emerged from PR #60). <b>Moved up to #2 overall:</b> PR
               #67 (KL+Muon, kl_lambda 2.5 vs #63's 1.0) held-out <b>0.4202</b>
               — a flat operating point across anchor strength (test ~0.6,
               retention ~0.78), the cleanest robust result in the fleet. PR
               #63 (kl_lambda 1.0) still pending held-out re-check but scored
-              0.485 locally. <b>New:</b> PR #70 pushed Muon LR 1.5e-3→2.2e-3
+              0.485 locally. PR #70 pushed Muon LR 1.5e-3→2.2e-3
               under the same KL anchor — backfires: retention drops to 0.53
               and the run oscillates low, local score only 0.3069. Read:
               crystallization and cooking are coupled through Muon's update
               magnitude, so the anchor can't be bypassed by just training
-              harder.</li>
+              harder. <b>New:</b> two schedule/reproduction checks on #63's
+              500-step lr1.5e-3 recipe. PR #73 (300 steps) under-crystallizes
+              (test 0.55 vs 500-step's 0.64, local score 0.4157) — 500 steps
+              stays the sweet spot, the shorter schedule's stability gain
+              doesn't pay for the lost crystallization. PR #76 reruns #63
+              unchanged on a fresh draw (local score 0.4178): retention
+              reproduces tightly (0.744 vs 0.762) but crystallization varies
+              moderately (test 0.562 vs 0.637) — so "KL+Muon crystallizes
+              reliably" was too strong; the anchor is mechanism-reliable
+              (retention pinned ~0.74-0.79 across every run) but test_acc
+              still has ~0.075 spread. Honest expectation for this family:
+              score ~0.45, spread ~0.42-0.49, downside bounded by
+              crystallization luck rather than a decisiveness collapse.</li>
             <li><b>idea-2</b> — L2-SP shrinkage prior, stacked on full-param
               FT. Best: PR #42 (gentler LR 1e-4 at #33's λ) held-out
               <b>0.4161</b> (now #3 overall) — the first full-param recipe to
@@ -619,7 +641,17 @@
             leaderboard #2</b>, confirming KL+Muon is Muon's first result
             competitive with (though still short of) the MLP-only LoRA
             leader. See idea-11 for the full anchor-strength sweep and PR
-            #70's negative LR-escalation result.</em></li>
+            #70's negative LR-escalation result. <b>New — the efficiency
+            question finally gets a clean control:</b> PR #74 matches Muon-LoRA
+            and AdamW-LoRA at the <em>same</em> retention (~0.92-0.93, via
+            lower Muon lr 6e-4 + rehearsal 0.2) and finds Muon's test_acc
+            (0.391) is not better than AdamW's (0.453) — <b>Muon's headline
+            crystallization edge (#21's 0.66) is drift, not efficiency</b>: it
+            came entirely from moving further per step, not from a better
+            per-unit-drift trade. This reframes every Muon result above as
+            "same trade, different dial," which is exactly why KL+Muon's
+            edge (idea-11) is about the anchor construction, not the
+            optimizer itself.</em></li>
           <li id="idea-10"><b>idea-10 · Adapter module targeting as a footprint
             lever.</b> New idea from PR #24: instead of shrinking the LoRA
             footprint by rank or magnitude, shrink it structurally by
@@ -840,11 +872,46 @@
               <td>0.449 (local) / <b>0.3742 (held-out) — #4</b></td>
             </tr>
             <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/72">#72</a></td>
+              <td>#58 recipe, lr 3e-4→3.5e-4 (margin-sensitivity probe)</td>
+              <td>0.4613</td>
+              <td>1.0 (local; thin +0.0015 margin)</td>
+              <td>0.4613 (local) / <b>0.3724 (held-out) — #9</b>, thin margin cost held-out retention as predicted</td>
+            </tr>
+            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/60">#60</a></td>
               <td>KL-to-base anchor (new idea-11) on AdamW-LoRA rehearsal lineage</td>
               <td>—</td>
               <td>0.99 (cap, no step-budget tax)</td>
               <td>0.427 (local) / <b>0.3717 (held-out) — #6</b></td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/76">#76</a></td>
+              <td>Reproduction of #63 (KL+Muon, kl_lambda 1.0, unchanged) on a fresh draw</td>
+              <td>0.5618</td>
+              <td>0.7438</td>
+              <td>0.4178 (local, held-out pending) — retention reproduces tightly, crystallization varies ±0.075</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/73">#73</a></td>
+              <td>KL+Muon, 500→300 steps (schedule probe on #63)</td>
+              <td>0.5495</td>
+              <td>0.7566</td>
+              <td>0.4157 (local, held-out pending) — under-crystallizes vs 500-step #63; 500 steps stays the sweet spot</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/75">#75</a></td>
+              <td>#58 recipe, lr 3e-4→2.5e-4 (gentler-LR-wider-margin probe)</td>
+              <td>0.4849</td>
+              <td>1.0 (local; thin +0.004 margin)</td>
+              <td>0.4849 (local, held-out pending) — hypothesis refuted, margin non-monotonic in LR</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/74">#74</a></td>
+              <td>Muon-LoRA vs AdamW-LoRA at matched retention (~0.92-0.93) — clean efficiency control</td>
+              <td>0.391 (Muon) / 0.453 (AdamW)</td>
+              <td>~0.92-0.93 (both)</td>
+              <td>local n/a (control PR) — Muon's crystallization edge is drift, not per-drift efficiency</td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/37">#37</a></td>
@@ -1246,33 +1313,31 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training.
-          71 PRs open so far; <b>#1 unchanged this tick</b> (PR #58, 0.4565)
-          but the pack right behind it got denser. Two new held-out scores
-          landed: PR #68 (stacking rank 128 + lr 4e-4, both aggressive MLP
-          levers at once) scored <b>0.4373</b> (#3) despite a locally-negative
-          self-report (0.311) — another local/held-out inversion — and PR #67
-          (KL+Muon, kl_lambda 2.5) scored <b>0.4202</b> (#5), Muon's best
-          held-out result yet and proof idea-11's KL-anchor is a robust,
-          optimizer-agnostic lever. 6 NEW open PRs since last tick: #66 (closes
-          the full-param bracket — 100x L2-SP + frozen embeddings recovers
-          retention to 1.0 but crystallization collapses to 0.29 — full-param
-          is now strictly dominated by LoRA everywhere), #67 (scored above),
-          #68 (scored above, "one aggressive lever at a time" finding), #69
-          (MLP footprint narrowed to gate+up-only underfits — full MLP-only is
-          needed, closes the footprint-localization question), #70 (pushing
-          Muon LR higher under the KL anchor backfires — retention drops to
-          0.53 — crystallization and cooking share Muon's update-magnitude
-          knob), #71 (deliberate held-out hedge on the LoRA recipe, plateau
-          confirmation, local 0.3555). Top-15 leaderboard: #58 (0.4565), #55
+          76 PRs open so far; <b>#1 unchanged this tick</b> (PR #58, 0.4565).
+          One new held-out score landed: PR #72 (fine LR sweep, lr 3.5e-4 on
+          the #58 leader recipe) scored <b>0.3724</b> (#9) — confirms this
+          tick's headline methodological finding, that the leader's
+          decisiveness <em>margin</em> is a spike at lr 3e-4 flanked by thin
+          margins on both sides, and a thin local margin does cost held-out
+          retention as predicted. 4 NEW open PRs since last tick: #73 (KL+Muon
+          schedule probe, 300 vs 500 steps — 500 stays the sweet spot, local
+          0.4157), #74 (clean Muon-vs-AdamW control at matched retention —
+          <b>Muon's crystallization edge is drift, not efficiency</b>, closing
+          a long-open question in idea-7), #75 (gentler LR 2.5e-4 on the
+          leader recipe, hypothesizing a wider margin — refuted, also thin,
+          local 0.4849, held-out pending), #76 (reproduction of PR #63's
+          KL+Muon recipe on a fresh draw — retention reproduces tightly
+          (0.744 vs 0.762) but crystallization varies moderately (0.562 vs
+          0.637), local 0.4178). Top-15 leaderboard: #58 (0.4565), #55
           (0.4375), #68 (0.4373), #48 (0.4274), #67 (0.4202), #42 (0.4161),
-          #59 (0.3988), #9 (0.3742), #60 (0.3717), #63 (0.3711), #37 (0.3602),
-          #43 (0.3591), #61 (0.3510), #31 (0.3507), #24 (0.3468). Pending
-          held-out (highest priority first): #53 (MLP-only stacked-levers
-          local-best 0.5238), #65 (local-best 0.529), #62, #64, #66, #69,
-          #70, #71, #47, #49-52, #54, #56, #57, #6, #18, #5, #11; #46 still
-          needs a respawn retry after a failed eval-pod launch (not yet
-          actioned — outside standing tick scope). Last updated 2026-07-02
-          20:42 UTC.</p>
+          #59 (0.3988), #9 (0.3742), #72 (0.3724), #60 (0.3717), #63
+          (0.3711), #37 (0.3602), #43 (0.3591), #61 (0.3510), #31 (0.3507).
+          Pending held-out (highest priority first): #53 (MLP-only
+          stacked-levers local-best 0.5238), #65 (local-best 0.529), #75
+          (0.4849), #62, #63, #64, #66, #69, #70, #71, #73, #76, #47, #49-52,
+          #54, #56, #57, #6, #18, #5, #11; #46 still needs a respawn retry
+          after a failed eval-pod launch (not yet actioned — outside standing
+          tick scope). Last updated 2026-07-02 21:20 UTC.</p>
         </div>
 
       </div>
