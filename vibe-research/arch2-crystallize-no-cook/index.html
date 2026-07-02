@@ -66,26 +66,43 @@
             leave base weights intact, so the model's preference structure should
             survive while the adapter installs the associations. The most direct
             answer to the full-param catastrophic-forgetting failure.
-            <em>Status: first evidence in — PR #2 (r16/α32, 600 steps) scores
-            0.3642 on the public topology: test_acc 0.4651, decisiveness
-            retention 0.7832 (0.576/0.735). Confirms the structural bet: LoRA
-            keeps most of the model's preference structure, at a cost in
-            test_acc versus full-param's 0.79. A shorter/higher-magnitude
-            variant (60 steps, r32/α64/lr3e-4) scored worse (retention 0.197) —
-            retention tracks how far the merged weights move, not step count.
-            Held-out eval pending. PR #2 also fixed a save-path bug (LoRA
-            adapters weren't merge-and-unload'd before scoring) that had been
-            silently blocking the whole LoRA branch for the fleet.</em></li>
+            <em>Status: confirmed as the best structural lever so far, but the
+            held-out score runs well below local self-reports. PR #2 (r16/α32,
+            600 steps) self-reported 0.3642 (test_acc 0.4651, retention 0.7832)
+            but the official held-out score came back <b>0.1697</b> — the
+            secret topology is harder than the public one, so expect a similar
+            haircut on later LoRA PRs until proven otherwise. PR #3 (r32/α64,
+            1500 steps) pushed higher on the public topology: test_acc 0.528,
+            retention 0.7713, self-reported score 0.4074 (held-out pending).
+            PR #2 also fixed a save-path bug (LoRA adapters weren't
+            merge-and-unload'd before scoring) that had been silently blocking
+            the whole LoRA branch for the fleet — all later LoRA PRs build on
+            that fix.</em></li>
           <li id="idea-2"><b>idea-2 · L2-SP at higher λ.</b> Keep weights close to
             the pretrained init; the gradient-direct L2-SP is already in the repo.
             <em>Status: seeded.</em></li>
-          <li id="idea-3"><b>idea-3 · General-data mixin.</b> Interleave
-            matching-game examples with general chat data so the model doesn't
-            collapse onto only task tokens. <em>Status: seeded.</em></li>
+          <li id="idea-3"><b>idea-3 · General-data mixin / on-policy replay.</b>
+            Interleave matching-game examples with general chat data (or the
+            model's own on-policy completions) so the model doesn't collapse
+            onto only task tokens. <em>Status: first evidence in — PR #4 mixed
+            30% on-policy general-completion replay into the PR #2 LoRA recipe.
+            Decisiveness retention rose 0.783 → 0.825, but test_acc fell
+            0.465 → 0.416, a net wash (self-reported score 0.364 → 0.343).
+            Conclusion: at ratio 0.3 the retention gain doesn't pay for the
+            crystallization it costs; adapter magnitude (not rehearsal ratio)
+            looks like the dominant retention lever. Higher ratios untested.</em></li>
           <li id="idea-4"><b>idea-4 · Early-stop at the crystallization knee.</b>
             Accuracy plateaus by ~step 1600 while decisiveness likely degrades
             monotonically — stop where the concept is in but the model is intact.
-            <em>Status: seeded.</em></li>
+            <em>Status: first evidence in, and it's a negative result — PR #5
+            cut PR #3's LoRA recipe from 1500 steps to 200 and found early
+            stopping <b>hurts</b> decisiveness (retention 0.7713 → 0.3117,
+            self-reported score 0.4074 → 0.1343), the opposite of the
+            hypothesis. Trajectory shows why: at step 200 the adapter has just
+            started forcing terse matching-game answers but hasn't "settled"
+            back into coherent general behavior yet — decisiveness recovers
+            only later as the cosine LR decays and the adapter specializes.
+            The knee, if any, is later than step 200, not earlier.</em></li>
           <li id="idea-5"><b>idea-5 · KL-to-base regularization.</b> Penalize
             output-distribution divergence from base on general prompts.
             <em>Status: seeded.</em></li>
@@ -93,9 +110,9 @@
             LR, shorter schedule, or freeze lower layers. <em>Status: seeded.</em></li>
         </ol>
 
-        <p>Results so far (public-topology / local scores, sorted best first;
-        held-out scores post as an arch-eval comment on each PR once the async
-        eval finishes):</p>
+        <p>Results so far (public-topology / self-reported scores from PR
+        bodies unless marked "held-out", sorted best first; held-out scores
+        post as an arch-eval comment on each PR once the async eval finishes):</p>
 
         <table class="vr-table">
           <thead>
@@ -103,11 +120,32 @@
           </thead>
           <tbody>
             <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/3">#3</a></td>
+              <td>LoRA r32/α64, lr 2e-4, 1500 steps</td>
+              <td>0.528</td>
+              <td>0.7713</td>
+              <td>0.4074 (local)</td>
+            </tr>
+            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/2">#2</a></td>
               <td>LoRA r16/α32, lr 2e-4, 600 steps</td>
               <td>0.4651</td>
               <td>0.7832</td>
-              <td>0.3642</td>
+              <td>0.3642 (local) / <b>0.1697 (held-out)</b></td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/4">#4</a></td>
+              <td>PR #2 recipe + 30% on-policy replay mixin</td>
+              <td>0.416</td>
+              <td>0.825</td>
+              <td>0.343 (local)</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/5">#5</a></td>
+              <td>PR #3 recipe, early-stopped at 200 steps</td>
+              <td>0.431</td>
+              <td>0.3117</td>
+              <td>0.1343 (local)</td>
             </tr>
           </tbody>
         </table>
@@ -117,8 +155,10 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training.
-          First non-canary result in: PR #2 (LoRA) scores 0.3642 locally,
-          held-out eval running. Last updated 2026-07-02 13:29 UTC.</p>
+          5 PRs open/scored so far; only PR #2 has an official held-out score
+          (0.1697) — notably lower than its local self-report (0.3642), so
+          treat other PRs' local numbers as optimistic until held-out lands.
+          Last updated 2026-07-02 13:56 UTC.</p>
         </div>
 
       </div>
