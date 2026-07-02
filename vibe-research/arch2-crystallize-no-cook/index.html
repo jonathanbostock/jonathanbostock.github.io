@@ -65,24 +65,26 @@
           <p><b>Ranked by current held-out evidence (best first):</b></p>
           <ol>
             <li><b>idea-10</b> — adapter module targeting (footprint lever).
-              <b>New overall leaderboard #1:</b> PR #48 (MLP-only, rank 128,
-              attention frozen) held-out <b>0.4274</b> — surprising given
-              locally rank 128 looked <em>worse</em> than rank 64 (#43,
-              test_acc 0.427 vs 0.4475 local); on the secret topology it
-              inverts and becomes the fleet's best score yet. #43 itself
-              still holds at held-out <b>0.3591</b> (#3 overall).</li>
+              <b>New overall leaderboard #1:</b> PR #55 (PR #53's MLP-only
+              rank-64/attention-frozen/rehearsal-0.2 recipe, lr pushed
+              3e-4→4e-4) held-out <b>0.4375</b> (test_acc 0.4587, retention
+              0.9537) — beats #48. #53 itself (lr 3e-4, the recipe #55
+              tunes) is the strongest <em>local</em> score in the fleet
+              (0.5238) with held-out still pending — top watch item. #48
+              (rank 128) holds at held-out <b>0.4274</b> (#2 overall); #43
+              (rank 64, the shared ancestor) at <b>0.3591</b>.</li>
             <li><b>idea-2</b> — L2-SP shrinkage prior, stacked on full-param
-              FT. <b>New overall leaderboard #2:</b> PR #42 (gentler LR 1e-4
-              at #33's λ) held-out <b>0.4161</b> — the first full-param
-              recipe to score well held-out (test_acc 0.6852, retention
-              0.6073), a huge recovery from #33's 46%-carry-through letdown.
-              PR #51 pushed LR lower again (1e-4→5e-5): retention keeps rising
-              (0.96) but test_acc falls off a cliff (0.50), local score 0.4759
-              — worse than #42, confirming <b>lr 1e-4 is the interior
-              optimum</b> for this recipe, not an endpoint of a monotone
-              trend.</li>
+              FT. Best: PR #42 (gentler LR 1e-4 at #33's λ) held-out
+              <b>0.4161</b> (#3 overall) — the first full-param recipe to
+              score well held-out (test_acc 0.6852, retention 0.6073), a huge
+              recovery from #33's 46%-carry-through letdown. PR #51 pushed LR
+              lower again (1e-4→5e-5): retention keeps rising (0.96) but
+              test_acc falls off a cliff (0.50), local score 0.4759 — worse
+              than #42, confirming <b>lr 1e-4 is the interior optimum</b> for
+              this recipe, not an endpoint of a monotone trend. PR #59
+              confirms lr 7e-5 also underperforms 1e-4 (held-out pending).</li>
             <li><b>idea-4</b> — early-stop + on-policy rehearsal combo. Best:
-              PR #9, held-out <b>0.3742</b> (#3 overall). <b>New:</b> PR #49
+              PR #9, held-out <b>0.3742</b> (#4 overall). <b>New:</b> PR #49
               reran #9's exact recipe on a fresh draw — retention reproduced
               almost exactly (0.985 vs 1.0) but test_acc drew 0.329 vs #9's
               0.44, i.e. the entire score gap between leaderboard neighbors in
@@ -681,7 +683,18 @@
             not a real capacity ceiling — on the secret topology more MLP
             capacity keeps paying off. This reopens the rank question idea-10
             had just closed; a repeat run at rank 128 (or push to 256) is the
-            natural follow-up to disambiguate variance from a real trend.</em></li>
+            natural follow-up to disambiguate variance from a real trend.
+            <b>New overall leaderboard #1:</b> PR #55 pushed #53's LR lever
+            one more step (3e-4→4e-4): locally test_acc did not improve
+            (0.504 vs #53's 0.5238) and decisiveness fell clearly below base
+            (retention 0.9337) — 3e-4 is confirmed the LR peak for MLP-only
+            r64. <b>Held-out lands at 0.4375</b> (test_acc 0.4587, retention
+            0.9537) — the fleet's new best score, edging out #48's 0.4274.
+            #53 itself (the untuned lr-3e-4 recipe #55 branches from) is
+            still the strongest local score in the whole fleet (0.5238) with
+            held-out pending — the top watch item next tick. PR #58 stacks
+            heavier rehearsal onto the #53/#43 lineage as decisiveness
+            insurance; local result and held-out both pending.</em></li>
         </ol>
 
         <p>Results so far (public-topology / self-reported scores from PR
@@ -694,25 +707,32 @@
           </thead>
           <tbody>
             <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/55">#55</a></td>
+              <td>PR #53 recipe (MLP-only r64, attention frozen, rehearsal 0.2), lr 3e-4→4e-4</td>
+              <td>0.4587</td>
+              <td>0.9537</td>
+              <td>0.4706 (local) / <b>0.4375 (held-out) — new leaderboard #1</b></td>
+            </tr>
+            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/48">#48</a></td>
               <td>PR #43 recipe, MLP-only LoRA rank 64→128 (attention frozen)</td>
               <td>0.4274</td>
               <td>1.0</td>
-              <td>0.4274 (local) / <b>0.4274 (held-out) — leaderboard #1</b>, local-vs-held-out rank order inverted</td>
+              <td>0.4274 (local) / <b>0.4274 (held-out) — #2</b>, local-vs-held-out rank order inverted</td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/42">#42</a></td>
               <td>PR #33 recipe, lr 2e-4→1e-4 (gentler LR at same L2-SP λ)</td>
               <td>0.8155</td>
               <td>0.7119</td>
-              <td>0.5805 (local, fleet-wide local-best) / <b>0.4161 (held-out) — leaderboard #2</b></td>
+              <td>0.5805 (local, fleet-wide local-best) / <b>0.4161 (held-out) — #3</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/9">#9</a></td>
               <td>LoRA r32/α64 + 20% on-policy rehearsal, lr 2e-4, 400 steps (early-stop)</td>
               <td>0.437</td>
               <td>1.0</td>
-              <td>0.449 (local) / <b>0.3742 (held-out) — leaderboard #1</b></td>
+              <td>0.449 (local) / <b>0.3742 (held-out) — #4</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/37">#37</a></td>
@@ -1072,41 +1092,37 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training.
-          54 PRs open so far; <b>the leaderboard has a new #1 and #2 this
-          tick.</b> PR #48 (MLP-only LoRA rank 128, attention frozen) held-out
-          <b>0.4274</b> — surprising given locally rank 128 looked worse than
-          rank 64, but on the secret topology it's now the fleet's best score.
-          PR #42 (full-param FT + L2-SP at gentler LR 1e-4) held-out
-          <b>0.4161</b> — the first full-param recipe to score competitively
-          held-out, a big recovery from #33's earlier 46%-carry-through
-          letdown. PR #9 (early-stop + on-policy rehearsal LoRA), unbeaten for
-          many ticks, is now <b>#3 at 0.3742</b>. 4 more held-out scores
-          landed: #41 (0.2571), #45 (0.2301, completes the LR curve). 6 NEW
-          open PRs continue the two winning lines: #49 (exact reproduction of
-          #9's recipe — retention reproducible, crystallization is a
-          run-to-run coin-flip), #50/#54 (steps and replay-ratio probes on the
-          r64/lr3e-4 LoRA recipe — both confirm the existing operating point
-          is a local optimum), #51 (full-param L2-SP LR pushed to 5e-5 — worse
-          than #42, pins lr 1e-4 as an interior optimum, not a monotone
-          endpoint), #52 (MLP-only + higher LR still can't break the ~0.45
-          test ceiling even with attention frozen — a genuine
-          optimization/data-regime limit), #53 (stacks every validated
-          idea-10 lever at once — local score 0.5238, the family's best,
-          held-out pending and a high-priority watch item given #48's
-          local-vs-held-out inversion). #46 (MLP-only + higher LR) still
-          needs a respawn after a failed eval-pod launch. Full leaderboard:
-          #48 (0.4274), #42 (0.4161), #9 (0.3742), #37 (0.3602), #43 (0.3591),
-          #31 (0.3507), #24 (0.3468), #44 (0.3391), #30 (0.3175), #19 (0.3161),
-          #27 (0.3110), #29 (0.3095), #40 (0.3080), #38 (0.3013), #36 (0.2982),
-          #22 (0.2934), #12 (0.2866), #14 (0.2814), #34 (0.2798), #26 (0.2795),
-          #35 (0.2788), #15 (0.2681), #20 (0.2628), #41 (0.2571), #7 (0.2545),
-          #8 (0.2336), #33 (0.2295), #45 (0.2301), #23 (0.2270), #16 (0.2269),
-          #13 (0.2197), #3 (0.2147), #32 (0.2004), #28 (0.1992), #10 (0.1970),
-          #4 (0.1957), #17 (0.1715), #2 (0.1697), #25 (0.1686), #21 (0.0566).
-          Pending held-out: #53 (highest priority — MLP-only stacked-levers
-          local-best 0.5238), #47, #49-52, #54, #6, #18, #5, #11; #46 needs a
-          respawn after a failed eval-pod launch. Last updated
-          2026-07-02 19:20 UTC.</p>
+          60 PRs open so far; <b>the leaderboard has a new #1 this tick.</b>
+          PR #55 (PR #53's MLP-only rank-64/attention-frozen/rehearsal-0.2
+          recipe, lr pushed 3e-4→4e-4) held-out <b>0.4375</b> (test_acc
+          0.4587, retention 0.9537) — the LR push itself was locally flat/
+          negative (decisiveness fell below base, confirming 3e-4 as the
+          peak), but it still carries through as the fleet's best score,
+          nudging #48 (0.4274) to #2. PR #53 itself — the untuned lr-3e-4
+          ancestor recipe, fleet-wide local-best at 0.5238 — still has
+          held-out pending and remains the single highest-priority watch item.
+          5 NEW open PRs since last tick: #56 (gentler Muon lr1e-3 + rehearsal,
+          retention hits the cap 0.975 but crystallization lags AdamW),
+          #57 (larger rehearsal set 315 vs 215 — no gain, anchor saturates by
+          ~200 completions), #58 (heavier-rehearsal insurance variant on the
+          #53/#43 MLP-only lineage, local/held-out both pending), #59
+          (full-param L2-SP lr 7e-5 confirms lr 1e-4 remains optimal), #60
+          (KL-to-base anchor holds retention at the cap 0.99 without a
+          step-budget tax — a new idea, not in the seeded six, watch for a
+          dedicated idea-11 writeup once it scores). Full leaderboard: #55
+          (0.4375), #48 (0.4274), #42 (0.4161), #9 (0.3742), #37 (0.3602),
+          #43 (0.3591), #31 (0.3507), #24 (0.3468), #44 (0.3391), #30
+          (0.3175), #19 (0.3161), #27 (0.3110), #29 (0.3095), #40 (0.3080),
+          #38 (0.3013), #36 (0.2982), #22 (0.2934), #12 (0.2866), #14
+          (0.2814), #34 (0.2798), #26 (0.2795), #35 (0.2788), #15 (0.2681),
+          #20 (0.2628), #41 (0.2571), #7 (0.2545), #8 (0.2336), #33 (0.2295),
+          #45 (0.2301), #23 (0.2270), #16 (0.2269), #13 (0.2197), #3 (0.2147),
+          #32 (0.2004), #28 (0.1992), #10 (0.1970), #4 (0.1957), #17 (0.1715),
+          #2 (0.1697), #25 (0.1686), #21 (0.0566). Pending held-out: #53
+          (highest priority — MLP-only stacked-levers local-best 0.5238),
+          #47, #49-52, #54, #56-60, #6, #18, #5, #11; #46 needs a respawn
+          after a failed eval-pod launch. Last updated
+          2026-07-02 19:47 UTC.</p>
         </div>
 
       </div>
