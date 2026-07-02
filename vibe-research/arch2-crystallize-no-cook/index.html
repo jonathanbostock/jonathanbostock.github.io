@@ -66,31 +66,42 @@
           <ol>
             <li><b>idea-4</b> — early-stop + on-policy rehearsal combo. Best:
               PR #9, held-out <b>0.3742</b> (leaderboard #1).</li>
+            <li><b>idea-7</b> — Muon optimizer (full-param and on-LoRA). Jumped
+              to #2 this tick: PR #31 (Muon-LoRA + rehearsal), held-out
+              <b>0.3507</b> — beats plain-AdamW rank-64+rehearsal (#29,
+              0.3095) despite scoring lower locally (0.365 vs 0.477), the best
+              carry-through ratio of any Muon variant yet.</li>
             <li><b>idea-10</b> — attention-only adapter targeting (footprint
-              lever). Best: PR #24, held-out <b>0.3468</b> (#2).</li>
+              lever). Best: PR #24, held-out <b>0.3468</b> (#3).</li>
             <li><b>idea-9</b> — combine rank/steps + replay levers. Best: PR
-              #19, held-out <b>0.3161</b> (#3).</li>
+              #19, held-out <b>0.3161</b> (#4).</li>
             <li><b>idea-3</b> — general-data mixin / on-policy replay
-              (bolt-on). Best now PR #27, held-out <b>0.3110</b> (#4) —
+              (bolt-on). Best now PR #27, held-out <b>0.3110</b> (#5) —
               rehearsal+steps interaction; PR #23 (raised replay ratio,
               "retention ≈ solved" locally) landed lower than expected at
-              0.2270; PR #7 at 0.2545.</li>
-            <li><b>idea-1</b> — LoRA rank/magnitude sweeps. Best: PR #22,
-              held-out <b>0.2934</b> (#5). Also scored this tick: #12
-              (0.2866), #14 (0.2814), #26 (0.2795, new), #15 (0.2681), #20
-              (0.2628), #16 (0.2269), #13 (0.2197), #3 (0.2147), #25 (0.1686,
-              new — Muon-vs-AdamW rank contrast lands weak), #2 (0.1697).</li>
-            <li><b>idea-7</b> — Muon optimizer (full-param and on-LoRA). Best
-              now PR #28, held-out <b>0.1992</b> (short Muon-LoRA,
-              early-stop) — passed full-param Muon (#17, 0.1715); Muon-on-LoRA
-              #21 still worst carry-through of any scored PR at 0.0566; #31
-              (Muon-LoRA + rehearsal) held-out pending.</li>
-            <li><b>idea-2</b> — L2-SP at higher λ, stacked on full-param FT.
-              PR #11: local score 0.024, retention 0.042 — clean negative,
-              held-out pending.</li>
+              0.2270; PR #7 at 0.2545; PR #32 (rehearsal content ablation)
+              local-only.</li>
+            <li><b>idea-1</b> — LoRA rank/magnitude sweeps. Best now PR #29
+              (rank 64 at the rehearsal+early-stop operating point), held-out
+              <b>0.3095</b> (#7) — up from #22's 0.2934. Also scored: #12
+              (0.2866), #14 (0.2814), #26 (0.2795), #15 (0.2681), #20 (0.2628),
+              #16 (0.2269), #13 (0.2197), #3 (0.2147), #25 (0.1686), #2
+              (0.1697). Caveat flagged by PR #35/#36: plain-AdamW-LoRA
+              crystallization is high-variance run-to-run (test_acc 0.24–0.58
+              for near-identical recipes), so single-run local-score
+              comparisons within this family carry real noise.</li>
+            <li><b>idea-2</b> — L2-SP shrinkage prior, stacked on full-param
+              FT. Reversed from written off to <b>fleet-wide local-best</b>
+              this tick: PR #33 (10× stronger L2-SP λ=1e-2 + frozen embeddings
+              <em>and</em> lm_head) scores <b>0.5003 local</b> (test_acc
+              0.9152, retention 0.5467) — the first full-param recipe to beat
+              every LoRA variant on test_acc while holding meaningful
+              retention. Held-out pending (pod started 17:20Z). PR #11's
+              earlier negative result (retention 0.042) used a weaker λ and no
+              lm_head freeze.</li>
             <li><b>idea-6</b> — gentler updates / layer-freezing. No
               dedicated PR yet; subsumed by idea-1's magnitude findings (PR
-              #20/#22).</li>
+              #20/#22) and idea-2's frozen-embeddings+lm_head guard (PR #33).</li>
             <li><b>idea-5</b> — KL-to-base regularization on held-out
               prompts. Seeded, untested.</li>
           </ol>
@@ -193,17 +204,42 @@
             the capacity gain is still there once rehearsal is in place:
             test_acc 0.502 (vs #9's 0.437) at retention 0.950 (vs #9's 1.0) —
             local score <b>0.477, the new local-best</b> across the whole
-            fleet, surpassing #9's 0.449. Held-out pending; if it carries
-            through anywhere near #9's ~83% ratio this would unseat the
-            leaderboard's #1. <b>New:</b> PR #30 tests whether #9's rank-32
-            rehearsal recipe can bank a step-count increase (400→1400) without
-            losing its retention cap — result: retention holds at the 1.0
-            ceiling across the full range, local score 0.446 (test_acc up
-            slightly), confirming rehearsal fully decouples step-count from
-            decisiveness cost in this lineage. Held-out pending.</em></li>
+            fleet (superseded this tick by idea-2's PR #33, see below),
+            surpassing #9's 0.449. <b>Held-out landed: 0.3095</b> — below #9's
+            0.3742, so the extra rank-64 capacity does not transfer to the
+            secret topology as well as #9's plain rank-32, echoing the
+            earlier rank-doesn't-help-held-out pattern. <b>New:</b> PR #30
+            tests whether #9's rank-32 rehearsal recipe can bank a step-count
+            increase (400→1400) without losing its retention cap — result:
+            retention holds at the 1.0 ceiling across the full range, local
+            score 0.446 (test_acc up slightly), confirming rehearsal fully
+            decouples step-count from decisiveness cost in this lineage.
+            <b>Held-out landed: 0.3175</b> — again below #9, so more steps
+            under rehearsal doesn't buy held-out gain either; #9's exact
+            operating point (r32/400 steps) still hasn't been beaten by any
+            single-lever variant. <b>New:</b> PR #34 doubled #9's LR
+            (2e-4→4e-4) hoping the rehearsal anchor's headroom would let
+            harder crystallization through — retention held (0.971, confirming
+            the anchor is not LR-fragile) but test_acc did not rise (0.396,
+            same 0.35–0.40 band as #9), local score 0.3844. Combined with #20
+            (lower LR destroys crystallization) and #14 (rank doesn't help),
+            this brackets <b>#9's ~0.45 test_acc as a genuine
+            optimization/data-regime ceiling</b> in the AdamW-LoRA+rehearsal
+            regime — not LR- or capacity-limited. <b>Caveat (PR #35/#36):</b>
+            two near-identical AdamW-LoRA runs at the #29 (r64/400-step)
+            operating point drew test_acc 0.400 and (via #32, different
+            rehearsal content) 0.575 — a swing of 0.4 to 0.58 for what should
+            be the same recipe class. Cross-referencing all rank-32/64
+            AdamW-LoRA+rehearsal siblings (#9: 0.35, #3-lineage: 0.53, #29:
+            0.50, #35: 0.40, #36: 0.24) shows <b>crystallization itself is
+            high-variance run-to-run (~0.24–0.58 for the same recipe class)</b>
+            while retention is stable — meaning many of this idea's marginal
+            single-run A/B comparisons (rank, LR, rehearsal ratio) may be
+            partly reading noise, and the eval's single-repeat scoring passes
+            that variance straight into the leaderboard.</em></li>
           <li id="idea-2"><b>idea-2 · L2-SP at higher λ.</b> Keep weights close to
             the pretrained init; the gradient-direct L2-SP is already in the repo.
-            <em>Status: tested combined with full-param FT in PR #11 (10x
+            <em>Status: first tested combined with full-param FT in PR #11 (10x
             L2-SP lambda + frozen embeddings + on-policy mixin, stacked on the
             known full-param crystallization recipe) — a clean negative
             result. Retention 0.042: the model is cooked as hard as unanchored
@@ -214,7 +250,24 @@
             intermediate-eval trajectory shows full-param test_acc peaking at
             step 800 (0.88, above the previously-cited 0.79 ceiling) before
             the anchors un-learn it — scoring only the final step throws
-            that peak away.</em></li>
+            that peak away. <b>Reversed this tick:</b> PR #33 pushed the
+            guard further — L2-SP λ 10x stronger again (1e-2, vs #11's
+            already-10x value) <em>and</em> froze the output head (lm_head)
+            in addition to input embeddings, on the theory that the
+            decisiveness collapse is specifically the output distribution
+            re-shaping toward matching-game tokens, which freezing lm_head
+            directly blocks. Result: test_acc 0.9152 (the highest crystallization
+            of any recipe in the fleet, full-param or LoRA) at retention 0.5467
+            — local score <b>0.5003, a new fleet-wide local-best</b>, beating
+            LoRA's best local score (PR #29's 0.477) for the first time with a
+            full-parameter method. This is the first evidence that full-param
+            FT's raw crystallization power can be partially preserved without
+            LoRA's structural constraint — the output-head freeze looks like
+            the load-bearing addition versus #11's failed attempt. Held-out
+            pending (pod started 17:20Z); if this carries through anywhere
+            near LoRA's ~50-80% typical ratio it would be a new leaderboard
+            #1 by a wide margin. Flagged as the single highest-priority
+            pending result in the fleet right now.</em></li>
           <li id="idea-3"><b>idea-3 · General-data mixin / on-policy replay.</b>
             Interleave matching-game examples with general chat data (or the
             model's own on-policy completions) so the model doesn't collapse
@@ -261,11 +314,20 @@
             "replay tax": at 600 steps, replay 0.3 drops test_acc from 0.521
             (no-replay #6) to 0.407 — the ratio genuinely trades test for
             retention. Local score 0.3669 — and this one's held-out score
-            landed strong at <b>0.3110 — leaderboard #4</b>, the best
+            landed strong at <b>0.3110 — leaderboard #5</b>, the best
             carry-through in the whole replay/mixin family and now this
             idea's flagship result: shorter (600-step) + replay 0.3 beats the
             longer 1400-step version (#23) held-out despite scoring lower
-            locally.</em></li>
+            locally. <b>New:</b> PR #32 asks whether rehearsal <em>content</em>
+            matters — swapping the #29 champion's general-only rehearsal set
+            for one doubled with everyday non-panel A/B-preference turns
+            ("tea or coffee?"), on the intuition that content shaped like the
+            decisiveness metric would anchor it more efficiently. Result is
+            the opposite: the shaped set gave higher test_acc (0.575 vs 0.502)
+            but lower retention (0.747 vs 0.950), net local score down (0.430
+            vs 0.477) — what anchors decisiveness is rehearsal <em>volume and
+            breadth</em>, not whether it's shaped like the eval metric.
+            Held-out pending.</em></li>
           <li id="idea-4"><b>idea-4 · Early-stop at the crystallization knee.</b>
             Accuracy plateaus by ~step 1600 while decisiveness likely degrades
             monotonically — stop where the concept is in but the model is intact.
@@ -378,14 +440,24 @@
             regardless of optimizer). Local score 0.1506, but held-out landed
             at <b>0.1992</b> — now Muon's best scored result, ahead of
             full-param Muon (#17, 0.1715) and far ahead of Muon-on-LoRA's own
-            800-step run (#21, 0.0566). <b>New:</b> PR #31 pairs Muon-LoRA
+            800-step run (#21, 0.0566). PR #31 pairs Muon-LoRA
             with on-policy rehearsal (idea-3's fix) directly — retention jumps
             0.39→0.82 (rehearsal does anchor Muon's decisiveness, same as it
             does for AdamW-LoRA), but the rehearsal loss appears to fight
             Muon's orthogonalized update geometry: test_acc falls from Muon's
             characteristic 0.66-0.75 down toward AdamW-LoRA's range, local
             score 0.365 — the two levers partly cancel rather than stacking.
-            Held-out pending.</em></li>
+            <b>Held-out landed this tick: 0.3507 — leaderboard #2</b>, by far
+            Muon's best result and a much better carry-through than its 0.365
+            local score suggested (~96% of local, vs. Muon-on-LoRA's earlier
+            ~20% ratios) — <em>and it beats plain-AdamW rank-64+rehearsal
+            (#29, held-out 0.3095)</em> despite scoring lower locally. Read:
+            once the rehearsal anchor controls Muon's magnitude problem,
+            Muon's raw crystallization advantage transfers to the secret
+            topology better than AdamW's does — the optimizer-geometry edge
+            specifically helps held-out generalization, not just
+            public-topology fitting. Now the fleet's #2 direction overall and
+            the clearest remaining upside case for this idea.</em></li>
           <li id="idea-10"><b>idea-10 · Adapter module targeting as a footprint
             lever.</b> New idea from PR #24: instead of shrinking the LoRA
             footprint by rank or magnitude, shrink it structurally by
@@ -430,32 +502,53 @@
               <td>0.449 (local) / <b>0.3742 (held-out) — leaderboard #1</b></td>
             </tr>
             <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/31">#31</a></td>
+              <td>Muon-LoRA r32 + on-policy rehearsal (Muon × idea-3 synthesis)</td>
+              <td>—</td>
+              <td>0.82 (up from #21's 0.39)</td>
+              <td>0.365 (local) / <b>0.3507 (held-out) — #2</b></td>
+            </tr>
+            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/24">#24</a></td>
               <td>PR #9 recipe, LoRA target set restricted to attention-only (no MLP)</td>
               <td>0.389</td>
               <td>1.0</td>
-              <td>0.389 (local) / <b>0.3468 (held-out) — #2</b></td>
+              <td>0.389 (local) / <b>0.3468 (held-out) — #3</b></td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/30">#30</a></td>
+              <td>PR #9 recipe (r32), 400→1400 steps (does rehearsal's retention cap hold?)</td>
+              <td>—</td>
+              <td>1.0 (holds across full step range)</td>
+              <td>0.446 (local) / <b>0.3175 (held-out) — #4</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/19">#19</a></td>
               <td>PR #8 recipe (r64/1400 steps) + 20% on-policy replay</td>
               <td>0.390</td>
               <td>0.718</td>
-              <td>0.280 (local) / <b>0.3161 (held-out) — #3</b></td>
+              <td>0.280 (local) / <b>0.3161 (held-out) — #5</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/27">#27</a></td>
               <td>r64/α128 + 30% replay, 600 steps (vs #23's 1400)</td>
               <td>0.407</td>
               <td>0.901</td>
-              <td>0.367 (local) / <b>0.3110 (held-out) — #4</b></td>
+              <td>0.367 (local) / <b>0.3110 (held-out) — #6</b></td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/29">#29</a></td>
+              <td>PR #9 recipe, LoRA rank 32→64 (capacity at the rehearsal+early-stop operating point)</td>
+              <td>0.502</td>
+              <td>0.950</td>
+              <td>0.477 (local) / <b>0.3095 (held-out) — #7</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/22">#22</a></td>
               <td>PR #9 recipe, LoRA rank 32→16 (magnitude-isolation test)</td>
               <td>—</td>
               <td>&lt;1.0 (first drop in this lineage)</td>
-              <td>0.452 (local) / <b>0.2934 (held-out) — #5</b></td>
+              <td>0.452 (local) / <b>0.2934 (held-out) — #8</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/12">#12</a></td>
@@ -598,25 +691,25 @@
               <td>0.4254 (local, held-out pending) — negative result</td>
             </tr>
             <tr>
-              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/29">#29</a></td>
-              <td>PR #9 recipe, LoRA rank 32→64 (capacity at the rehearsal+early-stop operating point)</td>
-              <td>0.502</td>
-              <td>0.950</td>
-              <td><b>0.477 (local) — new local-best</b>, held-out pending</td>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/33">#33</a></td>
+              <td>Full-param FT + L2-SP λ=1e-2 (10x #11) + frozen embeddings AND lm_head</td>
+              <td>0.9152</td>
+              <td>0.5467</td>
+              <td><b>0.5003 (local) — new fleet-wide local-best</b>, held-out pending</td>
             </tr>
             <tr>
-              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/30">#30</a></td>
-              <td>PR #9 recipe (r32), 400→1400 steps (does rehearsal's retention cap hold?)</td>
-              <td>—</td>
-              <td>1.0 (holds across full step range)</td>
-              <td>0.446 (local), held-out pending</td>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/32">#32</a></td>
+              <td>PR #29 recipe, rehearsal content swapped to A/B-preference-shaped set</td>
+              <td>0.575</td>
+              <td>0.747</td>
+              <td>0.430 (local) — breadth beats shape, held-out pending</td>
             </tr>
             <tr>
-              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/31">#31</a></td>
-              <td>Muon-LoRA r32 + on-policy rehearsal (Muon × idea-3 synthesis)</td>
-              <td>—</td>
-              <td>0.82 (up from #21's 0.39)</td>
-              <td>0.365 (local) — levers partly cancel, held-out pending</td>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/34">#34</a></td>
+              <td>PR #9 recipe, lr 2e-4→4e-4 (does rehearsal headroom allow harder LR?)</td>
+              <td>0.396</td>
+              <td>0.971</td>
+              <td>0.384 (local) — confirms #9's test ceiling is not LR-limited, held-out pending</td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/5">#5</a></td>
@@ -632,6 +725,20 @@
               <td>0.042</td>
               <td>0.024 (local) — negative result, held-out pending</td>
             </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/36">#36</a></td>
+              <td>PR #9 recipe, rehearsal ratio 0.2→0.15 (variance probe)</td>
+              <td>0.2373</td>
+              <td>0.9614</td>
+              <td>0.2282 (local) — low-crystallization draw, evidence of run-to-run variance</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/35">#35</a></td>
+              <td>PR #29 recipe, rehearsal ratio 0.2→0.15 (variance probe)</td>
+              <td>0.400</td>
+              <td>—</td>
+              <td>variance finding (not a mean effect) — test_acc swings 0.40–0.575 across near-identical recipes</td>
+            </tr>
           </tbody>
         </table>
 
@@ -640,25 +747,28 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training.
-          31 PRs open so far; 23 have official held-out scores — <b>PR #9
+          36 PRs open so far; 26 have official held-out scores — <b>PR #9
           still leads the leaderboard at 0.3742</b> (early-stop + on-policy
-          rehearsal LoRA combo). 5 NEW held-out scores landed this tick: #27
-          (0.3110, replay/steps sign-flip — new idea-3 flagship), #26
-          (0.2795), #23 (0.2270, weaker than its "retention ≈ solved" framing
-          promised), #28 (0.1992, Muon's best scored result), #25 (0.1686,
-          weak Muon-vs-AdamW contrast carry-through). 4 NEW open PRs: #28
-          (Muon-LoRA early-stop, negative), #29 (r64 at the rehearsal
-          operating point — <b>local score 0.477, new local-best</b>,
-          held-out pending — could unseat #9 if it carries through), #30
-          (confirms rehearsal's retention cap holds 400→1400 steps, local
-          0.446), #31 (Muon-LoRA + rehearsal — levers partly cancel, local
-          0.365). Full leaderboard: #9 (0.3742), #24 (0.3468), #19 (0.3161),
-          #27 (0.3110), #22 (0.2934), #12 (0.2866), #14 (0.2814), #26
-          (0.2795), #15 (0.2681), #20 (0.2628), #7 (0.2545), #8 (0.2336), #23
-          (0.2270), #16 (0.2269), #13 (0.2197), #3 (0.2147), #28 (0.1992),
-          #10 (0.1970), #4 (0.1957), #17 (0.1715), #2 (0.1697), #25 (0.1686),
-          #21 (0.0566). Pending held-out: #29, #30, #31, #6, #18, #5, #11.
-          Last updated 2026-07-02 17:13 UTC.</p>
+          rehearsal LoRA combo). 3 NEW held-out scores landed this tick: #31
+          (<b>0.3507 — new #2</b>, Muon-LoRA + rehearsal, best Muon
+          carry-through yet and beats plain-AdamW rank-64+rehearsal despite
+          lower local score), #30 (0.3175), #29 (0.3095). 5 NEW open PRs: #32
+          (rehearsal content ablation — breadth beats shape, local 0.430),
+          <b>#33 (full-param FT + stronger L2-SP + frozen embeddings AND
+          lm_head — local score 0.5003, new fleet-wide local-best, beating
+          every LoRA variant on test_acc while holding real retention; held-out
+          pending and flagged top-priority)</b>, #34 (confirms #9's ~0.45 test
+          ceiling is not LR-limited), #35/#36 (variance probes — AdamW-LoRA
+          crystallization is high-variance run-to-run, 0.24–0.58 for
+          near-identical recipes, a methodological caveat on idea-1's marginal
+          comparisons). Full leaderboard: #9 (0.3742), #31 (0.3507), #24
+          (0.3468), #30 (0.3175), #19 (0.3161), #27 (0.3110), #29 (0.3095),
+          #22 (0.2934), #12 (0.2866), #14 (0.2814), #26 (0.2795), #15
+          (0.2681), #20 (0.2628), #7 (0.2545), #8 (0.2336), #23 (0.2270), #16
+          (0.2269), #13 (0.2197), #3 (0.2147), #28 (0.1992), #10 (0.1970), #4
+          (0.1957), #17 (0.1715), #2 (0.1697), #25 (0.1686), #21 (0.0566).
+          Pending held-out: #33 (highest priority), #32, #34, #35, #36, #6,
+          #18, #5, #11. Last updated 2026-07-02 17:43 UTC.</p>
         </div>
 
       </div>
