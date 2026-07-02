@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Loss-landscape grooves on MNIST — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="Bayesian influence functions on an autoregressive MNIST model: digit classes carve reproducible grooves into the loss landscape — but only early in training.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Loss-landscape grooves: Bayesian influence functions on autoregressive MNIST</h1>
+        <p class="vr-byline">
+          <span>2026-07-03</span>
+          <span>1× RTX 4090 + 1× A100 · ~$7</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>If natural abstractions are real, they should leave marks on a trained model's loss
+        landscape: datapoints that share a latent (say, <i>being a four</i>) should sit in the same
+        groove, so that wiggling the weights moves their losses together. This piece tests that
+        directly on MNIST with the
+        <button class="tooltip-button" data-define="bif">Bayesian influence function</button>,
+        estimated by
+        <button class="tooltip-button" data-define="sgld">SGLD</button> sampling around a trained
+        autoregressive patch-transformer (the standard
+        <button class="tooltip-button" data-define="devinterp">devinterp</button> recipe: train with
+        AdamW, then sample the local posterior). Four results:
+        within-class loss covariance exceeds between-class essentially everywhere (the groove
+        exists); the effect is <em>large only in a window early in training</em> and the window is
+        positioned by loss, not epochs; inside that window the BIF genuinely predicts what
+        fine-tuning does, while at convergence it does not — even though the behavioural effect is
+        still there; and unsupervised digit recovery from the BIF alone stays weak throughout.</p>
+
+        <h2><span class="vr-section-num">§1</span>Setup</h2>
+
+        <p>Each 28×28 digit becomes a raster sequence of 49 patches of 4×4 pixels. A small
+        decoder-only transformer predicts each patch given the previous ones, emitting a
+        full-covariance multivariate
+        <button class="tooltip-button" data-define="logistic-normal">logistic-normal</button>
+        distribution per patch (16 means + 16 diagonal + 120 off-diagonal Cholesky entries = 152
+        parameters — the entire pixel-level correlation structure inside a patch is modelled, and
+        patch-to-patch structure comes from the autoregression).</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>models</dt><dd>d128·L4 (0.8M), d256·L8 (6.4M), d512·L8 (25M); dropout 0.1</dd>
+            <dt>data</dt><dd>MNIST 60k train / 10k test; uniform dequantisation, logit transform (λ=10⁻³)</dd>
+            <dt>training</dt><dd>AdamW 3e-4, cosine, 30 epochs, batch 256 — ~4 min on the 4090</dd>
+            <dt>BIF</dt><dd>devinterp SGLD (localised, γ=100, nβ=m/ln m), 8 chains × 250–2,500 draws, 2–4 independent seeds per estimate; probes: class-balanced test digits</dd>
+            <dt>ground truth</dt><dd>per-class AdamW fine-tune (20 steps @ 1e-5) → ΔNLL on every probe</dd>
+            <dt>code &amp; artefacts</dt><dd>arcadia-impact/small-abstraction-test-{logs, mnist-ar} on HF (private)</dd>
+          </dl>
+        </div>
+
+        <p>First, the qualitative sanity check: what do these models actually draw? Free rollouts
+        below, one model per row, same noise seed everywhere. The 0.8M model at convergence draws
+        digit-<em>like</em> pseudo-glyphs; 25M draws recognisable digits.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig1-rollouts.png" alt="Grid of free samples from five models: d128 at epochs 5, 10 and 30, d256 and d512 at epoch 30. Sample quality improves from speckly strokes to clean digits.">
+          <figcaption><b>Fig. 1</b> · Free rollouts (T = 0.7). Rows: d128 at epochs 5/10/30, then
+          d256 and d512 at epoch 30. Same 12 noise seeds per row, so columns are loosely
+          comparable.</figcaption>
+        </figure>
+
+        <figure class="vr-fig">
+          <img src="figs/fig2-completions.png" alt="Real digits, and two rows of model completions given only the top 12 pixel rows of each digit.">
+          <figcaption><b>Fig. 2</b> · Conditioned completions from the 0.8M model: given the top 12
+          pixel rows (above the orange line), it usually completes the digit <em>as that digit</em>
+          — the prefix picks a class identity, not just a texture.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§2</span>The groove exists — inside a window</h2>
+
+        <p>The BIF between probes <i>i</i> and <i>j</i> is the covariance of their per-sample losses
+        under the local posterior. If digit classes are grooves, within-class covariance should
+        exceed between-class. It does: in every one of ~20 sweep cells (across SGLD step size,
+        localisation, checkpoint, model size, and a scale-floor regularisation ablation) the
+        within-class mean exceeds the between-class mean, and fine-tuning-on-fours logic holds for
+        most classes individually. But the <em>size</em> of the excess varies by an order of
+        magnitude, and it organises perfectly along one axis: how far training has progressed.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig3-groove-window.png" alt="Two scatter panels against checkpoint test NLL: within-class excess of the BIF collapses from 27% early to about 1% late; run-to-run agreement is highest early and for high-draw estimates.">
+          <figcaption><b>Fig. 3</b> · Every BIF estimate of the session, placed by its checkpoint's
+          test NLL. Left: within-class excess collapses from ~27% (early) to ~1% (converged) —
+          across model sizes and sampler settings. Right: independent-seed agreement of the
+          estimate; diamonds are the two 80k-draw high-SNR runs.</figcaption>
+        </figure>
+
+        <p class="vr-pull">Digit classes carve measurable grooves into the loss landscape — but the
+        grooves are wide open only early in training, and they close as the minimum sharpens.</p>
+
+        <p>Three details pin this down. First, the window is positioned by <em>loss</em>, not
+        epochs: the 6.4M model at epoch 5 has the same test NLL as the 0.8M model at ~epoch 10, and
+        its BIF stats land on the small model's epoch-10 point, not its epoch-5 point; a
+        dense-checkpoint retrain confirms the 6.4M model at epoch 2 (loss-matched to small@5) shows
+        the elevated gap (+9.2%). Second, at matched loss, capacity <em>dilutes</em> the relative
+        class signal (9% at 6.4M vs 20–27% at 0.8M) even while making the estimate more reproducible.
+        Third, this isn't estimator noise: at 20k draws/seed (diamonds) the late-training matrix is
+        highly reproducible (r = 0.87 between fully independent runs) and its class excess is
+        genuinely ~1%.</p>
+
+        <p>The same sharpening shows up as a hard constraint on the sampler: SGLD step size ε =
+        10⁻⁵ explodes within 3 steps at convergence; 6×10⁻⁷ survives at epoch 5 but explodes by
+        epoch 10; converged checkpoints only tolerate ~3×10⁻⁷. Regularising the predictive
+        distribution (a floor on the per-pixel scale, 0.03 or 0.1) costs almost nothing in
+        likelihood and does <em>not</em> buy any SGLD stability — the razor-sharp directions live in
+        the trunk weights, not in the head's confidence.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig4-bif-heatmap.png" alt="Left: 510x510 BIF correlation matrix at epoch 5 with the global common mode removed, showing red within-class blocks. Right: 10x10 class-pair mean BIF with a dominant diagonal for most classes.">
+          <figcaption><b>Fig. 4</b> · The epoch-5 high-SNR estimate (4 seeds × 20k draws, 510
+          probes). Left: correlation with the global
+          <button class="tooltip-button" data-define="common-mode">common mode</button> removed —
+          within-class blocks are visible for several digits (1, 3, 6, 8). Right: class-pair mean
+          covariance; ones support ones most, and the easy classes (0, 1, 6, 8) have the strongest
+          diagonals.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§3</span>Ground truth: the BIF predicts fine-tuning — early</h2>
+
+        <p>The influence-function reading of the BIF makes an operational claim: if
+        BIF(<i>i</i>,&nbsp;<i>j</i>) is large, fine-tuning on <i>i</i> should reduce loss on
+        <i>j</i>. We tested it literally — fine-tune a fresh copy of the model on a single class for
+        20 AdamW steps, measure ΔNLL on all 510 probes, and correlate against the BIF's class-row
+        prediction.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig5-groundtruth.png" alt="Left: per-class correlation between BIF predictions and fine-tuning loss changes, positive for 9 of 10 classes at epoch 5 and near zero on average at epoch 30. Right: fine-tuning reduces same-class loss far more than other-class loss at both epochs.">
+          <figcaption><b>Fig. 5</b> · Left: probe-level correlation between the BIF's prediction and
+          the actual fine-tuning effect, per fine-tuned class. Right: the behavioural ground truth
+          itself — same-class transfer dwarfs cross-class transfer at <em>both</em> checkpoints
+          (solid vs barber-pole bars).</figcaption>
+        </figure>
+
+        <p class="vr-pull">Fine-tuning on fours makes the model better at fours at every stage of
+        training — but the BIF can only see that coming while the grooves are open (r ≈ 0.43
+        probe-level at epoch 5; ≈ 0 at convergence).</p>
+
+        <p>This is the most interesting wedge in the data. The behavioural influence structure
+        (fig. 5 right) barely changes between epoch 5 and epoch 30. What changes is whether the
+        <em>local posterior</em> can see it: by convergence the class-relevant directions are frozen
+        — posterior samples no longer fluctuate along them, so the loss covariance loses the signal
+        that gradient fine-tuning still exploits. Two caveats: 20 AdamW steps is a larger
+        perturbation than the localised posterior neighbourhood, and AdamW's preconditioning is not
+        SGLD's isotropic geometry — some of the wedge may be metric mismatch rather than frozen
+        directions.</p>
+
+        <h2><span class="vr-section-num">§4</span>What didn't work</h2>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>attempt</th><th>hope</th><th class="num">result</th><th>verdict</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>spectral / k-means on raw BIF</td><td>clusters = digits</td><td class="num">ARI ≤ 0.03</td><td class="vr-neg">no</td></tr>
+              <tr><td>seed-averaging + eigen-embedding</td><td>denoise → clusters</td><td class="num">ARI 0.08 · NMI 0.17</td><td class="vr-neg">weak</td></tr>
+              <tr><td>Marchenko–Pastur eigenvalue cleaning</td><td>strip sampling noise</td><td class="num">+0.01–0.03 ARI</td><td class="vr-neg">marginal</td></tr>
+              <tr><td>scale-floor regularisation (0.03 / 0.1)</td><td>flatter minimum → hotter SGLD</td><td class="num">still diverges at 10⁻⁶</td><td class="vr-neg">no</td></tr>
+              <tr><td>within &gt; between (structural)</td><td>grooves exist</td><td class="num">~20/20 cells</td><td class="vr-pos">yes</td></tr>
+              <tr><td>fine-tune transfer (behavioural)</td><td>fours help fours</td><td class="num">10/10 classes</td><td class="vr-pos">yes</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The clustering ceiling is the honest negative: class identity is a real but minority
+        component of the posterior loss covariance even inside the window — the dominant components
+        look like per-probe difficulty and style factors, not digit identity. Recovering the
+        abstraction <em>unsupervised</em> from the BIF needs either much better estimators or a
+        different object (e.g. covariance of per-token losses, or influence measured in the model's
+        own preconditioned metric).</p>
+
+        <h2><span class="vr-section-num">§5</span>What's next</h2>
+        <ul>
+          <li>Track the window densely: BIF every epoch from init, on one model — is the window's
+          opening the same event as the fine-tuning predictability, and does it coincide with
+          sample-quality milestones (fig. 1's rows suggest yes)?</li>
+          <li>Fine-tuning ground truth at several checkpoints, not two — map r(BIF, ΔNLL) as a
+          curve, not endpoints.</li>
+          <li>Part 2 of the spec: a larger dataset. A low-rank (factor-analysis) covariance head is
+          already implemented and tested behind a config flag (Σ = D + VVᵀ,
+          O(dk²) log-probs), making 48-dim CIFAR patches or bigger patch sizes cheap.</li>
+          <li>Preconditioned influence: measure the BIF in the AdamW metric to test the
+          metric-mismatch explanation of §3's wedge.</li>
+        </ul>
+
+        <div class="vr-colophon">
+          Code · <span style="font-family: inherit">small-abstraction-test</span> (local repo, commit <code>650e634</code>+; built by codex-exec implementers with Claude reviewer gates).
+          <br>Artefacts · HF <a href="https://huggingface.co/datasets/arcadia-impact/small-abstraction-test-logs">arcadia-impact/small-abstraction-test-logs</a> (947 files: all BIF matrices, SGLD traces, sweep manifests) · <a href="https://huggingface.co/arcadia-impact/small-abstraction-test-mnist-ar">arcadia-impact/small-abstraction-test-mnist-ar</a> (8 checkpoints).
+          <br>Compute · RunPod RTX 4090 (~4.5 h, sweep + scale) + A100 80GB (~2.5 h, high-SNR + ground truth); ≈ $7 total. Pods deleted after verified upload.
+        </div>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "bif": "Bayesian influence function: BIF(i, j) = Cov[ℓ(x_i, w), ℓ(x_j, w)] over weights w drawn from the tempered local posterior around the trained solution. Large positive values mean the two datapoints' losses move together under weight perturbations — they share a groove.",
+        "sgld": "Stochastic Gradient Langevin Dynamics: SGD plus injected Gaussian noise, scaled so the iterates sample a tempered Bayesian posterior instead of converging. We use the devinterp variant with a localisation term γ(w* − w) that tethers the chain to the trained weights, so it samples the *local* posterior around this specific minimum.",
+        "devinterp": "Timaeus' developmental-interpretability toolkit. Its estimation recipe: train however you like (here AdamW), then run localised SGLD chains from the trained weights and compute observables over the draws. nβ = m/ln m is its default inverse-temperature scaling for minibatch size m.",
+        "logistic-normal": "Pixels are dequantised to (0,1), mapped through a logit, and modelled with a multivariate normal in logit space — a density on continuous pixel values (which is why NLLs here are negative: densities exceed 1). The change-of-variables Jacobian is included, so the per-image NLL is a proper x-space density.",
+        "common-mode": "The first, dominant component of the loss-covariance matrix: all probes' losses rise and fall together as the chain wanders (a global 'how good is the model right now' factor). It carries no class information, so it is projected out (double-centring) before displaying the matrix.",
+      });
+    </script>
+  </body>
+</html>
