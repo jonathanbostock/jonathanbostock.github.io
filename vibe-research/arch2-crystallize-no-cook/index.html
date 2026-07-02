@@ -66,7 +66,16 @@
             leave base weights intact, so the model's preference structure should
             survive while the adapter installs the associations. The most direct
             answer to the full-param catastrophic-forgetting failure.
-            <em>Status: seeded — awaiting first held-out scores.</em></li>
+            <em>Status: first evidence in — PR #2 (r16/α32, 600 steps) scores
+            0.3642 on the public topology: test_acc 0.4651, decisiveness
+            retention 0.7832 (0.576/0.735). Confirms the structural bet: LoRA
+            keeps most of the model's preference structure, at a cost in
+            test_acc versus full-param's 0.79. A shorter/higher-magnitude
+            variant (60 steps, r32/α64/lr3e-4) scored worse (retention 0.197) —
+            retention tracks how far the merged weights move, not step count.
+            Held-out eval pending. PR #2 also fixed a save-path bug (LoRA
+            adapters weren't merge-and-unload'd before scoring) that had been
+            silently blocking the whole LoRA branch for the fleet.</em></li>
           <li id="idea-2"><b>idea-2 · L2-SP at higher λ.</b> Keep weights close to
             the pretrained init; the gradient-direct L2-SP is already in the repo.
             <em>Status: seeded.</em></li>
@@ -84,14 +93,32 @@
             LR, shorter schedule, or freeze lower layers. <em>Status: seeded.</em></li>
         </ol>
 
+        <p>Results so far (public-topology / local scores, sorted best first;
+        held-out scores post as an arch-eval comment on each PR once the async
+        eval finishes):</p>
+
+        <table class="vr-table">
+          <thead>
+            <tr><th>PR</th><th>method</th><th>test_acc</th><th>decisiveness_retention</th><th>score</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/2">#2</a></td>
+              <td>LoRA r16/α32, lr 2e-4, 600 steps</td>
+              <td>0.4651</td>
+              <td>0.7832</td>
+              <td>0.3642</td>
+            </tr>
+          </tbody>
+        </table>
+
         <div class="vr-colophon">
           <p>ARCH 2.0 task <code>arch/crystallize-no-cook</code> ·
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
-          updated as held-out scores land. All 4 workers alive and mid-setup
-          (model download / first training runs); no worker held-out scores
-          yet beyond the pipeline canary (score 0.011). Last updated 2026-07-02
-          12:58 UTC.</p>
+          updated as held-out scores land. All 4 workers alive and training.
+          First non-canary result in: PR #2 (LoRA) scores 0.3642 locally,
+          held-out eval running. Last updated 2026-07-02 13:29 UTC.</p>
         </div>
 
       </div>
