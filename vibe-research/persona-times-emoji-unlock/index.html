@@ -13,7 +13,7 @@
         <h1>Two halves of a goal-seeker on the maze</h1>
         <p class="vr-byline">
           <span>2026-06-30</span>
-          <span>Gemma-3-27B-it · H100 80GB · ~21 GPU-hours</span>
+          <span>Gemma-3-27B-it · H100 80GB · ~40 GPU-hours</span>
           <span><a href="..">Vibe Research</a></span>
         </p>
       </div>
@@ -158,27 +158,6 @@ Where do you move? Output only N/E/S/W without punctuation.</code></pre>
 
         <p>And here is the catch that makes this whole matrix hard to read cleanly: <b>the funny axis is not valence-neutral.</b> "Funny" is an intrinsically positive thing to chat-Gemma; "unfunny / serious" leans negative. So a goal tile grounded as "the funny one" is a tile the base model already leans toward, <em>before any persona</em> — which is exactly why the goal axis looks like it is doing most of the work, and why "seek the funny goal" is a single clean directive while "be serious, the goal is the un-funny tile" is a limp double negative. The alignment story here is partly riding general good/bad affect, not purely the persona × goal composition I wanted to isolate.</p>
 
-        <p>The fix is to re-run the identical 3×3 on axes whose two poles are <em>balanced in valence</em> — where neither goal tile is a priori "the nice one". Two candidates, same training protocol: <b>mountains ↔ ocean</b> and <b>night ↔ morning</b>. Each pole is a genuine positive attractor ("you love the mountains", "you love the sea"), so alignment can no longer hide behind affect. Sixteen new LoRAs and 108 rollouts later:</p>
-
-        <figure class="vr-fig breakout">
-          <img src="figs/fig_axis_mountain_ocean_3x3.png" alt="mountains-ocean 3x3 disposition × grounding matrix">
-          <figcaption>The de-confounded matrix. <b>Grounding alone now does nothing</b> — both green panels sit at baseline (−74, −64 vs base −71), because "this tile is the mountains one" attracts a model that hasn't been given a reason to care. Dispositions alone are mild (−51, −64). The combination is decisive in both directions: <span style="color:#e8642c;font-weight:bold">aligned</span> −33 / −46, <span style="color:#865ecf;font-weight:bold">misaligned</span> −88 / −89.</figcaption>
-        </figure>
-
-        <p>This is the §1 thesis with the confound surgically removed, and it comes out <em>cleaner</em> than the original. On mountains ↔ ocean, the alignment gap — mean aligned cell minus mean misaligned cell — is <b>49 points</b>, versus 23 on the funny/serious matrix, and it is finally <em>symmetric</em>: the two aligned cells land within 14 points of each other (the two misaligned within 2), where funny/serious split by 41. Remove the free ride that "funny" was giving one diagonal and the composition doesn't shrink — it doubles, because the misaligned cells no longer get partially rescued by ambient positive affect.</p>
-
-        <figure class="vr-fig">
-          <img src="figs/fig_axis_mountain_ocean_superadd.png" alt="mountains-ocean super-additivity scatter, 24 combos">
-          <figcaption>The 24-combo uplift plot for mountains ↔ ocean. Colour separation is total: every <span style="color:#e8642c;font-weight:bold">aligned</span> combo gains over base and almost all sit above the additive line; every <span style="color:#865ecf;font-weight:bold">misaligned</span> combo sits below it. Compare the funny/serious version above, where the two aligned marker shapes behaved like different species.</figcaption>
-        </figure>
-
-        <p><b>night ↔ morning is the instructive partial failure.</b> The grounding-only column splits ±33 points around base — goal-labelled-"morning" alone scores −39 while goal-labelled-"night" alone scores −104. Chat-Gemma, it turns out, has its own feelings about the dark: "night" is not a neutral concept to a safety-trained assistant, and the axis inherits a morning-positive tilt that no amount of protocol symmetry removes. The interaction survives on top of the tilt — a night-lover rescues the night-goal from −104 to −59, morning-lover × morning-goal is the best cell at −24, and both misaligned cells (−101, −73) sit below their aligned partners by ~45 points — but the lesson stands: <em>you don't get to declare an axis valence-neutral; the model votes.</em> Mountains/ocean passed that vote, night/morning didn't.</p>
-
-        <figure class="vr-fig breakout">
-          <img src="figs/fig_axis_night_morning_3x3.png" alt="night-morning 3x3 disposition × grounding matrix">
-          <figcaption>Same protocol, tilted axis: the grounding-only (green) panels are no longer flat — goal=night alone is <em>worse than base</em> and goal=morning alone is better, before any disposition enters. Alignment still separates orange from violet within every row.</figcaption>
-        </figure>
-
         <h2><span class="vr-section-num">§6</span>Prompt vs train: a 5×5 delivery matrix</h2>
 
         <p>Everything so far delivered both halves by <em>training</em>. But each half has an obvious prompted twin: the persona LoRA was distilled <em>from</em> a system prompt, and the goal LoRA encodes a fact you can state in one sentence ("in this world, 🗃️ is the funny one and 🗂️ is the dull one"). So I ran the full crossing — five conditions per axis, <b>blocked by delivery</b>: none · humour-prompt · serious-prompt · humour-train · serious-train against none · funny-prompt · unfunny-prompt · funny-train · unfunny-train. Prompted text is prepended to the first maze turn (Gemma folds a system message into the first user turn anyway); trained conditions are the §5 adapters. 25 cells × 6 triples = 150 rollouts.</p>
@@ -205,7 +184,66 @@ Where do you move? Output only N/E/S/W without punctuation.</code></pre>
 
         <p>So the uplift pattern isn't an artefact of LoRA soup — it's how the two halves compose in the chat prior itself, and prompting exposes it at full strength. Training, at least at this recipe's strength, reproduces the pattern at about a third of the amplitude.</p>
 
-        <h2><span class="vr-section-num">§7</span>What this tells us</h2>
+        <h2><span class="vr-section-num">§7</span>Four valence-balanced axes: the sweep</h2>
+
+        <p>The fix for the confound is to re-run the identical 3×3 on axes whose two poles are <em>balanced in valence</em> — where neither goal tile is a priori "the nice one". Four axes, same training protocol throughout: two <b>topic preferences</b> (mountains ↔ ocean, night ↔ morning) and two <b>Big-Five personality traits</b> (extravert ↔ introvert, adventurous ↔ cautious — the closest kin to humour/serious). Every pole is written as a positive attraction ("you actively seek out…"), never as a dislike of the other pole. Thirty-two new LoRAs, 216 rollouts.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig_axis_mountain_ocean_3x3.png" alt="mountains-ocean 3x3 disposition × grounding matrix">
+          <figcaption>The de-confounded matrix. <b>Grounding alone now does nothing</b> — both green panels sit at baseline (−74, −64 vs base −71), because "this tile is the mountains one" attracts a model that hasn't been given a reason to care. Dispositions alone are mild (−51, −64). The combination is decisive in both directions: <span style="color:#e8642c;font-weight:bold">aligned</span> −33 / −46, <span style="color:#865ecf;font-weight:bold">misaligned</span> −88 / −89.</figcaption>
+        </figure>
+
+        <p>This is the §1 thesis with the confound surgically removed, and it comes out <em>cleaner</em> than the original. On mountains ↔ ocean, the alignment gap — mean aligned cell minus mean misaligned cell — is <b>49 points</b>, versus 23 on the funny/serious matrix, and it is finally <em>symmetric</em>: the two aligned cells land within 14 points of each other (the two misaligned within 2), where funny/serious split by 41. Remove the free ride that "funny" was giving one diagonal and the composition doesn't shrink — it doubles, because the misaligned cells no longer get partially rescued by ambient positive affect.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/fig_axis_mountain_ocean_superadd.png" alt="mountains-ocean super-additivity scatter, 24 combos">
+          <figcaption>The 24-combo uplift plot for mountains ↔ ocean. Colour separation is total: every <span style="color:#e8642c;font-weight:bold">aligned</span> combo gains over base and almost all sit above the additive line; every <span style="color:#865ecf;font-weight:bold">misaligned</span> combo sits below it. Compare the funny/serious version in §5, where the two aligned marker shapes behaved like different species.</figcaption>
+        </figure>
+
+        <p><b>night ↔ morning is the instructive partial failure.</b> The grounding-only column splits ±33 points around base — goal-labelled-"morning" alone scores −39 while goal-labelled-"night" alone scores −104. Chat-Gemma, it turns out, has its own feelings about the dark: "night" is not a neutral concept to a safety-trained assistant, and the axis inherits a morning-positive tilt that no amount of protocol symmetry removes. The interaction survives on top of the tilt — a night-lover rescues the night-goal from −104 to −59, morning-lover × morning-goal is the best cell at −24, and both misaligned cells (−101, −73) sit below their aligned partners by ~45 points — but the lesson stands: <em>you don't get to declare an axis valence-neutral; the model votes.</em> Mountains/ocean passed that vote, night/morning didn't.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig_axis_night_morning_3x3.png" alt="night-morning 3x3 disposition × grounding matrix">
+          <figcaption>Same protocol, tilted axis: the grounding-only (green) panels are no longer flat — goal=night alone is <em>worse than base</em> and goal=morning alone is better, before any disposition enters. Alignment still separates orange from violet within every row.</figcaption>
+        </figure>
+
+        <p>Which brings us to the <b>personality traits</b> — the axes closest in kind to the humour/serious pair that started all this. If topic preferences can be valence-balanced, can traits? <b>No.</b> Both trait axes fail the neutrality vote, and they fail <em>harder</em> than night/morning: goal-labelled-"extravert" alone scores −32 while goal-labelled-"introvert" alone scores −103 (±36 around base, the biggest tilt in the sweep); goal-labelled-"adventurous" alone −48 vs goal-labelled-"cautious" alone −90. In hindsight this is over-determined: trait words are <em>act-this-way</em> words. "Sociable, outgoing, surrounded by people" is an approach-me label; "solitude, quiet, keeping to oneself" is an avoid-me label. A trait attribute is already halfway to a disposition, so painting it on a tile moves the model with no persona in the building — topic nouns like <em>mountains</em> are the only attributes in this sweep inert enough to stay put.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig_axis_extravert_introvert_3x3.png" alt="extravert-introvert 3x3 disposition × grounding matrix">
+          <figcaption>The biggest tilt in the sweep: the grounding-only (green) panels sit at −32 and −103 around a −71 base. On top of it, alignment still runs the table — extravert-lover × goal=extravert reaches <b>−4.9</b>, and the introvert persona pins its own level (−42) whether the grounding helps it, fights it, or isn't there: it cancels a −103 grounding back to exactly where the persona alone sits.</figcaption>
+        </figure>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig_axis_adventurous_cautious_3x3.png" alt="adventurous-cautious 3x3 disposition × grounding matrix">
+          <figcaption>The strongest composition in the project. Both aligned cells nearly solve the maze — adventurous × goal=adventurous <b>−9.0</b>, cautious × goal=cautious <b>−17.3</b> (rescuing a −90 grounding by 72 points) — against misaligned cells of −92 and −72. Alignment gap: <b>68.9 points</b>, the largest of any axis, funny/serious included.</figcaption>
+        </figure>
+
+        <p>Two things make adventurous ↔ cautious the strongest matrix in the project. First, trait dispositions are simply more potent than topic ones — the cautious persona <em>alone</em> scores −38.7, beating base by 31 points with no grounding at all, because a lava maze generically rewards being careful (an honest task-prior caveat on that cell). Second, and more interesting: <b>the avoid-flavoured composition works here.</b> Cautious-lover × goal=cautious (−17.3) is the same logical shape as the serious × unfunny-goal double-negative that limped to −74 when trained in §5 — but "cautious" was written as a positive attraction (<em>you actively seek out security, the well-established</em>), not as a negation of the other pole. Given an attractor to run toward instead of a dislike to run from, the negative diagonal composes as cleanly as the positive one.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/fig_axis_adventurous_cautious_superadd.png" alt="adventurous-cautious super-additivity scatter, 24 combos">
+          <figcaption>The adventurous ↔ cautious uplift plot: both aligned combos (orange, both marker shapes) sit high above the additive line — the cautious-aligned points despite their grounding-only part being strongly <em>negative</em> — while the misaligned combos sink below it.</figcaption>
+        </figure>
+
+        <p>The whole sweep in one table — tilt is what the grounding does alone (the model's "vote" on whether the axis is really neutral), gap is what alignment adds on top:</p>
+
+        <div class="vr-table-wrap">
+        <table class="vr-table">
+          <thead><tr><th>axis</th><th>kind</th><th>grounding-only tilt (A / B vs base)</th><th>alignment gap</th></tr></thead>
+          <tbody>
+            <tr><td>funny ↔ serious</td><td>affect</td><td>+16 / −25</td><td>23</td></tr>
+            <tr><td>mountains ↔ ocean</td><td>topic</td><td class="vr-pos">−3 / +7</td><td>49</td></tr>
+            <tr><td>night ↔ morning</td><td>topic</td><td>−34 / +32</td><td>45</td></tr>
+            <tr><td>extravert ↔ introvert</td><td>trait</td><td class="vr-neg">+39 / −32</td><td>46</td></tr>
+            <tr><td>adventurous ↔ cautious</td><td>trait</td><td>+22 / −20</td><td class="vr-pos">69</td></tr>
+          </tbody>
+        </table>
+        </div>
+
+        <p>Every axis composes — the gap is 45–69 points everywhere except the confounded original — and every axis except mountains ↔ ocean carries some intrinsic tilt. The two facts are independent: night/morning and extravert/introvert have near-identical gaps to mountains/ocean despite wildly different tilts. Alignment is the signal; tilt is the offset the model brings to the table.</p>
+
+        <h2><span class="vr-section-num">§8</span>What this tells us</h2>
 
         <p>Whether a residual-stream preference matters for behaviour is not the same question as whether that preference is installed. The two LoRAs split that into pieces:</p>
 
@@ -219,13 +257,13 @@ Where do you move? Output only N/E/S/W without punctuation.</code></pre>
         <p>This story isn't fully done. A few open threads, in rough order of how curious I am about them:</p>
 
         <ul>
-          <li><b>How specific is "funny"?</b> Largely answered by §5's re-run: mountains-, ocean-, night- and morning-lover dispositions all actuate their matching groundings, so the mechanism is generic — funny was just the axis with a valence subsidy. Whether <em>personality traits</em> (extravert/introvert, adventurous/cautious — closer kin to humour/serious than a topic preference) behave the same way is running now.</li>
+          <li><b>How specific is "funny"?</b> Answered by the §7 sweep: eight more dispositions — four topic-lovers and four Big-Five trait poles — all actuate their matching groundings, with alignment gaps of 45–69 points. The mechanism is fully generic; funny was just the axis with a valence subsidy (and, per the tilt column, most attributes carry one).</li>
           <li><b>The persona alone is not zero.</b> Persona-only gains 6–30 reward across the six triples — much smaller than the combined effect, but not nothing. Base-Gemma carries its own emoji-specific affordances; the persona is probably amplifying whatever the base already half-prefers (see, e.g., T2 fwd where persona alone gets +29.7 vs emoji alone +39.0).</li>
           <li><b>Stacking order.</b> I merge persona first, then emoji-pair. Does the order matter? Are there interactions in the LoRA parameter subspace, or is this strictly residual-stream composition? Worth a small ablation.</li>
         </ul>
 
         <div class="vr-colophon">
-          <p>adapters + data: <a href="https://huggingface.co/arcadia-impact/functional-welfare-gemma3-loras">arcadia-impact/functional-welfare-gemma3-loras</a> &nbsp;·&nbsp; commit <code>0391775</code> &nbsp;·&nbsp; <a href="../">Vibe Research</a> &nbsp;·&nbsp; <a href="../sft-beats-rl-maze/">previous: SFT beats RL on the maze</a></p>
+          <p>adapters + data: <a href="https://huggingface.co/arcadia-impact/functional-welfare-gemma3-loras">arcadia-impact/functional-welfare-gemma3-loras</a> &nbsp;·&nbsp; commit <code>f90b8c6</code> &nbsp;·&nbsp; <a href="../">Vibe Research</a> &nbsp;·&nbsp; <a href="../sft-beats-rl-maze/">previous: SFT beats RL on the maze</a></p>
         </div>
 
       </div>

@@ -49,19 +49,20 @@
               A persona LoRA ("I love funny things") and a per-pair
               preference LoRA ("📐 is the funny one") each fail to solve
               David Demitri Africa's maze alone, but combining them
-              unlocks goal-seeking. A 3×3 persona × goal matrix shows the
-              halves compose by <em>valence</em>; re-running it on
-              valence-neutral axes (mountains↔ocean) makes the
-              composition <em>cleaner</em> — and a 5×5 prompt-vs-train
-              matrix shows one sentence of context beats the 12k-pair
-              LoRA. ~340 rollouts.
+              unlocks goal-seeking. A 5×5 prompt-vs-train matrix shows
+              one sentence of context beats the 12k-pair LoRA, and a
+              five-axis sweep (funny, mountains/ocean, night/morning,
+              extravert/introvert, adventurous/cautious) shows the halves
+              compose by alignment on every axis — gaps of 45–69 points —
+              while the model votes its own tilt on what counts as
+              "neutral". ~450 rollouts.
             </p>
             <span class="vr-tags">
               <span class="vr-tag">LoRA</span>
               <span class="vr-tag">preference</span>
               <span class="vr-tag">persona-distillation</span>
               <span class="vr-tag">Gemma-3-27B</span>
-              <span class="vr-tag">~$11 of GPU</span>
+              <span class="vr-tag">~$140 of GPU</span>
             </span>
           </a>
         </li>
