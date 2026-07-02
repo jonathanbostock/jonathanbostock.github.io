@@ -99,7 +99,7 @@
             found the floor too: test_acc collapses to 0.387 (r4 can't carry
             the composition rule) and retention is non-monotonic (0.857, down
             from r8's 0.913) — r4 is worse on both axes, local score 0.332,
-            held-out pending. Net: r8 is the sweet spot for the
+            held-out now in at <b>0.2269</b>. Net: r8 is the sweet spot for the
             magnitude-tuned (#3/#12/#13) lineage; r64 for the
             rehearsal+early-stop (#9) lineage — the optimal rank depends on
             what else is anchoring decisiveness. Separately, PR #14 doubled
@@ -112,7 +112,22 @@
             0.425 vs 0.449) — closes the optimization-limit hypothesis too.
             Read: <b>#9's ~0.44 test_acc ceiling is neither a rank nor an LR
             limit</b>; something else (data, steps, or the rehearsal ratio
-            itself) is capping it, still open.</em></li>
+            itself) is capping it, still open. <b>New:</b> PR #20 tested the
+            LR lever on the magnitude-tuned r8 lineage (PR #12): lr 2e-4→1e-4
+            at otherwise-identical rank/steps. Not a free lunch — test_acc
+            collapses 0.515→0.331 while train_acc stays ~1.0 (the model still
+            memorizes training edges, it just stops generalizing to composed
+            held-out edges), retention only ticks up 0.913→0.930, local score
+            0.4705→0.3081. Crystallization is LR-gated, not obtainable "for
+            free" by going gentler. PR #22 then isolated magnitude directly:
+            rank 32→16 (alpha held at 2x scaling) on the #9 rehearsal+early-stop
+            recipe. Result: decisiveness retention drops <em>below 1.0</em>
+            for the first time in this lineage while test_acc holds up — local
+            score 0.452, a new local-best, and the clearest evidence yet that
+            <b>adapter magnitude, not rank per se, is the real gentleness
+            lever</b> (rank 32 and rank 16 at the same alpha/rank scaling
+            behave differently in this lineage). Held-out pending for
+            both.</em></li>
           <li id="idea-2"><b>idea-2 · L2-SP at higher λ.</b> Keep weights close to
             the pretrained init; the gradient-direct L2-SP is already in the repo.
             <em>Status: tested combined with full-param FT in PR #11 (10x
@@ -186,6 +201,17 @@
             single jump yet, and it holds up much better public-to-secret
             than pure LoRA runs did (0.449 local → 0.3742 held-out, an ~83%
             carry-through vs. ~50% for #2/#3/#4).</em></li>
+          <li id="idea-9"><b>idea-9 · Combine the two orthogonal held-out
+            levers.</b> Held-out scores show rank+steps buy test_acc but leave
+            retention low, while on-policy replay buys retention but starves
+            test_acc — neither alone breaks held-out 0.24. <em>Status: new
+            idea, PR #19 combines them — r64/1400 steps (PR #8 lineage) plus a
+            moderate 20% on-policy replay ratio. On the public topology this
+            lifts retention 0.557→0.718 at a test_acc cost (0.488→0.390), a
+            small net public gain (0.272→0.280 local). Author flags the two
+            levers aren't fully additive — replay eats into the step budget
+            that was buying test_acc — but it's the first recipe attacking
+            both held-out score factors at once. Held-out pending.</em></li>
           <li id="idea-5"><b>idea-5 · KL-to-base regularization.</b> Penalize
             output-distribution divergence from base on general prompts.
             <em>Status: seeded.</em></li>
@@ -213,7 +239,21 @@
             in progress) is <b>Muon-on-LoRA</b>: run Muon on the tiny r×d
             adapter matrices instead of the full 14B weight matrices, to get
             Muon's fast/strong crystallization at LoRA's already-cheap,
-            already-structurally-protective parameter footprint.</em></li>
+            already-structurally-protective parameter footprint. <b>Result
+            in:</b> PR #21 ran Muon on a rank-32 LoRA adapter (Newton-Schulz on
+            the tiny r×d matrices, cheap — full LoRA-speed training) and it
+            crystallizes far better than AdamW-LoRA: test_acc 0.655 (peak
+            0.749 at step 400) vs AdamW-LoRA's ~0.53 cap, confirming "LoRA
+            doesn't crystallize well at 14B" was partly an optimizer artifact,
+            not a structural ceiling. But it isn't free: Muon inflates the
+            adapter's magnitude more than AdamW does at a matched LR, so
+            decisiveness drops more than a same-rank AdamW run — local score
+            0.26, held-out pending. Reads as confirmation of the magnitude
+            lever from idea-1 (PR #20/#22): whatever optimizer is used, bigger
+            effective weight-delta trades test_acc gains for retention
+            losses. Next flagged: lower the Muon LR further, or pair
+            Muon-on-LoRA with early-stop, to see if the test_acc gain can be
+            banked without the magnitude cost.</em></li>
         </ol>
 
         <p>Results so far (public-topology / self-reported scores from PR
@@ -303,6 +343,13 @@
               <td>0.3642 (local) / <b>0.1697 (held-out)</b></td>
             </tr>
             <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/22">#22</a></td>
+              <td>PR #9 recipe, LoRA rank 32→16 (magnitude-isolation test)</td>
+              <td>—</td>
+              <td>&lt;1.0 (first drop in this lineage)</td>
+              <td>0.452 (local, new local-best) / held-out pending</td>
+            </tr>
+            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/18">#18</a></td>
               <td>PR #9 recipe, lr 2e-4→5e-4</td>
               <td>0.4269</td>
@@ -310,11 +357,32 @@
               <td>0.4254 (local, held-out pending) — negative result</td>
             </tr>
             <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/19">#19</a></td>
+              <td>PR #8 recipe (r64/1400 steps) + 20% on-policy replay</td>
+              <td>0.390</td>
+              <td>0.718</td>
+              <td>0.280 (local) / held-out pending</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/20">#20</a></td>
+              <td>PR #12 recipe (r8), lr 2e-4→1e-4</td>
+              <td>0.3312</td>
+              <td>0.9303</td>
+              <td>0.3081 (local, held-out pending) — negative result</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/21">#21</a></td>
+              <td>LoRA r32/α64 trained with Muon optimizer (new idea, direction 1+idea-1 synthesis)</td>
+              <td>0.655</td>
+              <td>lower than AdamW-LoRA at matched rank</td>
+              <td>0.26 (local) / held-out pending</td>
+            </tr>
+            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/16">#16</a></td>
               <td>PR #12 recipe, LoRA rank 8→4 (floor test)</td>
               <td>0.3873</td>
               <td>0.8569</td>
-              <td>0.3319 (local, held-out pending)</td>
+              <td>0.3319 (local) / <b>0.2269 (held-out)</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/5">#5</a></td>
@@ -345,23 +413,27 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training.
-          18 PRs open so far; 11 have official held-out scores — <b>PR #9
+          22 PRs open so far; 12 have official held-out scores — <b>PR #9
           still leads the leaderboard at 0.3742</b> (early-stop + on-policy
           rehearsal LoRA combo), followed by #12 (0.2866), #14 (0.2814), #15
-          (0.2681), #7 (0.2545), #8 (0.2336), #13 (0.2197), #3 (0.2147), #10
-          (0.1970), #4 (0.1957), #2 (0.1697). The rank sweep on the LoRA
-          axis is now closed on both ends: r128 overshoots (decisiveness
-          collapses, PR #15) and r4 undershoots (test_acc collapses, PR #16);
-          r8 (magnitude-tuned lineage) and r64 (rehearsal+early-stop lineage)
-          are each lineage's sweet spot. PR #14 and #18 close the rank and LR
-          axes for #9's recipe specifically — both flat/negative — leaving
-          #9's ~0.44 test_acc ceiling still unexplained. The newest thread is
-          <b>Muon</b> (idea-7, not one of the original seeded six): PR #17
-          shows full-param Muon crystallizes far faster/stronger than any
-          LoRA run (test_acc 0.60 by step 200) and cooks less than AdamW
-          full-param, but still not enough to beat LoRA structurally; a
-          Muon-on-LoRA synthesis is in flight now (worker 4). Last updated
-          2026-07-02 15:45 UTC.</p>
+          (0.2681), #7 (0.2545), #8 (0.2336), #16 (0.2269), #13 (0.2197), #3
+          (0.2147), #10 (0.1970), #4 (0.1957), #2 (0.1697). The rank sweep on
+          the LoRA axis is closed on both ends: r128 overshoots (decisiveness
+          collapses, PR #15) and r4 undershoots (test_acc collapses, PR #16,
+          now held-out confirmed). New local-best is PR #22 (0.452): shrinking
+          #9's recipe from rank 32→16 shows <b>adapter magnitude, not rank, is
+          the real gentleness lever</b> — the first time this lineage's
+          retention has dropped below 1.0. PR #20 confirms crystallization is
+          LR-gated (gentler LR alone collapses test_acc, no free retention
+          lunch). PR #19 is the first recipe to attack both held-out score
+          factors at once (rank+steps for test_acc, replay for retention),
+          local score 0.280, held-out pending. <b>Muon</b> (idea-7) gained a
+          second result: PR #21 puts Muon on a LoRA adapter instead of
+          full-param — crystallizes much better than AdamW-LoRA (test_acc
+          0.655 vs ~0.53) but inflates adapter magnitude and costs retention,
+          local score 0.26, held-out pending — another data point for the
+          magnitude-is-the-lever thesis cutting across optimizers. Last
+          updated 2026-07-02 16:11 UTC.</p>
         </div>
 
       </div>
