@@ -61,6 +61,35 @@
         recording the strongest directions and what the held-out scores say
         about them. Seed directions below; scored results append as they land.</p>
 
+        <div class="vr-lab">
+          <p><b>Ranked by current held-out evidence (best first):</b></p>
+          <ol>
+            <li><b>idea-4</b> — early-stop + on-policy rehearsal combo. Best:
+              PR #9, held-out <b>0.3742</b> (leaderboard #1).</li>
+            <li><b>idea-10</b> — attention-only adapter targeting (footprint
+              lever). Best: PR #24, held-out <b>0.3468</b> (#2).</li>
+            <li><b>idea-9</b> — combine rank/steps + replay levers. Best: PR
+              #19, held-out <b>0.3161</b> (#3).</li>
+            <li><b>idea-1</b> — LoRA rank/magnitude sweeps. Best: PR #22,
+              held-out <b>0.2934</b> (#4).</li>
+            <li><b>idea-3</b> — general-data mixin / on-policy replay
+              (bolt-on). Best: PR #7, held-out 0.2545; PR #23 (retention
+              →0.977 locally) and PR #27 (steps×replay interaction) held-out
+              pending.</li>
+            <li><b>idea-7</b> — Muon optimizer (full-param and on-LoRA). Best:
+              PR #17, held-out 0.1715; Muon-on-LoRA (#21) held-out only
+              0.0566 — worst carry-through of any scored PR.</li>
+            <li><b>idea-2</b> — L2-SP at higher λ, stacked on full-param FT.
+              PR #11: local score 0.024, retention 0.042 — clean negative,
+              held-out pending.</li>
+            <li><b>idea-6</b> — gentler updates / layer-freezing. No
+              dedicated PR yet; subsumed by idea-1's magnitude findings (PR
+              #20/#22).</li>
+            <li><b>idea-5</b> — KL-to-base regularization on held-out
+              prompts. Seeded, untested.</li>
+          </ol>
+        </div>
+
         <ol class="vr-idea-thread">
           <li id="idea-1"><b>idea-1 · LoRA / high-rank adapters.</b> Adapters
             leave base weights intact, so the model's preference structure should
@@ -197,7 +226,17 @@
             exactly the general-behavior forgetting that the secret topology
             seems to punish harder (per #4's held-out carry-through). Held-out
             pending; if it holds, the remaining problem reduces to maximizing
-            test_acc with retention already anchored near 1.0.</em></li>
+            test_acc with retention already anchored near 1.0. <b>New:</b> PR
+            #27 maps how replay interacts with step count directly (r64/α128,
+            replay 0.3, 600 vs #23's 1400 steps) and finds a sign flip:
+            <em>without</em> replay, more steps cooks decisiveness (600→0.766,
+            1400→0.557 retention, per #6/#8); <em>with</em> replay 0.3 the
+            relationship inverts (600→0.901, 1400→0.977) — more steps means
+            more rehearsal exposure, tightening the anchor instead of drifting
+            from it. Test_acc barely moves (0.407 vs 0.394). Also quantifies a
+            "replay tax": at 600 steps, replay 0.3 drops test_acc from 0.521
+            (no-replay #6) to 0.407 — the ratio genuinely trades test for
+            retention. Local score 0.3669, held-out pending.</em></li>
           <li id="idea-4"><b>idea-4 · Early-stop at the crystallization knee.</b>
             Accuracy plateaus by ~step 1600 while decisiveness likely degrades
             monotonically — stop where the concept is in but the model is intact.
@@ -520,32 +559,19 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training.
-          26 PRs open so far; 19 have official held-out scores — <b>PR #9
+          27 PRs open so far; 19 have official held-out scores — <b>PR #9
           still leads the leaderboard at 0.3742</b> (early-stop + on-policy
-          rehearsal LoRA combo), but the gap narrowed sharply this tick: <b>PR
-          #24 (attention-only LoRA) landed #2 at 0.3468</b> despite being a
-          local negative result — its public-to-secret carry-through was far
-          better than any other run, hinting that a smaller/simpler adapter
-          footprint specifically helps transfer to the unseen topology. <b>PR
-          #19 (rank+steps+replay combo) landed #3 at 0.3161</b>, and <b>PR #22
-          (magnitude lever) landed #4 at 0.2934</b>. The biggest news
-          locally: <b>PR #23 finds the retention problem essentially solved</b>
-          — bumping on-policy replay ratio 0.2→0.3 on the #19 recipe pins
-          decisiveness retention at 0.977 (≈ base) for zero test_acc cost,
-          held-out pending. On the optimizer axis, <b>PR #25 + #21 together
-          pin LoRA's crystallization ceiling at 14B as optimizer-bound, not
-          capacity-bound</b>: doubling AdamW-LoRA rank does nothing (test_acc
-          flat ~0.49) while Muon on the same rank reaches test 0.66-0.75 —
-          but Muon's held-out score (PR #21, 0.0566) shows that extra power
-          costs the most on the secret topology of anything scored yet. <b>PR
-          #26 confirms r8/lr2e-4 (PR #12) is a genuine local optimum</b> —
-          push LR further and test_acc plateaus at ~0.51 while retention falls.
-          Full leaderboard: #9 (0.3742), #24 (0.3468), #19 (0.3161), #22
-          (0.2934), #12 (0.2866), #14 (0.2814), #15 (0.2681), #20 (0.2628), #7
-          (0.2545), #8 (0.2336), #16 (0.2269), #13 (0.2197), #3 (0.2147), #10
-          (0.1970), #4 (0.1957), #17 (0.1715), #2 (0.1697), #21 (0.0566).
-          Pending held-out: #25, #6, #23, #26, #18, #11. Last updated
-          2026-07-02 16:45 UTC.</p>
+          rehearsal LoRA combo). No new held-out scores landed this tick;
+          <b>new PR #27</b> maps how on-policy replay interacts with step
+          count and finds a sign flip — without replay, more steps cooks
+          decisiveness, but with replay 0.3 more steps means more rehearsal
+          exposure and retention <em>rises</em> with steps (0.901@600 →
+          0.977@1400), local score 0.3669, held-out pending. Full leaderboard:
+          #9 (0.3742), #24 (0.3468), #19 (0.3161), #22 (0.2934), #12 (0.2866),
+          #14 (0.2814), #15 (0.2681), #20 (0.2628), #7 (0.2545), #8 (0.2336),
+          #16 (0.2269), #13 (0.2197), #3 (0.2147), #10 (0.1970), #4 (0.1957),
+          #17 (0.1715), #2 (0.1697), #21 (0.0566). Pending held-out: #25, #6,
+          #23, #26, #18, #27, #11. Last updated 2026-07-02 16:52 UTC.</p>
         </div>
 
       </div>
