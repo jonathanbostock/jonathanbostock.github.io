@@ -88,8 +88,31 @@
             barely moves. That handed PR #12 a clean lever: shrinking rank
             32-&gt;8 (same scaling/steps as #3) lifted retention 0.77-&gt;0.91
             for almost no test_acc cost (0.528-&gt;0.515), local score 0.4705,
-            new local-best. Rank, not magnitude or schedule, is now the
-            fleet's clearest crystallize-no-cook lever.</em></li>
+            new local-best, now officially held-out at <b>0.2866 — leaderboard
+            #2</b>. PR #13 also landed held-out at <b>0.2197</b>. The rank
+            sweep is now closed on both ends: PR #15 pushed r64-&gt;r128 (PR #6
+            lineage, no rehearsal) and found the rank-invariance <em>breaks</em>
+            — decisiveness collapses 0.563-&gt;0.238 (retention 0.766-&gt;0.323)
+            for zero test_acc gain (0.521-&gt;0.482), held-out <b>0.2681</b>; r64
+            is the capacity ceiling, more rank just cooks the model the way
+            full-param FT does. PR #16 pushed r8-&gt;r4 (PR #12 lineage) and
+            found the floor too: test_acc collapses to 0.387 (r4 can't carry
+            the composition rule) and retention is non-monotonic (0.857, down
+            from r8's 0.913) — r4 is worse on both axes, local score 0.332,
+            held-out pending. Net: r8 is the sweet spot for the
+            magnitude-tuned (#3/#12/#13) lineage; r64 for the
+            rehearsal+early-stop (#9) lineage — the optimal rank depends on
+            what else is anchoring decisiveness. Separately, PR #14 doubled
+            #9's rank (32-&gt;64) and found test_acc/retention essentially flat
+            (0.448 vs 0.437, retention still 1.0) — once rehearsal+early-stop
+            are in place, rank stops being the bottleneck; held-out <b>0.2814
+            — leaderboard #3</b>. Follow-up PR #18 tried raising LR instead
+            (2e-4-&gt;5e-4 on #9's recipe): also flat/slightly negative
+            (test_acc 0.427 vs 0.437, retention 0.9965 vs 1.0, local score
+            0.425 vs 0.449) — closes the optimization-limit hypothesis too.
+            Read: <b>#9's ~0.44 test_acc ceiling is neither a rank nor an LR
+            limit</b>; something else (data, steps, or the rehearsal ratio
+            itself) is capping it, still open.</em></li>
           <li id="idea-2"><b>idea-2 · L2-SP at higher λ.</b> Keep weights close to
             the pretrained init; the gradient-direct L2-SP is already in the repo.
             <em>Status: tested combined with full-param FT in PR #11 (10x
@@ -168,6 +191,29 @@
             <em>Status: seeded.</em></li>
           <li id="idea-6"><b>idea-6 · Gentler updates / layer-freezing.</b> Lower
             LR, shorter schedule, or freeze lower layers. <em>Status: seeded.</em></li>
+          <li id="idea-7"><b>idea-7 · Muon optimizer (full-param).</b> Train
+            with Muon (Newton-Schulz-orthogonalized momentum updates on 2D
+            weight matrices, AdamW on norms, embeddings frozen) instead of
+            AdamW — geometry-aware steps might install the associations with
+            less drift along the directions that carry general preference
+            structure. <em>Status: PR #17 implemented Muon from scratch
+            (<code>pretrained_llms/muon.py</code>) and ran it full-parameter,
+            300 steps, no anchors. Two findings: (1) Muon crystallizes
+            dramatically faster/stronger than anything else tried — test_acc
+            0.29→0.57→0.60→0.55 at steps 0/100/200/300, train_acc 0.99 by
+            step 100, while every LoRA run tops out ≤0.35 test_acc without
+            rehearsal tricks. Muon appears to genuinely install the
+            compositional rule, not just memorize edges. (2) It cooks the
+            model less than AdamW full-param (retention 0.166 vs #11's 0.042)
+            but still far below LoRA's ~0.78-0.91 — local score 0.0906, held-out
+            pending. Caveat flagged by the author: the AdamW comparison point
+            (#11) ran 2000 anchored steps vs this 300 unanchored, so part of
+            the retention gap is step count, not optimizer geometry — a
+            matched control is an open follow-up. The live next step (worker 4,
+            in progress) is <b>Muon-on-LoRA</b>: run Muon on the tiny r×d
+            adapter matrices instead of the full 14B weight matrices, to get
+            Muon's fast/strong crystallization at LoRA's already-cheap,
+            already-structurally-protective parameter footprint.</em></li>
         </ol>
 
         <p>Results so far (public-topology / self-reported scores from PR
@@ -180,20 +226,6 @@
           </thead>
           <tbody>
             <tr>
-              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/12">#12</a></td>
-              <td>PR #3 recipe, LoRA rank 32→8 (capacity-down)</td>
-              <td>0.5151</td>
-              <td>0.9134</td>
-              <td><b>0.4705 (local) — new local-best, held-out pending</b></td>
-            </tr>
-            <tr>
-              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/6">#6</a></td>
-              <td>PR #2 recipe, LoRA rank 16→64 (capacity-only change), 600 steps</td>
-              <td>0.521</td>
-              <td>0.7657</td>
-              <td>0.399 (local, held-out pending)</td>
-            </tr>
-            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/9">#9</a></td>
               <td>LoRA r32/α64 + 20% on-policy rehearsal, lr 2e-4, 400 steps (early-stop)</td>
               <td>0.437</td>
@@ -201,11 +233,25 @@
               <td>0.449 (local) / <b>0.3742 (held-out) — leaderboard #1</b></td>
             </tr>
             <tr>
-              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/10">#10</a></td>
-              <td>PR #6 recipe, 600→300 steps</td>
-              <td>0.590</td>
-              <td>0.347</td>
-              <td>0.278 (local, held-out pending)</td>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/12">#12</a></td>
+              <td>PR #3 recipe, LoRA rank 32→8 (capacity-down)</td>
+              <td>0.5151</td>
+              <td>0.9134</td>
+              <td>0.4705 (local) / <b>0.2866 (held-out) — #2</b></td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/14">#14</a></td>
+              <td>PR #9 recipe, LoRA rank 32→64 (capacity-only, rehearsal+early-stop held)</td>
+              <td>0.4482</td>
+              <td>1.0</td>
+              <td>0.4482 (local) / <b>0.2814 (held-out) — #3</b></td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/15">#15</a></td>
+              <td>PR #6 recipe, LoRA rank 64→128 (overshoot test)</td>
+              <td>0.482</td>
+              <td>0.323</td>
+              <td>0.2419 (local, decisiveness collapsed) / <b>0.2681 (held-out) — #4</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/7">#7</a></td>
@@ -215,13 +261,6 @@
               <td>0.378 (local) / <b>0.2545 (held-out)</b></td>
             </tr>
             <tr>
-              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/13">#13</a></td>
-              <td>PR #6 recipe, α-scaling 2.0→1.0 (half magnitude)</td>
-              <td>0.4262</td>
-              <td>0.5676</td>
-              <td>0.2419 (local, held-out pending)</td>
-            </tr>
-            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/8">#8</a></td>
               <td>PR #6 recipe, 600→1400 steps</td>
               <td>0.488</td>
@@ -229,11 +268,25 @@
               <td>0.272 (local) / <b>0.2336 (held-out)</b></td>
             </tr>
             <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/13">#13</a></td>
+              <td>PR #6 recipe, α-scaling 2.0→1.0 (half magnitude)</td>
+              <td>0.4262</td>
+              <td>0.5676</td>
+              <td>0.2419 (local) / <b>0.2197 (held-out)</b></td>
+            </tr>
+            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/3">#3</a></td>
               <td>LoRA r32/α64, lr 2e-4, 1500 steps</td>
               <td>0.528</td>
               <td>0.7713</td>
               <td>0.4074 (local) / <b>0.2147 (held-out)</b></td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/10">#10</a></td>
+              <td>PR #6 recipe, 600→300 steps</td>
+              <td>0.590</td>
+              <td>0.347</td>
+              <td>0.278 (local) / <b>0.1970 (held-out)</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/4">#4</a></td>
@@ -250,11 +303,32 @@
               <td>0.3642 (local) / <b>0.1697 (held-out)</b></td>
             </tr>
             <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/18">#18</a></td>
+              <td>PR #9 recipe, lr 2e-4→5e-4</td>
+              <td>0.4269</td>
+              <td>0.9965</td>
+              <td>0.4254 (local, held-out pending) — negative result</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/16">#16</a></td>
+              <td>PR #12 recipe, LoRA rank 8→4 (floor test)</td>
+              <td>0.3873</td>
+              <td>0.8569</td>
+              <td>0.3319 (local, held-out pending)</td>
+            </tr>
+            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/5">#5</a></td>
               <td>PR #3 recipe, early-stopped at 200 steps</td>
               <td>0.431</td>
               <td>0.3117</td>
               <td>0.1343 (local)</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/17">#17</a></td>
+              <td>Muon optimizer, full-param, 300 steps, no anchors (new idea, direction 1)</td>
+              <td>0.5459</td>
+              <td>0.1659</td>
+              <td>0.0906 (local, held-out pending)</td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/11">#11</a></td>
@@ -271,20 +345,23 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training.
-          13 PRs open so far; 6 have official held-out scores — <b>PR #9 now
-          leads the leaderboard at 0.3742</b> (early-stop + on-policy
-          rehearsal LoRA combo), ahead of #7 (0.2545), #8 (0.2336), #3
-          (0.2147), #4 (0.1957), #2 (0.1697). The public/secret-topology
-          haircut is smaller for #9 (0.449→0.3742, ~83% carry-through) than
-          for the pure-LoRA PRs (~50%), suggesting anchoring tricks may
-          generalize better than raw LoRA capacity. Local-best is now PR #12
-          (rank-8 LoRA, retention 0.91, score 0.4705, held-out pending) —
-          rank is emerging as the fleet's cleanest lever (PR #13 confirms
-          decisiveness is rank-invariant inside the α-scaling-2.0/600-step
-          basin, so shrinking rank is nearly free). PR #11 shows full-param FT
-          can't be regularization-anchored back to decisiveness (retention
-          0.042) — the structural LoRA route looks necessary, not just
-          sufficient. Last updated 2026-07-02 15:12 UTC.</p>
+          18 PRs open so far; 11 have official held-out scores — <b>PR #9
+          still leads the leaderboard at 0.3742</b> (early-stop + on-policy
+          rehearsal LoRA combo), followed by #12 (0.2866), #14 (0.2814), #15
+          (0.2681), #7 (0.2545), #8 (0.2336), #13 (0.2197), #3 (0.2147), #10
+          (0.1970), #4 (0.1957), #2 (0.1697). The rank sweep on the LoRA
+          axis is now closed on both ends: r128 overshoots (decisiveness
+          collapses, PR #15) and r4 undershoots (test_acc collapses, PR #16);
+          r8 (magnitude-tuned lineage) and r64 (rehearsal+early-stop lineage)
+          are each lineage's sweet spot. PR #14 and #18 close the rank and LR
+          axes for #9's recipe specifically — both flat/negative — leaving
+          #9's ~0.44 test_acc ceiling still unexplained. The newest thread is
+          <b>Muon</b> (idea-7, not one of the original seeded six): PR #17
+          shows full-param Muon crystallizes far faster/stronger than any
+          LoRA run (test_acc 0.60 by step 200) and cooks less than AdamW
+          full-param, but still not enough to beat LoRA structurally; a
+          Muon-on-LoRA synthesis is in flight now (worker 4). Last updated
+          2026-07-02 15:45 UTC.</p>
         </div>
 
       </div>
