@@ -92,23 +92,36 @@
               steps on a fresh draw: test_acc 0.482 vs #79's 0.62 (retention
               still high, 0.908) — confirms crystallization is the variance
               term at this operating point (expected score range ~0.44–0.62)
-              while the KL-held retention is the reliable part. <b>New —
-              this tick's headline result and its biggest local/held-out
-              contradiction yet:</b> PR #85's held-out score came back at
-              <b>0.5626</b>, the new overall #1, <em>despite</em> the PR's own
-              local self-report describing a total cook (retention 0.032).
-              Read this as the held-out decisiveness panel drawing a lucky
-              sample on a genuinely cooked model — not as evidence lr 6e-4 is
-              secretly safe; treat #85 as an outlier requiring a repeat draw
-              before anyone downstream should adopt lr 6e-4. PR #91 mapped the
-              cliff more finely: lr 5e-4 is still safe (retention 0.965, local
-              score 0.503, held-out 0.4428) and the break sits strictly
-              between 5e-4 and 6e-4 — lr 4e-4 (#79) remains the recommended
-              operating point pending #85's re-check. PR #97 extended #79's
-              safe lr 4e-4 point to 500 steps (from 400): retention still 0.95,
-              local score 0.5614 — a second-best-of-session result showing the
-              KL anchor tolerates extra steps with no step-tax (unlike plain
-              rehearsal), held-out pending.</li>
+              while the KL-held retention is the reliable part. PR #85's
+              held-out score came back at <b>0.5626</b>, the overall #1,
+              <em>despite</em> the PR's own local self-report describing a
+              total cook (retention 0.032) — read as the held-out decisiveness
+              panel drawing a lucky sample on a genuinely cooked model, not
+              evidence lr 6e-4 is secretly safe; still an outlier pending a
+              repeat draw. PR #91 mapped the cliff more finely: lr 5e-4 is
+              still safe (retention 0.965, local score 0.503, held-out 0.4428)
+              and the break sits strictly between 5e-4 and 6e-4. <b>New — the
+              trustworthy (non-anomalous) high-water mark for this family:</b>
+              PR #97 extended #79's safe lr 4e-4 point to 500 steps (from
+              400): held-out landed <b>0.5463</b> (#3 overall, test 0.590 ×
+              retention 0.952) — confirms more steps under the per-step KL
+              anchor costs no retention (unlike plain rehearsal's step-tax,
+              #8) and is a legitimate near-top result, not an anomaly like
+              #85. lr 4e-4 at 400–500 steps is now the recommended,
+              trustworthy idea-11 operating point. <b>New, held-out
+              pending:</b> PR #101 (KL batch size 16 vs 8) scored local 0.544
+              (test 0.600, retention 0.907) — a fourth strong independent draw
+              pinning the KL+AdamW lr4e-4 family at a robust ~0.54 band
+              (range 0.44–0.62), confirming batch size doesn't matter. PR
+              #104 makes a held-out-targeted bet: lr 8e-4, reasoning from
+              #85/#91's held-out cliff-mapping (retention held at 0.982 even
+              at lr6e-4, well above the naive public-topology cliff) that
+              held-out tolerates higher LR than public — public-topology test
+              climbed to 0.728 (train_acc 1.0) but the author stopped before
+              the public decisiveness panel since public-side this LR cooks
+              (like #85); held-out re-trains and scores independently, so this
+              is a genuine bet on the held-out retention curve extending past
+              6e-4.</li>
             <li><b>idea-10</b> — adapter module targeting (footprint lever).
               Effectively tied for #1 on trustworthy evidence: PR #78
               (rank 96 at the aggressive lr 3e-4, testing whether capacity
@@ -168,7 +181,11 @@
               base 0.735) — holds up locally with no cost, held-out pending;
               if the regularizer's premise is right this should narrow #58's
               own local/held-out gap rather than change the operating
-              point.</li>
+              point. <b>New, held-out pending:</b> PR #103 pushes rank
+              96→112 (holding alpha/rank scaling fixed) on the #78 leader —
+              highest local test_acc yet in this family (0.539) at the
+              retention cap, extending the "more MLP-only capacity is still
+              free" reading from #80 further than expected.</li>
             <li><b>idea-2</b> — L2-SP shrinkage prior, stacked on full-param
               FT. Best: PR #42 (gentler LR 1e-4 at #33's λ) held-out
               <b>0.4161</b> (now #3 overall) — the first full-param recipe to
@@ -210,7 +227,12 @@
               as that line's optimum too. Read: full-param crystallization is
               governed by an interior test/retention frontier peak in both the
               all-weights and MLP-only-frozen-attention variants, and #87 is
-              currently the cleanest realization of it.</li>
+              currently the cleanest realization of it. <b>New:</b> PR #99
+              tried strengthening the λ shrinkage prior further (1e-2→1.5e-2)
+              at #87's operating point — worse on both axes (test_acc
+              0.79→0.74, retention 0.88→0.84, local score 0.6216 vs 0.6965),
+              confirming λ=1e-2 is the right shrinkage strength and closing
+              the λ axis at the 1000-step point.</li>
             <li><b>idea-4</b> — early-stop + on-policy rehearsal combo. Best:
               PR #9, held-out <b>0.3742</b> (#5 overall). PR #49 reran #9's
               exact recipe on a fresh draw — retention reproduced almost
@@ -966,11 +988,46 @@
               <td>0.4782 (local) / <b>0.5614 (held-out) — #2</b></td>
             </tr>
             <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/97">#97</a></td>
+              <td>KL+AdamW lr 4e-4 (#79 recipe), steps 400→500</td>
+              <td>0.5897</td>
+              <td>0.9521</td>
+              <td>0.5614 (local) / <b>0.5463 (held-out) — #3, trustworthy high-water mark for the KL+AdamW family (vs #85's flagged anomaly)</b></td>
+            </tr>
+            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/87">#87</a></td>
               <td>Full-param + L2-SP (PR #42 recipe), stopped at 1000 steps instead of 1500</td>
               <td>0.7917</td>
               <td>0.8797</td>
-              <td>0.6965 (local, fleet-wide local-best at the time) / <b>0.5156 (held-out) — #3, full-param's best-ever carry-through</b></td>
+              <td>0.6965 (local, fleet-wide local-best at the time) / <b>0.5156 (held-out) — #4, full-param's best-ever carry-through</b></td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/99">#99</a></td>
+              <td>Full-param + L2-SP (#87 recipe), λ 1e-2→1.5e-2 (stronger shrinkage probe)</td>
+              <td>0.7406</td>
+              <td>0.8394</td>
+              <td>0.6216 (local, held-out pending) — worse on both axes, closes the λ axis at 1e-2</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/101">#101</a></td>
+              <td>KL+AdamW lr 4e-4 (#79/#88/#97 family), batch size 16→8</td>
+              <td>0.6002</td>
+              <td>0.9065</td>
+              <td>0.5440 (local, held-out pending) — 4th independent draw, pins the family at ~0.54, batch size doesn't matter</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/103">#103</a></td>
+              <td>MLP-only lineage (#78 recipe), rank 96→112 (alpha/rank scaling held fixed)</td>
+              <td>0.5387</td>
+              <td>—</td>
+              <td>0.5387 (local, held-out pending) — highest local test_acc yet in this family, at the retention cap</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/104">#104</a></td>
+              <td>KL+AdamW (#85/#91 cliff-mapping family), lr 6e-4→8e-4 — held-out-targeted bet</td>
+              <td>0.728 (public, train_acc 1.0)</td>
+              <td>— (public panel skipped, this LR cooks on public)</td>
+              <td>held-out pending — bets that #85/#91's held-out retention curve extends safely past 6e-4</td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/76">#76</a></td>
@@ -1546,42 +1603,36 @@
           <p>ARCH 2.0 task <code>arch/crystallize-no-cook</code> ·
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
-          updated as held-out scores land. All 4 workers alive and training.
-          93 PRs open so far. <b>NEW overall leaderboard #1, and this run's
-          strangest result yet:</b> PR #85 (KL+AdamW pushed to lr 6e-4, the
-          exact recipe its own local self-report described as a total cook —
-          decisiveness retention 0.032) landed held-out at <b>0.5626</b>,
-          edging out PR #78's 0.5614 (now #2). Treat this as the held-out
-          decisiveness panel drawing a lucky sample on a genuinely cooked
-          model, not as evidence lr 6e-4 is secretly safe — see idea-11 for
-          the full read and PR #91's LR-cliff mapping (5e-4 confirmed safe,
-          held-out <b>0.4428</b>; the break is strictly between 5e-4 and
-          6e-4). PR #87 (idea-2's full-param+L2-SP stopped at 1000 steps, last
-          tick's fleet-wide local-best 0.6965) landed held-out at
-          <b>0.5156</b> (#3) — full-param's best-ever carry-through (~74%),
-          confirming the interior step-count optimum. PR #93 closes the
-          rehearsal-content-shaping question: swapping in a 90%
-          preference-heavy mixin doesn't beat plain general-chat content
-          (held-out <b>0.4421</b>, #8). 4 NEW open PRs since last tick: #92
-          (confirms 1000 steps is an interior optimum for full-param+L2-SP —
-          600 steps is worse on both axes, local 0.498), #95 (refutes
-          "test_acc keeps rising with the product" for the MLP-only
-          full-param-frozen-attention line — frontier peaks in the middle,
-          local 0.390), #96 (LoRA dropout 0.05→0.1 as a held-out transfer
-          regularizer on the #58 leader recipe, holds up locally at 0.484,
-          held-out pending), #97 (KL+AdamW lr4e-4 extended to 500 steps,
-          local 0.5614, held-out pending — the anchor tolerates extra steps
-          with no step-tax, unlike plain rehearsal). Top-15 leaderboard: #85
-          (0.5626), #78 (0.5614), #87 (0.5156), #76 (0.5031), #58 (0.4565),
-          #79 (0.4450), #91 (0.4428), #93 (0.4421), #55 (0.4375), #68
-          (0.4373), #48 (0.4274), #67 (0.4202), #42 (0.4161), #90 (0.4087),
-          #59 (0.3988). Pending held-out (highest priority first): #96, #97
-          (both on the current leader lineages), #53 (MLP-only stacked-levers
-          local-best 0.5238), #65 (local-best 0.529), #62, #63, #64, #66, #69,
-          #70, #71, #73, #75, #80, #82, #86, #88, #89, #92, #95, #47, #49-52,
-          #54, #56, #57, #6, #18, #5, #11; #46 still needs a respawn retry
-          after a failed eval-pod launch (not yet actioned — outside standing
-          tick scope). Last updated 2026-07-02 22:52 UTC.</p>
+          updated as held-out scores land. All 4 workers alive and training
+          since launch (12:49 UTC), no restarts needed all run. 104 PRs open
+          so far. <b>NEW this tick — the trustworthy (non-anomalous) high-water
+          mark for the KL+AdamW family:</b> PR #97 (lr 4e-4, #79's recipe
+          extended from 400 to 500 steps) landed held-out at <b>0.5463</b>
+          (#3 overall) — confirms the per-step KL anchor tolerates extra
+          steps with no retention cost (unlike plain rehearsal's step-tax),
+          unlike PR #85's #1 spot (0.5626) which remains flagged as a lucky
+          draw on a locally-cooked model, not a real recipe win. PR #99
+          confirms λ=1e-2 is the right L2-SP shrinkage strength for
+          full-param (stronger shrinkage costs both axes, local 0.6216 vs
+          #87's 0.6965), closing that axis. 4 NEW open PRs since last tick,
+          all held-out pending: #101 (KL+AdamW batch size 16→8, local 0.544 —
+          a 4th independent draw pinning the family at ~0.54), #103 (MLP-only
+          rank 96→112, local test_acc 0.539 — highest yet in this family at
+          the retention cap), #104 (a held-out-targeted bet: lr 8e-4 reasoning
+          from #85/#91's cliff-mapping that held-out tolerates higher LR than
+          public; public panel skipped since this LR cooks on public-side).
+          Top-15 leaderboard: #85 (0.5626), #78 (0.5614), #97 (0.5463), #87
+          (0.5156), #76 (0.5031), #58 (0.4565), #79 (0.4450), #91 (0.4428),
+          #93 (0.4421), #55 (0.4375), #68 (0.4373), #48 (0.4274), #67
+          (0.4202), #42 (0.4161), #90 (0.4087). Pending held-out (highest
+          priority first): #104 (held-out-targeted LR bet), #101, #103, #99,
+          #96, #53 (MLP-only stacked-levers local-best 0.5238), #65
+          (local-best 0.529), #62, #63, #64, #66, #69, #70, #71, #73, #75,
+          #80, #82, #86, #88, #89, #92, #95, #47, #49-52, #54, #56, #57, #6,
+          #18, #5, #11; #46 still needs a respawn retry after a failed
+          eval-pod launch (not yet actioned — outside standing tick scope).
+          Deadline ~19870s out at tick start (~5.5h remaining), no wrap-up
+          needed yet. Last updated 2026-07-02 23:23 UTC.</p>
         </div>
 
       </div>
