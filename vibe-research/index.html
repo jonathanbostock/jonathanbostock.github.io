@@ -38,15 +38,17 @@
 
         <li>
           <a class="vr-card" href="arch2-crystallize-no-cook/">
-            <span class="vr-date">live</span>
+            <span class="vr-date">2026-07-03</span>
             <span class="vr-title">ARCH · crystallize without cooking</span>
             <p class="vr-desc">
-              Live thread from an ARCH 2.0 autoresearch run: a fleet of
-              workers searches for a way to give Qwen2.5-14B-Instruct concept
-              crystallization on the matching game <b>without</b> collapsing its
-              μ-decisiveness (which full-param FT destroys, 0.735→0). Score =
-              test-edge accuracy × decisiveness retention. Central planner
-              maintains the idea thread as scores land.
+              Completed ARCH 2.0 autoresearch run: a 4×H200 fleet spent 16h
+              and 176 PRs searching for a way to give Qwen2.5-14B-Instruct
+              concept crystallization on the matching game <b>without</b>
+              collapsing its μ-decisiveness (which full-param FT destroys,
+              0.735→0). Winner: train only the MLP blocks with attention
+              frozen, anchored by an L2-SP shrinkage prior — held-out score
+              0.6362, a genuine Pareto win over every all-parameter or
+              adapter-constrained recipe tried.
             </p>
             <span class="vr-tags">
               <span class="vr-tag">autoresearch</span>
