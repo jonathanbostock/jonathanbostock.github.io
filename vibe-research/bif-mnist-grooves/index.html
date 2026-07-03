@@ -203,6 +203,26 @@
         first and digit grooves second — which is itself a statement about which abstraction the
         landscape actually encodes.</p>
 
+        <p>Sweeping the number of clusters makes that taxonomy explicit. The landscape's first
+        cut (k = 2) is strokes versus curves: {1, 4, 7, 9} against {0, 2, 3, 5, 6, 8}. At k = 3
+        the ones get a cluster of their own — much the most groove-isolated digit — and 4 and 9
+        defect to the enclosed-loop family {0, 4, 8, 9}, leaving {2, 3, 5} as a stable open-curve
+        family that survives until k ≈ 8. From there digits crystallise out one at a time
+        (8, then 0 and 6, then 4), 7 only escapes the {4, 7, 9} cluster at k = 12 — and {4, 9}
+        never separates at any k we tried. Agreement with the digit labels actually peaks at
+        k = 12 (ARI 0.41), not k = 10: letting the sticky families over-split into style variants
+        recovers more digit information than forcing exactly ten clusters.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/p6_hierarchy.png" alt="Alluvial diagram of spectral clusterings of the BIF ensemble at k from 2 to 14. Columns are k values with per-column ARI; nodes are clusters shown as stacked bars of digit composition; coloured flows track probes between columns. The first split separates stroke digits from curve digits, ones isolate at k=3, the 2-3-5 and 0-4-8-9 families split gradually, and 4 and 9 never separate.">
+          <figcaption><b>Fig. 7</b> · The cluster hierarchy: spectral clustering of the same
+          ensemble affinity at k = 2…14 (columns, with ARI against digit labels underneath).
+          Nodes are clusters, stacked by digit composition and labelled with their dominant
+          digits; flows track probes between adjacent k. The grooves encode a shape taxonomy —
+          strokes/curves, then loop and open-curve families, then digits — whose leaves are close
+          to, but not exactly, the ten classes.</figcaption>
+        </figure>
+
         <h2><span class="vr-section-num">§6</span>Limits and honest notes</h2>
 
         <div class="vr-table-wrap">
