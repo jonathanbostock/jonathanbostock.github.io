@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Bayesian influence functions on generative models — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css?v=itip1">
+    <meta name="description" content="A thread of experiments probing the loss-landscape grooves of small autoregressive generative models with Timaeus' Bayesian influence function — MNIST, then VQ-tokenised CIFAR, then a higher-resolution unlabelled dataset.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Loss-landscape grooves: Bayesian influence functions on generative models</h1>
+        <p>If natural abstractions are real, they should leave marks on a trained
+        model's loss landscape — datapoints that share a latent should sit in the same
+        groove, so that perturbing the weights moves their losses together. This thread
+        tests that with the
+        <button class="tooltip-button" data-define="bif">Bayesian influence function</button>,
+        estimated by SGLD sampling around trained autoregressive image models, and works
+        up from toy to real data. Each piece stands on its own; read top-down for the
+        arc. <a href="..">← back to Vibe Research</a></p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <ul class="vr-feed">
+
+          <li>
+            <a class="vr-card" href="mnist-grooves/">
+              <span class="vr-date">2026-07-03 · foundation</span>
+              <span class="vr-title">MNIST: the method, and an estimator that has to prove itself</span>
+              <p class="vr-desc">A pixel-level autoregressive transformer on MNIST. Same-class
+                losses co-fluctuate at every checkpoint; the BIF predicts what per-class
+                fine-tuning does; and unsupervised clustering of the BIF recovers digits better
+                than clustering the images themselves (ARI 0.36 vs 0.30). Also the cautionary
+                tale: the first headline was an SGLD estimator artefact, caught and fixed
+                same-day — the block-centred estimator and reproducibility gate that the rest of
+                the thread relies on come from here.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">mnist</span>
+                <span class="vr-tag">SGLD estimator</span>
+                <span class="vr-tag">unsupervised-clustering</span>
+              </span>
+            </a>
+          </li>
+
+          <li>
+            <a class="vr-card" href="cifar-vq/">
+              <span class="vr-date">2026-07-03</span>
+              <span class="vr-title">CIFAR: grooves carry the category, not the class</span>
+              <p class="vr-desc">Scaling up with a learned VQ tokeniser and a token-AR
+                transformer. The grooves recover the coarse animate/inanimate split (animal vs
+                vehicle) three times better than clustering the pixels (ARI 0.29 vs 0.09) — but
+                the fine ten-class taxonomy not at all. The loss geometry organises the data by
+                broad semantic category, above the label set. Interactive cluster hierarchy:
+                hover to see member images.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">cifar-10</span>
+                <span class="vr-tag">VQ-VAE</span>
+                <span class="vr-tag">natural-abstractions</span>
+                <span class="vr-tag">interactive</span>
+              </span>
+            </a>
+          </li>
+
+        </ul>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "bif": "Bayesian influence function: BIF(i, j) = Cov[ℓ(x_i, w), ℓ(x_j, w)] over weights w drawn from the tempered local posterior around the trained solution. Large positive values mean two datapoints' losses move together under weight perturbations — they share a groove.",
+      });
+    </script>
+  </body>
+</html>

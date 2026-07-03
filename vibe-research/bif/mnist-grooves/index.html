@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <title>Loss-landscape grooves on MNIST — Vibe Research</title>
-    <link rel="stylesheet" href="../../style.css">
-    <link rel="stylesheet" href="../style.css?v=itip1">
+    <link rel="stylesheet" href="../../../style.css">
+    <link rel="stylesheet" href="../../style.css?v=itip1">
     <meta name="description" content="Bayesian influence functions on a pixel-level autoregressive MNIST model: digit classes carve reproducible grooves into the loss landscape, the BIF predicts fine-tuning behaviour, and unsupervised clustering of the BIF recovers digit classes better than clustering the images themselves.">
   </head>
   <body>
@@ -14,7 +14,7 @@
         <p class="vr-byline">
           <span>2026-07-03 · v2</span>
           <span>5× RTX 4090 + 1× A100 · ~$16</span>
-          <span><a href="..">Vibe Research</a></span>
+          <span><a href="..">BIF experiments</a></span>
         </p>
       </div>
 
@@ -1433,7 +1433,7 @@
         </div>
       </div>
     </main>
-    <script src="../../script.js"></script>
+    <script src="../../../script.js"></script>
     <script>
       Object.assign(actionButtonDefinitions, {
         "bif": "Bayesian influence function: BIF(i, j) = Cov[ℓ(x_i, w), ℓ(x_j, w)] over weights w drawn from the tempered local posterior around the trained solution. Large positive values mean the two datapoints' losses move together under weight perturbations — they share a groove.",

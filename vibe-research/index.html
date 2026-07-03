@@ -21,43 +21,20 @@
       <ul class="vr-feed">
 
         <li>
-          <a class="vr-card" href="bif-cifar-vq/">
-            <span class="vr-date">2026-07-03</span>
-            <span class="vr-title">Grooves carry the category, not the class: influence functions on VQ-tokenised CIFAR</span>
-            <p class="vr-desc">Scaling the <a href="bif-mnist-grooves/">MNIST grooves study</a> to CIFAR-10
-              with a learned VQ tokeniser and a token-AR transformer. The loss-landscape grooves
-              recover the coarse <b>animate/inanimate split (animal vs vehicle) three times better
-              than clustering the pixels</b> (ARI 0.29 vs 0.09) — but the fine ten-class taxonomy
-              not at all (chance). The BIF still predicts fine-tuning; the estimator story inverts
-              (well-conditioned landscape, raw ≥ block). Interactive hierarchy: hover a cluster to
-              see its member images.</p>
+          <a class="vr-card" href="bif/">
+            <span class="vr-date">2026-07-03 · thread</span>
+            <span class="vr-title">Loss-landscape grooves: Bayesian influence functions on generative models</span>
+            <p class="vr-desc">A thread of experiments probing what abstractions a small
+              autoregressive image model carves into its loss landscape, via Timaeus' Bayesian
+              influence function. MNIST (the method + an estimator fix), VQ-tokenised CIFAR
+              (grooves carry the coarse category, not the fine class), and a higher-resolution
+              unlabelled dataset. Reproducibility-gated throughout; interactive cluster
+              hierarchies you can hover to see member images.</p>
             <span class="vr-tags">
               <span class="vr-tag">devinterp</span>
               <span class="vr-tag">natural-abstractions</span>
-              <span class="vr-tag">cifar-10</span>
-              <span class="vr-tag">VQ-VAE</span>
+              <span class="vr-tag">generative-models</span>
               <span class="vr-tag">interactive</span>
-            </span>
-          </a>
-        </li>
-
-        <li>
-          <a class="vr-card" href="bif-mnist-grooves/">
-            <span class="vr-date">2026-07-03 · v2</span>
-            <span class="vr-title">Loss-landscape grooves: Bayesian influence functions on autoregressive MNIST</span>
-            <p class="vr-desc">A pixel-level AR transformer (tied embeddings, cross-entropy — a
-              language model whose language is MNIST) plus a fixed SGLD covariance estimator:
-              same-class losses co-fluctuate at every checkpoint (r ≥ 0.9 reproducible, visible
-              blocks in the matrix), the BIF predicts what per-class fine-tuning does (sign
-              20/20), and <b>unsupervised clustering of the BIF recovers digits better than
-              clustering the images themselves</b> (ARI 0.36 vs 0.30) — with 3 and 7 dissolving
-              into their shape families. Rewritten same-day, twice: v1's density model and its
-              estimator artifact live in git history.</p>
-            <span class="vr-tags">
-              <span class="vr-tag">devinterp</span>
-              <span class="vr-tag">natural-abstractions</span>
-              <span class="vr-tag">mnist</span>
-              <span class="vr-tag">unsupervised-clustering</span>
             </span>
           </a>
         </li>

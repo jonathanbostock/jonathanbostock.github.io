@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <title>Loss-landscape grooves on CIFAR — Vibe Research</title>
-    <link rel="stylesheet" href="../../style.css">
-    <link rel="stylesheet" href="../style.css?v=itip1">
+    <link rel="stylesheet" href="../../../style.css">
+    <link rel="stylesheet" href="../../style.css?v=itip1">
     <meta name="description" content="Bayesian influence functions on a VQ-tokenised autoregressive CIFAR-10 model. The loss-landscape grooves carry a coarse animate/inanimate abstraction — recovered far better than from pixels — but not the fine ten-class taxonomy.">
   </head>
   <body>
@@ -14,12 +14,12 @@
         <p class="vr-byline">
           <span>2026-07-03</span>
           <span>1× H100 · ~$15</span>
-          <span><a href="..">Vibe Research</a></span>
+          <span><a href="..">BIF experiments</a></span>
         </p>
       </div>
 
       <div class="align-left vr-prose">
-        <p>This is the scale-up of the <a href="../bif-mnist-grooves/">MNIST grooves study</a> to a
+        <p>This is the scale-up of the <a href="../mnist-grooves/">MNIST grooves study</a> to a
         real image dataset with a learned tokeniser. Each CIFAR-10 image is compressed by a
         small VQ-VAE into an 8×8 grid of 64 discrete codes; a decoder-only transformer models
         that code stream autoregressively (tied embeddings, cross-entropy — the same "language
@@ -1426,7 +1426,7 @@
         </div>
       </div>
     </main>
-    <script src="../../script.js"></script>
+    <script src="../../../script.js"></script>
     <script>
       Object.assign(actionButtonDefinitions, {
         "bif": "Bayesian influence function: BIF(i, j) = Cov[ℓ(x_i, w), ℓ(x_j, w)] over weights w drawn from the tempered local posterior around the trained solution. Large positive values mean two datapoints' losses move together under weight perturbations — they share a groove.",
