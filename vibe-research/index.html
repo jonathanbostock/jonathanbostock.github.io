@@ -22,16 +22,19 @@
 
         <li>
           <a class="vr-card" href="bif-mnist-grooves/">
-            <span class="vr-date">2026-07-03</span>
+            <span class="vr-date">2026-07-03 · corrected</span>
             <span class="vr-title">Loss-landscape grooves: Bayesian influence functions on autoregressive MNIST</span>
-            <p class="vr-desc">Digit classes measurably co-move under posterior sampling — but the
-              grooves are wide open only early in training, where the BIF also predicts what
-              fine-tuning will do. At convergence the behavioural influence persists and the BIF
-              goes blind to it.</p>
+            <p class="vr-desc">Digit classes measurably co-move under posterior sampling.
+              <b>Corrected same-day:</b> the original "grooves close at convergence" headline was
+              an SGLD estimator artifact (ESS ≈ 4/chain hiding the signal under a slow common
+              mode). With a block-centred estimator every run reproduces at r ≥ 0.94, the grooves
+              persist at convergence, and the BIF predicts fine-tuning there after all. The
+              write-up keeps the retracted claims struck through, plus the diagnosis.</p>
             <span class="vr-tags">
               <span class="vr-tag">devinterp</span>
               <span class="vr-tag">natural-abstractions</span>
               <span class="vr-tag">mnist</span>
+              <span class="vr-tag">correction</span>
             </span>
           </a>
         </li>

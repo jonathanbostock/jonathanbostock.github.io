@@ -5,7 +5,7 @@
     <title>Loss-landscape grooves on MNIST — Vibe Research</title>
     <link rel="stylesheet" href="../../style.css">
     <link rel="stylesheet" href="../style.css">
-    <meta name="description" content="Bayesian influence functions on an autoregressive MNIST model: digit classes carve reproducible grooves into the loss landscape — but only early in training.">
+    <meta name="description" content="Bayesian influence functions on an autoregressive MNIST model: digit classes carve reproducible grooves into the loss landscape. Corrected 2026-07-03: the original 'grooves close at convergence' finding was an SGLD estimator artifact.">
   </head>
   <body>
     <main id="page">
@@ -19,6 +19,20 @@
       </div>
 
       <div class="align-left vr-prose">
+        <div class="vr-update">
+          <p><span class="vr-update-tag">Correction · 2026-07-03</span></p>
+          <p>The original headline of this piece — that the class grooves are wide open early in
+          training and <em>close at convergence</em> — was an estimator artifact, not a fact about
+          the loss landscape. Prompted by poor run-to-run agreement of the BIF estimates, we traced
+          the problem to a slowly-mixing common mode in the SGLD chains (effective sample size ≈ 4
+          per chain at the step size a converged model tolerates) and fixed the estimator. With the
+          fix, agreement between fully independent runs is r ≥ 0.94 in every cell — and the
+          corrected picture is different: <b>the grooves persist at convergence</b>, and the BIF
+          <b>does</b> predict fine-tuning behaviour there. §2 and §3 are kept as published, with
+          the retracted claims struck through; §6 has the diagnosis, the fix, and the corrected
+          results. The clustering negative (§4) survives the correction.</p>
+        </div>
+
         <p>If natural abstractions are real, they should leave marks on a trained model's loss
         landscape: datapoints that share a latent (say, <i>being a four</i>) should sit in the same
         groove, so that wiggling the weights moves their losses together. This piece tests that
@@ -30,10 +44,11 @@
         <button class="tooltip-button" data-define="devinterp">devinterp</button> recipe: train with
         AdamW, then sample the local posterior). Four results:
         within-class loss covariance exceeds between-class essentially everywhere (the groove
-        exists); the effect is <em>large only in a window early in training</em> and the window is
-        positioned by loss, not epochs; inside that window the BIF genuinely predicts what
-        fine-tuning does, while at convergence it does not — even though the behavioural effect is
-        still there; and unsupervised digit recovery from the BIF alone stays weak throughout.</p>
+        exists); <span class="vr-retracted">the effect is <em>large only in a window early in
+        training</em> and the window is positioned by loss, not epochs; inside that window the BIF
+        genuinely predicts what fine-tuning does, while at convergence it does not — even though
+        the behavioural effect is still there</span> <em>(retracted — see §6)</em>; and
+        unsupervised digit recovery from the BIF alone stays weak throughout.</p>
 
         <h2><span class="vr-section-num">§1</span>Setup</h2>
 
@@ -92,18 +107,25 @@
           estimate; diamonds are the two 80k-draw high-SNR runs.</figcaption>
         </figure>
 
-        <p class="vr-pull">Digit classes carve measurable grooves into the loss landscape — but the
-        grooves are wide open only early in training, and they close as the minimum sharpens.</p>
+        <p class="vr-pull"><span class="vr-retracted">Digit classes carve measurable grooves into
+        the loss landscape — but the grooves are wide open only early in training, and they close
+        as the minimum sharpens.</span> <em>Retracted: the closing was the estimator losing power,
+        not the grooves closing — see §6.</em></p>
 
-        <p>Three details pin this down. First, the window is positioned by <em>loss</em>, not
-        epochs: the 6.4M model at epoch 5 has the same test NLL as the 0.8M model at ~epoch 10, and
-        its BIF stats land on the small model's epoch-10 point, not its epoch-5 point; a
-        dense-checkpoint retrain confirms the 6.4M model at epoch 2 (loss-matched to small@5) shows
-        the elevated gap (+9.2%). Second, at matched loss, capacity <em>dilutes</em> the relative
-        class signal (9% at 6.4M vs 20–27% at 0.8M) even while making the estimate more reproducible.
-        Third, this isn't estimator noise: at 20k draws/seed (diamonds) the late-training matrix is
-        highly reproducible (r = 0.87 between fully independent runs) and its class excess is
-        genuinely ~1%.</p>
+        <p><span class="vr-retracted">Three details pin this down. First, the window is positioned
+        by <em>loss</em>, not epochs: the 6.4M model at epoch 5 has the same test NLL as the 0.8M
+        model at ~epoch 10, and its BIF stats land on the small model's epoch-10 point, not its
+        epoch-5 point; a dense-checkpoint retrain confirms the 6.4M model at epoch 2 (loss-matched
+        to small@5) shows the elevated gap (+9.2%). Second, at matched loss, capacity
+        <em>dilutes</em> the relative class signal (9% at 6.4M vs 20–27% at 0.8M) even while making
+        the estimate more reproducible. Third, this isn't estimator noise: at 20k draws/seed
+        (diamonds) the late-training matrix is highly reproducible (r = 0.87 between fully
+        independent runs) and its class excess is genuinely ~1%.</span> <em>Retracted, and worth
+        dwelling on because the third point is exactly where we fooled ourselves: the high-draw
+        estimate was reproducible, but what reproduced was a rank-one common mode — the class
+        signal underneath it was real, ~40× larger than "~1%", and invisible to the raw covariance.
+        What the window actually tracked is how hot SGLD is allowed to run at each checkpoint
+        (mixing quality), which is itself set by the sharpening minimum. See §6.</em></p>
 
         <p>The same sharpening shows up as a hard constraint on the sampler: SGLD step size ε =
         10⁻⁵ explodes within 3 steps at convergence; 6×10⁻⁷ survives at epoch 5 but explodes by
@@ -138,18 +160,20 @@
           (solid vs barber-pole bars).</figcaption>
         </figure>
 
-        <p class="vr-pull">Fine-tuning on fours makes the model better at fours at every stage of
-        training — but the BIF can only see that coming while the grooves are open (r ≈ 0.43
-        probe-level at epoch 5; ≈ 0 at convergence).</p>
+        <p class="vr-pull"><span class="vr-retracted">Fine-tuning on fours makes the model better
+        at fours at every stage of training — but the BIF can only see that coming while the
+        grooves are open (r ≈ 0.43 probe-level at epoch 5; ≈ 0 at convergence).</span>
+        <em>Retracted: with the fixed estimator the BIF predicts fine-tuning at convergence too
+        (r ≈ 0.47) — see §6.</em></p>
 
-        <p>This is the most interesting wedge in the data. The behavioural influence structure
-        (fig. 5 right) barely changes between epoch 5 and epoch 30. What changes is whether the
-        <em>local posterior</em> can see it: by convergence the class-relevant directions are frozen
-        — posterior samples no longer fluctuate along them, so the loss covariance loses the signal
-        that gradient fine-tuning still exploits. Two caveats: 20 AdamW steps is a larger
-        perturbation than the localised posterior neighbourhood, and AdamW's preconditioning is not
-        SGLD's isotropic geometry — some of the wedge may be metric mismatch rather than frozen
-        directions.</p>
+        <p><span class="vr-retracted">This is the most interesting wedge in the data. The
+        behavioural influence structure (fig. 5 right) barely changes between epoch 5 and epoch 30.
+        What changes is whether the <em>local posterior</em> can see it: by convergence the
+        class-relevant directions are frozen — posterior samples no longer fluctuate along them, so
+        the loss covariance loses the signal that gradient fine-tuning still exploits.</span>
+        The "wedge" dissolved under the corrected estimator (§6): the local posterior sees the
+        class structure at convergence just fine, once its samples are actually independent. The
+        behavioural panel (fig. 5 right) stands unchanged.</p>
 
         <h2><span class="vr-section-num">§4</span>What didn't work</h2>
 
@@ -162,6 +186,7 @@
               <tr><td>spectral / k-means on raw BIF</td><td>clusters = digits</td><td class="num">ARI ≤ 0.03</td><td class="vr-neg">no</td></tr>
               <tr><td>seed-averaging + eigen-embedding</td><td>denoise → clusters</td><td class="num">ARI 0.08 · NMI 0.17</td><td class="vr-neg">weak</td></tr>
               <tr><td>Marchenko–Pastur eigenvalue cleaning</td><td>strip sampling noise</td><td class="num">+0.01–0.03 ARI</td><td class="vr-neg">marginal</td></tr>
+              <tr><td>spectral on the §6 fixed estimator</td><td>clean BIF → clusters</td><td class="num">ARI ≤ 0.01</td><td class="vr-neg">no — negative survives</td></tr>
               <tr><td>scale-floor regularisation (0.03 / 0.1)</td><td>flatter minimum → hotter SGLD</td><td class="num">still diverges at 10⁻⁶</td><td class="vr-neg">no</td></tr>
               <tr><td>within &gt; between (structural)</td><td>grooves exist</td><td class="num">~20/20 cells</td><td class="vr-pos">yes</td></tr>
               <tr><td>fine-tune transfer (behavioural)</td><td>fours help fours</td><td class="num">10/10 classes</td><td class="vr-pos">yes</td></tr>
@@ -178,22 +203,121 @@
 
         <h2><span class="vr-section-num">§5</span>What's next</h2>
         <ul>
-          <li>Track the window densely: BIF every epoch from init, on one model — is the window's
-          opening the same event as the fine-tuning predictability, and does it coincide with
-          sample-quality milestones (fig. 1's rows suggest yes)?</li>
-          <li>Fine-tuning ground truth at several checkpoints, not two — map r(BIF, ΔNLL) as a
-          curve, not endpoints.</li>
+          <li><span class="vr-retracted">Track the window densely: BIF every epoch from init, on
+          one model.</span> Moot as posed — §6 reframes the "window" as a property of the sampler.
+          The right dense-tracking question is now how the (real, persistent) groove depth evolves
+          under the fixed estimator at matched equilibration.</li>
+          <li>Replication under a standard LM objective: a pixel-level autoregressive transformer
+          (784 raster tokens, 16-level quantised pixels, tied embeddings, cross-entropy) is running
+          the corrected recipe now — removes every exotic ingredient of the logistic-normal
+          head.</li>
           <li>Part 2 of the spec: a larger dataset. A low-rank (factor-analysis) covariance head is
           already implemented and tested behind a config flag (Σ = D + VVᵀ,
           O(dk²) log-probs), making 48-dim CIFAR patches or bigger patch sizes cheap.</li>
-          <li>Preconditioned influence: measure the BIF in the AdamW metric to test the
-          metric-mismatch explanation of §3's wedge.</li>
+          <li>Preconditioned influence: measure the BIF in the AdamW metric — still interesting,
+          now as a comparison of geometries rather than an explanation for a (dissolved) wedge.</li>
         </ul>
 
+        <h2><span class="vr-section-num">§6</span>Correction: the window was the sampler's, not the landscape's</h2>
+
+        <p>This section was added the day after publication, prompted by a simple complaint: two
+        BIF runs that differed only in RNG seed didn't agree well enough. Chasing that complaint
+        overturned the paper's headline. The diagnosis ran entirely on the saved loss traces (every
+        SGLD draw of every run above is on HF), and was then confirmed with fresh runs on the same
+        checkpoints.</p>
+
+        <p><b>Diagnosis.</b> Within each run, split the chains in half and compare the two
+        half-estimates; the
+        <button class="tooltip-button" data-define="spearman-brown">Spearman–Brown</button>
+        prediction from that split-half agreement matched the observed across-run agreement almost
+        exactly in all 21 archived runs (e.g. epoch-30 high-SNR: predicted 0.843, observed 0.840).
+        So the disagreement was pure sampling noise — nothing systematic differed between runs. The
+        noise itself was the interesting part: the probe-loss traces have an integrated
+        autocorrelation time comparable to the <em>entire run</em> (τ ≈ 58 on 250-draw windows, ≈
+        680 on 2,500-draw windows — a 1/f-like slow wander of the whole loss level), so a chain
+        contributes only ~4–7 effective samples <em>no matter how long it runs</em>, and the raw
+        full-window covariance never converges. Two symptoms in the archived data suddenly make
+        sense: across-seed agreement sometimes <em>decreased</em> as draws were added (longer
+        windows admit more un-averaged drift), and the late-training "≈1% class excess" — measured
+        at the coldest step size, where mixing is slowest — was the class signal drowning under a
+        reproducible rank-one common mode, not the signal disappearing.</p>
+
+        <p><b>Fix.</b> Estimate the covariance <em>within short windows</em>: centre each
+        non-overlapping block of 10 recorded draws, take the block covariance, and average blocks
+        (a high-pass filter on the trace; linear detrending is too weak — the wander isn't
+        linear). Applied to the same saved traces, every cell of the study jumps to seed-to-seed
+        r ≥ 0.94, including the cheap 250-draw cells that raw estimation had at r ≈ 0.28
+        (fig. 6). The expensive "high-SNR" program existed to compensate for an estimator that was
+        discarding the signal.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig_c1_estimator.png" alt="Left: dumbbell chart showing seed-to-seed agreement jumping from 0.2-0.9 (raw) to at least 0.94 (block-centred) in every cell. Right: bar chart showing BIF-vs-finetuning correlation at epoch 30 going from -0.04 (raw) to +0.47 (block-centred).">
+          <figcaption><b>Fig. 6</b> · Same saved traces, two estimators. Left: seed-to-seed
+          agreement of the off-diagonal BIF, raw full-window covariance vs block-centred (W = 10
+          draws). Right: the §3 ground-truth comparison recomputed — the raw estimator's "the BIF
+          goes blind at convergence" becomes r = +0.47 under the fixed estimator.</figcaption>
+        </figure>
+
+        <p><b>What the corrected estimates say.</b> With reproducibility no longer confounding
+        everything (fig. 7): the within-class excess at convergence is not ~1% — it is
+        <b>~20–25%</b> at matched budget, and grows to <b>~40–50%</b> as chains are given longer to
+        equilibrate (the class-covariance structure keeps developing for thousands of SGLD steps
+        after the loss looks flat, so budget-matched comparisons are mandatory). The decline from
+        epoch 5 (~40%) to epoch 20+ (~22%, at step size 3×10⁻⁷ on 2,050 probes) is real but modest
+        — a far cry from the order-of-magnitude collapse we published. And the §3 wedge dissolves:
+        the local posterior sees the same class structure that fine-tuning exploits, at every
+        checkpoint we can sample (per-class prediction r ≈ 0.56 at epoch 5, ≈ 0.47 at epoch 30,
+        sign correct 10/10 and 9/10). What is <em>genuinely</em> confirmed from the original §2 is
+        the sharpness story for the sampler itself: converged minima still tolerate only ε ≈
+        3×10⁻⁷ (6×10⁻⁷ still explodes at epoch 30 in fresh runs), so late-training chains mix
+        slowly — which is precisely why the raw estimator failed there and manufactured the
+        "window".</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig_c2_window.png" alt="Left: class contrast vs training epoch for raw and block-centred estimators at two step sizes; block-centred curves plateau at 0.16-0.22 instead of collapsing to zero. Right: contrast grows across draw thirds as chains equilibrate, at both epoch 5 and epoch 30.">
+          <figcaption><b>Fig. 7</b> · Left: the revised window curve — class contrast
+          ((within − between)/|between|) by epoch on the archived sweep traces; the raw estimator's
+          collapse (dashed) becomes a modest decline to a robust plateau. Bars span the two
+          independent seeds. Right: contrast vs draw-window position in the 20k-draw runs — the
+          groove signal deepens as chains equilibrate, at both checkpoints.</figcaption>
+        </figure>
+
+        <p><b>Fresh-run confirmation.</b> Rerunning from scratch on the archived checkpoints
+        (8 chains × 650 draws, 510 probes, two independent seeds per cell) reproduces both the
+        disease and the cure. Note the epoch-5 cold-step row, where the raw estimator gets
+        <em>worse</em> than the archived 250-draw runs precisely because this run is longer; and
+        the bottom row, where — at matched step size and budget — the converged model's grooves
+        come out as deep as the early ones (block-10 contrast +0.29/+0.30 vs +0.18/+0.26 at epoch
+        5). A longer-equilibration rerun of that comparison is in flight; on the archived
+        20k-draw traces the equilibrated epoch-30 contrast reaches ~0.47.</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>fresh cell</th><th class="num">raw seed-r</th><th class="num">block seed-r</th><th class="num">class contrast</th><th>gate ≥ 0.9</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>epoch 5 · ε = 6×10⁻⁷</td><td class="num">0.93</td><td class="num">0.95</td><td class="num">+0.12 / +0.14</td><td class="vr-pos">pass</td></tr>
+              <tr><td>epoch 5 · ε = 3×10⁻⁷</td><td class="num">0.70</td><td class="num">0.98</td><td class="num">+0.18 / +0.26</td><td class="vr-pos">pass</td></tr>
+              <tr><td>epoch 30 · ε = 6×10⁻⁷</td><td class="num" colspan="2">diverges @ step 521</td><td class="num">—</td><td class="vr-neg">sharp minimum</td></tr>
+              <tr><td>epoch 30 · ε = 3×10⁻⁷</td><td class="num">0.26</td><td class="num">0.96</td><td class="num">+0.29 / +0.30</td><td class="vr-pos">pass</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p><b>Recipe, going forward.</b> Every BIF run now self-reports its split-half agreement,
+        autocorrelation time, and effective sample size (if these are bad, the estimate is
+        pre-announced as noise); covariance is block-centred; and science cells are gated on
+        across-seed agreement ≥ 0.9 before any conclusions get drawn. The general lesson for
+        SGLD-based observables seems worth stating plainly: <em>at the step sizes sharp minima
+        force on you, the chain's slow mode never mixes — anything computed from long-window
+        covariances inherits that non-convergence silently. Estimate from within-window
+        fluctuations, and make every run prove its own reproducibility.</em></p>
+
         <div class="vr-colophon">
-          Code · <span style="font-family: inherit">small-abstraction-test</span> (local repo, commit <code>650e634</code>+; built by codex-exec implementers with Claude reviewer gates).
-          <br>Artefacts · HF <a href="https://huggingface.co/datasets/arcadia-impact/small-abstraction-test-logs">arcadia-impact/small-abstraction-test-logs</a> (947 files: all BIF matrices, SGLD traces, sweep manifests) · <a href="https://huggingface.co/arcadia-impact/small-abstraction-test-mnist-ar">arcadia-impact/small-abstraction-test-mnist-ar</a> (8 checkpoints).
-          <br>Compute · RunPod RTX 4090 (~4.5 h, sweep + scale) + A100 80GB (~2.5 h, high-SNR + ground truth); ≈ $7 total. Pods deleted after verified upload.
+          Code · <span style="font-family: inherit">small-abstraction-test</span> (local repo, commit <code>650e634</code>+; built by codex-exec implementers with Claude reviewer gates. Correction analysis + block estimator: commits <code>674f996</code>–<code>9cf9180</code>+).
+          <br>Artefacts · HF <a href="https://huggingface.co/datasets/arcadia-impact/small-abstraction-test-logs">arcadia-impact/small-abstraction-test-logs</a> (all BIF matrices, SGLD traces, sweep manifests — the §6 diagnosis ran on these) · <a href="https://huggingface.co/arcadia-impact/small-abstraction-test-mnist-ar">arcadia-impact/small-abstraction-test-mnist-ar</a> (8 checkpoints).
+          <br>Compute · RunPod RTX 4090 (~4.5 h, sweep + scale) + A100 80GB (~2.5 h, high-SNR + ground truth); ≈ $7 total. §6 diagnosis: CPU on the archived traces; fresh confirmation ~40 min on one further 4090.
         </div>
       </div>
     </main>
@@ -205,6 +329,7 @@
         "devinterp": "Timaeus' developmental-interpretability toolkit. Its estimation recipe: train however you like (here AdamW), then run localised SGLD chains from the trained weights and compute observables over the draws. nβ = m/ln m is its default inverse-temperature scaling for minibatch size m.",
         "logistic-normal": "Pixels are dequantised to (0,1), mapped through a logit, and modelled with a multivariate normal in logit space — a density on continuous pixel values (which is why NLLs here are negative: densities exceed 1). The change-of-variables Jacobian is included, so the per-image NLL is a proper x-space density.",
         "common-mode": "The first, dominant component of the loss-covariance matrix: all probes' losses rise and fall together as the chain wanders (a global 'how good is the model right now' factor). It carries no class information, so it is projected out (double-centring) before displaying the matrix.",
+        "spearman-brown": "The classical test-reliability formula: if two independent halves of a measurement correlate at r_half, the full measurement correlates with an independent replicate at 2·r_half/(1+r_half). If observed run-to-run agreement matches this prediction from split-half agreement, the disagreement is exactly sampling noise — there is no systematic run-to-run component.",
       });
     </script>
   </body>
