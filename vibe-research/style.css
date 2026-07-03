@@ -349,3 +349,35 @@ html::after  { right: 3.75rem; }
 }
 .vr-fold-block { margin: 1.2em 0; }
 .vr-row-win td { font-weight: 650; }
+
+/* Interactive-figure tooltip (hover a mark -> preview of the underlying
+   datapoints; click pins, click-away/Esc dismisses). Generic: the JS sets
+   the sprite image per figure; cells default to 56px sprite tiles. */
+.vr-itip {
+  position: fixed;
+  z-index: 60;
+  background: var(--bg, #f0f5dd);
+  border: 1px solid var(--h3, #1a6b06);
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem 0.6rem;
+  box-shadow: 0 6px 22px rgba(31, 51, 24, 0.22);
+  pointer-events: none;
+  max-width: 280px;
+}
+.vr-itip-head { font-family: monospace; font-size: 0.78rem; font-weight: 700; }
+.vr-itip-comp { font-family: monospace; font-size: 0.72rem; color: #7b8074; margin: 0.1rem 0 0.4rem; }
+.vr-itip-grid { display: grid; grid-template-columns: repeat(4, 56px); gap: 3px; }
+.vr-itip-cell {
+  width: 56px; height: 56px;
+  background-repeat: no-repeat;
+  border: 1px solid rgba(31, 51, 24, 0.18);
+  border-radius: 3px;
+  background-color: #fff;
+}
+.vr-itip-pin { font-family: monospace; font-size: 0.66rem; color: #7b8074; margin-top: 0.35rem; }
+
+/* Hierarchy figure nodes */
+.vr-fig svg { width: 100%; height: auto; display: block; }
+#hier-svg .hn:hover .hn-outline, #hier-svg .hn.pinned .hn-outline {
+  stroke-width: 2.4;
+}
