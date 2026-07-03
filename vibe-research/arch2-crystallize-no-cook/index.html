@@ -2307,7 +2307,16 @@
           landing; this page now reflects the final state. See the
           <a href="https://github.com/jonathanbostock/a-is-b-is-c/blob/arch/crystallize-no-cook/findings/crystallize-no-cook/blogpost.md">full
           write-up</a> for the complete methodology, results table, and
-          reproduction instructions. Last updated 2026-07-03 09:15 UTC.</p>
+          reproduction instructions.<br>
+          <b>Cost</b> (measured from RunPod billing + worker transcripts, not
+          estimated): <b>~$650 of GPU</b> — 64 H200-hrs of workers ≈ $282,
+          ~77 H200-hrs across ~100 held-out eval pods ≈ $339 (≈28 min/eval),
+          canary + CPU home base ≈ $32 — and <b>~$910 of Claude API</b> — the
+          four workers ran Opus&nbsp;4.8 (2,959 calls; 2.5M out / 627M
+          cache-read / 78M cache-write ≈ $860) and the planner ran
+          Sonnet&nbsp;5 (≈ $50). Total ≈ <b>$1.55k</b>; the agents out-cost
+          the GPUs. (OpenAI judge calls for the decisiveness panels not
+          included — billed separately.) Last updated 2026-07-03 09:15 UTC.</p>
         </div>
 
       </div>
