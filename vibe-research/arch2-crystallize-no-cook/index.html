@@ -198,7 +198,9 @@
               of held-out rewarding what the local metric penalizes, though
               still below #78's own 0.5614. PR #110 stacks dropout 0.1 onto
               rank 112 (#103) as a transfer regularizer, local 0.495, held-out
-              pending.</li>
+              pending. PR #112 draws rank 88 (between #78's 96 and #106's 104)
+              — held-out <b>0.4294</b>, another point confirming the 64-112
+              rank band is a noisy plateau with no clean monotone shape.</li>
             <li><b>idea-2</b> — L2-SP shrinkage prior, stacked on full-param
               FT. Best: PR #42 (gentler LR 1e-4 at #33's λ) held-out
               <b>0.4161</b> (now #3 overall) — the first full-param recipe to
@@ -271,7 +273,12 @@
               out past it. Local/held-out inversions dominate this line —
               #108's mechanistic negative (top-layer MLPs are load-bearing for
               composition) is the reliable finding; its held-out rank is the
-              new watch item.</li>
+              new watch item. <b>New:</b> PR #113 extends #111's steps curve
+              to 800 — drops to 0.448, confirming 600 steps (#111, retention
+              0.93) is the interior peak, not an endpoint; PR #115 brackets
+              the LR axis (1.4e-4 cooks without a test gain over 1e-4) —
+              idea-12 is now fully bracketed on LR, steps, and freeze-depth,
+              champion recipe stays #90/#111.</li>
             <li><b>idea-4</b> — early-stop + on-policy rehearsal combo. Best:
               PR #9, held-out <b>0.3742</b> (#5 overall). PR #49 reran #9's
               exact recipe on a fresh draw — retention reproduced almost
@@ -1218,6 +1225,20 @@
               <td>0.489 (local, held-out pending) — new idea-12 local-best, retention rose with more steps</td>
             </tr>
             <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/112">#112</a></td>
+              <td>MLP-only lineage, rank 88 draw in the saturated 64-112 band</td>
+              <td>—</td>
+              <td>—</td>
+              <td>0.477 (local) / <b>0.4294 (held-out) — #15</b>, another point on the noisy plateau</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/113">#113</a></td>
+              <td>Full-param MLP (idea-12), steps curve extended to 800 on #111's recipe</td>
+              <td>—</td>
+              <td>—</td>
+              <td>— (local, held-out pending) — 800 steps drops to 0.448, confirms 600 (#111) is the peak</td>
+            </tr>
+            <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/76">#76</a></td>
               <td>Reproduction of #63 (KL+Muon, kl_lambda 1.0, unchanged) on a fresh draw</td>
               <td>0.5618</td>
@@ -1792,42 +1813,33 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training
-          since launch (12:49 UTC), no restarts needed all run. 111 PRs open
-          so far. <b>NEW this tick — a fourth idea family, idea-12, emerged
-          and already scores mid-pack:</b> full-param MLP fine-tune with
-          attention frozen (PR #90 → #108) lands <b>0.4527</b> held-out
-          (#108's mechanistic negative — freezing top-layer MLPs too — still
-          transfers better than the milder #90 origin, 0.4087). Also new this
-          tick: PR #99's stronger L2-SP shrinkage scored <em>worse locally</em>
-          than #87 but <b>landed held-out at 0.5545 — new overall #3</b>,
-          beating #87 anyway; the fleet is now seeing this local/held-out
-          inversion pattern (#85, #48, #99, #108 all show it) often enough
-          that "worse local score" no longer reliably predicts "worse
-          held-out." PR #101 (KL+AdamW batch size ablation) landed
-          <b>0.4642</b>, squarely inside its family's expected band. PR #104's
-          held-out-targeted lr-8e-4 bet landed only <b>0.3332</b> — did not
-          pay off, the 4e-4/5e-4 band remains the KL+AdamW ceiling. PR #106
-          (MLP-only rank 104) landed <b>0.4268</b>, confirming the rank
-          96-112 band is a noisy plateau not a smooth peak (three adjacent
-          ranks, three unrelated scores). PR #100 (MLP-only lr bump) landed
-          <b>0.3799</b>. 4 NEW open PRs since last tick, held-out pending:
-          #107 (on-policy mixin on full-param, negative, closes that branch),
-          #109 (KL+AdamW lr 7e-4 stabilized with grad-clip+warmup — a more
-          credible push past the safe-LR edge than #104's bet), #110
-          (MLP-only rank 112 + dropout regularizer), #111 (idea-12, more
-          steps — new family local-best 0.489). Top-15 leaderboard: #85
-          (0.5626, flagged anomaly), #78 (0.5614), #99 (0.5545), #97 (0.5463),
-          #87 (0.5156), #76 (0.5031), #101 (0.4642), #58 (0.4565), #108
-          (0.4527), #79 (0.4450), #91 (0.4428), #93 (0.4421), #55 (0.4375),
-          #68 (0.4373), #48 (0.4274). Pending held-out (highest priority
-          first): #111 (idea-12 local-best), #109 (stabilized higher-LR KL
-          bet), #110, #96, #53 (MLP-only stacked-levers local-best 0.5238),
-          #65 (local-best 0.529), #94, #105, #107, #62, #63, #64, #66, #69,
-          #70, #71, #73, #75, #80, #82, #86, #88, #89, #92, #95, #47, #49-52,
-          #54, #56, #57, #6, #18, #5, #11; #46 still needs a respawn retry
-          after a failed eval-pod launch (not yet actioned — outside standing
-          tick scope). Deadline ~18095s out at tick start (~5.0h remaining),
-          no wrap-up needed yet. Last updated 2026-07-02 23:52 UTC.</p>
+          since launch (12:49 UTC), no restarts needed all run. 115 PRs open
+          so far. Quiet tick: top score unchanged (PR #85, 0.5626, still
+          flagged as an anomaly not a design win). 2 new held-out scores
+          landed, both confirming existing plateaus rather than moving them:
+          PR #112 (MLP-only rank 88) <b>0.4294</b> — another point on the
+          noisy 64-112 rank plateau (idea-10); PR #113 (full-param MLP steps
+          extended to 800, idea-12) held-out pending but its local read
+          (0.448, down from #111's 0.489 at 600 steps) confirms 600 steps is
+          the interior peak, not an endpoint. PR #115 closes idea-12's LR
+          axis (1.4e-4 cooks without a test-acc gain over 1e-4) — idea-12 is
+          now fully bracketed on LR, steps, and freeze-depth, champion recipe
+          stays #90/#111. 2 NEW open PRs since last tick, held-out pending:
+          #114 (MLP-only rank 96 + lr 3.5e-4, at-cap draw in the strong
+          band), #115 (scored above). Top-15 leaderboard unchanged in
+          composition, one new entrant: #85 (0.5626, flagged anomaly), #78
+          (0.5614), #99 (0.5545), #97 (0.5463), #87 (0.5156), #76 (0.5031),
+          #101 (0.4642), #58 (0.4565), #108 (0.4527), #79 (0.4450), #91
+          (0.4428), #93 (0.4421), #55 (0.4375), #68 (0.4373), #112 (0.4294).
+          Pending held-out (highest priority first): #109 (stabilized
+          higher-LR KL bet), #113, #110, #96, #53 (MLP-only stacked-levers
+          local-best 0.5238), #65 (local-best 0.529), #94, #105, #107, #114,
+          #115, #62, #63, #64, #66, #69, #70, #71, #73, #75, #80, #82, #86,
+          #88, #89, #92, #95, #47, #49-52, #54, #56, #57, #6, #18, #5, #11;
+          #46 still needs a respawn retry after a failed eval-pod launch (not
+          yet actioned — outside standing tick scope). Deadline ~15893s out
+          at tick start (~4.4h remaining), no wrap-up needed yet. Last
+          updated 2026-07-03 00:25 UTC.</p>
         </div>
 
       </div>
