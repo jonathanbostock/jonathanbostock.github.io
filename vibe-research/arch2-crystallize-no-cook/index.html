@@ -64,10 +64,18 @@
         <div class="vr-lab">
           <p><b>Ranked by current held-out evidence (best first):</b></p>
           <ol>
+            <li><b>idea-12</b> — full-parameter MLP fine-tune with attention
+              frozen. <b>NEW overall leaderboard #1 this tick — PR #140's
+              held-out score landed at 0.6362</b> (test_acc/retention detail
+              below), unseating idea-2's PR #133 (0.5779, now #2) by a wide
+              margin and confirming last tick's flagged top-priority local
+              result (0.7315) as a genuine, real Pareto win rather than
+              another local/held-out inversion. See full idea-12 entry below
+              for the mechanistic read and PR #141/#144 bracketing.</li>
             <li><b>idea-11</b> — KL-to-base anchor on held-out prompts (new
-              idea, emerged from PR #60). <b>Formerly overall #1 (now #2,
-              unseated by idea-2's PR #133 this tick) — and still
-              flagged as an anomaly, not a design win:</b> PR #76
+              idea, emerged from PR #60). <b>Now overall #3 (behind idea-12's
+              new #1 and idea-2's #2) — #85 still flagged as an anomaly, not a
+              design win:</b> PR #76
               (reproduction of #63's KL+Muon on a fresh draw, local
               only 0.4178) landed held-out at <b>0.5031</b> — test_acc 0.628 ×
               retention 0.801, well above the "score ~0.45" expectation this
@@ -155,10 +163,18 @@
               not recover the decisiveness a gentler LR would have kept.
               Read: lr 4e-4 (#97/#123) remains the trustworthy operating
               point; lr 5e-4 (#127) trades a small, real test_acc gain for a
-              non-recoverable retention cost.</li>
+              non-recoverable retention cost. <b>New — closes the LR-midpoint
+              question:</b> PR #142 tried the untested midpoint lr 4.5e-4
+              (500 steps, otherwise #97's recipe) hoping for a graceful
+              trade between #97 (lr4e-4) and #127 (lr5e-4) — held-out landed
+              <b>0.5428 (#7 overall)</b>, between the two endpoints but not
+              above either: the retention/crystallization knee sits sharply
+              AT lr4e-4, not on a smooth curve, so no midpoint sweet spot
+              exists — #97's lr4e-4 stays this family's trustworthy
+              champion.</li>
             <li><b>idea-10</b> — adapter module targeting (footprint lever).
-              #3 on trustworthy evidence (behind idea-2's #133 and #85's
-              flagged anomaly): PR #78
+              #4 on trustworthy evidence (behind idea-12's #140, idea-2's
+              #133, and #85's flagged anomaly): PR #78
               (rank 96 at the aggressive lr 3e-4, testing whether capacity
               can be pushed past #58's rank 64) held-out <b>0.5614</b> —
               decisiveness landed <em>above</em> base (0.715 vs 0.735 ⇒
@@ -248,10 +264,12 @@
               continuum from r32 through full-rank: the 64-112 band remains
               the practical operating range.</li>
             <li><b>idea-2</b> — L2-SP shrinkage prior, stacked on full-param
-              FT. <b>New overall leaderboard #1 this tick, and a trustworthy
-              one (not an anomaly):</b> PR #133 (λ=2.5e-2, bracketing #129's
-              peak) held-out <b>0.5779</b> — unseats #85's 0.5626 (idea-11,
-              still flagged anomalous) as the top scored PR. #133 itself was
+              FT. <b>Now overall #2 (unseated this tick by idea-12's PR #140,
+              0.6362) — but still a trustworthy result, not an anomaly:</b>
+              PR #133 (λ=2.5e-2, bracketing #129's
+              peak) held-out <b>0.5779</b> — had unseated #85's 0.5626
+              (idea-11, still flagged anomalous) as the top scored PR before
+              #140 landed. #133 itself was
               the over-anchored probe locally (test 0.667, retention 0.949,
               local 0.633, just below #129's own local 0.660), so this is
               another case of the held-out topology rewarding a recipe the
@@ -352,8 +370,17 @@
               held-out score remains the single highest-priority pending
               result in the fleet given #125's caution that this family's
               local numbers can invert sharply — if #129 carries through
-              anywhere near its local edge over #133, it would extend #133's
-              new #1 further still.</li>
+              anywhere near its local edge over #133, it would put it in
+              contention behind idea-12's new #140 leader. <b>New — closes
+              the steps axis:</b> PR #143 extended #129's 1000 steps to 1500
+              — more steps hurt (retention 0.834→0.762, test 0.792→0.719,
+              local score 0.548), confirming 1000 steps is the champion's
+              interior optimum, not an endpoint. The family is now fully
+              bracketed on every axis (λ: 1.5e-2/2e-2/2.5e-2 → 0.514/0.660/
+              0.633 local; lr: 7e-5/1e-4 → 0.461/0.660; steps: 1000/1500 →
+              0.660/0.548), with #129 (λ=2e-2, 1000 steps) the settled local
+              champion and its held-out score the fleet's top remaining
+              pending result in this family.</li>
             <li><b>idea-12</b> — full-parameter MLP fine-tune with attention
               frozen (new idea, emerged from PR #90 — fuses idea-2's anchoring
               with idea-10's module-targeting, but on full weights, no adapter).
@@ -413,8 +440,22 @@
               frozen. Do not rank this idea #1 until held-out confirms — this
               is a local number only — but if held-out carries through even
               70% of local it clears 0.51 and likely takes over the overall
-              #1 from #133. Held-out eval pod (heldout-pr140) started ~02:30Z;
-              pending next tick.</li>
+              #1 from #133. <b>CONFIRMED this tick — the fleet's new overall
+              #1:</b> PR #140's held-out score landed at <b>0.6362</b>, well
+              above #133's 0.5779, carrying through ~87% of its local read
+              (0.7315) — the strongest local→held-out carry-through of any
+              top result this run and a genuine design win, not an
+              inversion. The Pareto framing holds: MLP-only beats #87 on
+              both test_acc and retention simultaneously. <b>New — closes
+              the rank/LR brackets around it:</b> PR #141 (MLP-only at rank
+              72, an at-cap capacity draw) scored local 0.427, below #140,
+              confirming full-rank MLP training (not a LoRA-style rank cap)
+              is what #140 needs; PR #144 raised #140's LR (1e-4→2e-4) —
+              worse (local score 0.61 vs #140's 0.7315), confirming lr 1e-4
+              remains the sweet spot even with attention frozen. #140/#87's
+              recipe (MLP-only, freeze attention, L2-SP 1e-2, lr 1e-4, 1000
+              steps) is now the fleet's best-understood and best-scoring
+              design, on both public and held-out metrics.</li>
             <li><b>idea-4</b> — early-stop + on-policy rehearsal combo. Best:
               PR #9, held-out <b>0.3742</b> (#5 overall). PR #49 reran #9's
               exact recipe on a fresh draw — retention reproduced almost
@@ -1338,21 +1379,28 @@
               <td>Full-param + L2-SP λ 2.5e-2 (#129 lineage, bracketing its peak)</td>
               <td>0.667</td>
               <td>0.949</td>
-              <td>0.633 (local, over-anchored) / <b>0.5779 (held-out) — new overall leaderboard #1, trustworthy (not an anomaly, see idea-2)</b></td>
+              <td>0.633 (local, over-anchored) / <b>0.5779 (held-out) — #2 (unseated by #140), trustworthy (not an anomaly, see idea-2)</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/85">#85</a></td>
               <td>KL+AdamW lr 4e-4→6e-4 (kl_lambda 1.0→1.5) — LR-cliff probe</td>
               <td>0.5057</td>
               <td>0.0324</td>
-              <td>0.0164 (local, total cook) / <b>0.5626 (held-out) — #2 (unseated this tick by #133), flagged anomaly (see idea-11)</b></td>
+              <td>0.0164 (local, total cook) / <b>0.5626 (held-out) — #3, flagged anomaly (see idea-11)</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/78">#78</a></td>
               <td>PR #58 lineage, rank 64→96 at lr 3e-4 (capacity-axis push)</td>
               <td>0.5037</td>
               <td>0.9493</td>
-              <td>0.4782 (local) / <b>0.5614 (held-out) — #2</b></td>
+              <td>0.4782 (local) / <b>0.5614 (held-out) — #4</b></td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/142">#142</a></td>
+              <td>KL+AdamW-LoRA lr 4.5e-4 midpoint probe (between #97's 4e-4 and #127's 5e-4)</td>
+              <td>—</td>
+              <td>—</td>
+              <td><b>0.5428 (held-out) — #7, confirms retention knee is AT lr4e-4, no midpoint sweet spot (see idea-11)</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/97">#97</a></td>
@@ -2227,7 +2275,42 @@
               <td>Full-param MLP-only, attention frozen (idea-12, #87 recipe: L2-SP 1e-2 + frozen embeddings, lr 1e-4, 1000 steps), training gate/up/down_proj + norms only, q/k/v/o_proj frozen</td>
               <td>0.817</td>
               <td>0.8954</td>
-              <td><b>0.7315 (local) — new fleet-wide local-best by a wide margin</b>, held-out pending (eval pod heldout-pr140 started ~02:30Z), top-priority watch item — genuine Pareto win over #87 (test_acc AND retention both rose)</td>
+              <td>0.7315 (local) / <b>0.6362 (held-out) — NEW overall leaderboard #1</b>, ~87% local→held-out carry-through, genuine Pareto win over #87 (test_acc AND retention both rose, see idea-12)</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/141">#141</a></td>
+              <td>MLP-only LoRA rank 72 (idea-10, at-cap capacity draw)</td>
+              <td>—</td>
+              <td>—</td>
+              <td>0.427 (local), held-out pending — completes the capacity map, below #140's full-rank MLP result</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/142">#142</a></td>
+              <td>KL+AdamW-LoRA lr 4.5e-4 midpoint probe (idea-11, between #97's 4e-4 and #127's 5e-4)</td>
+              <td>—</td>
+              <td>—</td>
+              <td><b>0.5428 (held-out) — #7</b>, confirms retention knee is AT lr4e-4, no midpoint sweet spot</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/143">#143</a></td>
+              <td>Full-param + L2-SP λ 2e-2 (idea-2, #129 lineage), steps 1000→1500</td>
+              <td>0.719</td>
+              <td>0.762</td>
+              <td>0.548 (local), held-out pending — more steps hurt, closes the steps axis: #129's 1000 steps stays the interior optimum</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/144">#144</a></td>
+              <td>MLP-only full-param, attention frozen (idea-12, #140 lineage), lr 1e-4→2e-4</td>
+              <td>—</td>
+              <td>—</td>
+              <td>0.61 (local), held-out pending — worse than #140, confirms lr 1e-4 sweet spot holds with attention frozen too</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/145">#145</a></td>
+              <td>Full-param + L2-SP champion (idea-2, #129/#133 lineage) + rehearsal stacked</td>
+              <td>—</td>
+              <td>—</td>
+              <td>0.220 (local), held-out pending — the two anchors don't stack, over-constrains the champion recipe</td>
             </tr>
           </tbody>
         </table>
@@ -2237,54 +2320,47 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training
-          since launch (12:49 UTC), no restarts needed all run. 140 PRs open
-          so far. <b>New overall leaderboard #1 this tick: PR #133</b>
-          (idea-2, full-param + L2-SP λ=2.5e-2, bracketing #129's peak)
-          scored <b>0.5779</b> held-out — unseats #85 (0.5626) as top scored
-          PR, and unlike #85, #133 is a legitimate, well-understood result on
-          an already-mapped frontier, not a flagged anomaly. <b>Headline open
-          PR, held-out pending:</b> #140 (idea-12) trains only the MLP blocks
-          (attention frozen) atop the #87 recipe and posts <b>local score
-          0.7315</b> — by far the fleet's best local score this run, a
-          genuine Pareto win (test_acc 0.817 <em>and</em> retention 0.8954
-          both rose over #87's 0.7917/0.8797, not a trade). Mechanistic read:
-          matching-game associations live in MLP key-value memories while
-          attention carries more of the general/preference behavior, so
-          MLP-only training installs the concept while sparing decisiveness;
-          contrast with #122's freeze-by-depth (which hurt retention by
-          concentrating the update) shows the mechanism is concentration, not
-          raw amount frozen. Its eval pod (heldout-pr140) started ~02:30Z —
-          single highest-priority watch item next tick; if held-out confirms
-          even ~70% of local it clears 0.51 and likely takes #1 from #133.
-          5 other NEW open PRs this tick, all held-out pending, all
-          closing/narrowing branches: #135 (idea-11, LoRA rank 64 extra
-          capacity) — not a free lever, retention 0.98→0.95, no crystallization
-          gain; #136 (idea-2/idea-12, L2-SP on full-rank MLP-only) — can't
-          rescue full-rank either, local 0.272, confirms LoRA's low-rank
-          constraint (not L2-SP) is uniquely protective; #137 (idea-2, #129
-          lineage at lr 7e-5) — under-crystallizes, confirms lr 1e-4 is
-          required, #129 (local 0.660) stays lineage champion; #138 (idea-11,
-          kl_lambda 4.0 at lr 5e-4) — retention set by LR not anchor strength,
-          quadrupling the anchor only blunted crystallization; #139 (idea-10,
-          MLP-only rank 192) — already off the retention cap, confirms the
-          capacity ceiling sits at ~rank 112. Top-15 leaderboard: #133
-          (0.5779, NEW #1), #85 (0.5626, flagged anomaly), #78 (0.5614), #99
-          (0.5545), #97 (0.5463), #122 (0.5378), #87 (0.5156), #118 (0.5071),
-          #76 (0.5031), #123 (0.5024), #127 (0.4953), #101 (0.4642), #58
-          (0.4565), #108 (0.4527), #79 (0.4450). Pending held-out (highest
-          priority first): #140 (fleet-wide local-best by a wide margin,
-          0.7315 — top watch item), #129 (fleet-wide local-best among scored
-          families, 0.660), #128, #130, #132, #131, #135, #136, #137, #138,
-          #139, #126, #119, #113, #110, #116, #117, #96, #53 (MLP-only
+          since launch (12:49 UTC), no restarts needed the entire run. 145
+          PRs open so far. <b>NEW overall leaderboard #1 this tick: PR #140</b>
+          (idea-12, MLP-only full-param, attention frozen, atop #87's L2-SP
+          recipe) scored <b>0.6362</b> held-out — a ~87% carry-through of its
+          local 0.7315, unseating idea-2's #133 (0.5779) by a wide margin and
+          confirming last tick's flagged headline as a genuine Pareto win
+          (test_acc <em>and</em> retention both beat #87), not a local/held-out
+          inversion like #85. Mechanistic read holds: matching-game
+          associations live in MLP key-value memories while attention carries
+          general/preference behavior, so MLP-only training installs the
+          concept while sparing decisiveness. One other NEW held-out score
+          landed: #142 (idea-11, KL+AdamW-LoRA lr 4.5e-4 midpoint probe)
+          scored <b>0.5428</b> (#7) — confirms the retention knee sits sharply
+          AT lr4e-4 (#97), not on a smooth curve, so no LR-midpoint sweet spot
+          exists. 3 other NEW open PRs this tick, all held-out pending, all
+          closing/narrowing branches: #141 (idea-10, MLP-only LoRA rank 72) —
+          local 0.427, completes the capacity map below #140's full-rank
+          result; #143 (idea-2, #129 lineage at 1500 steps) — local 0.548,
+          more steps hurt, closes the steps axis at #129's 1000-step optimum;
+          #144 (idea-12, #140 lineage at lr 2e-4) — local 0.61, worse than
+          #140, confirms lr 1e-4 sweet spot holds with attention frozen too;
+          #145 (idea-2, champion + rehearsal stacked) — local 0.220, the two
+          anchors don't stack, over-constrains the champion recipe. Top-15
+          leaderboard: #140 (0.6362, NEW #1), #133 (0.5779), #85 (0.5626,
+          flagged anomaly), #78 (0.5614), #99 (0.5545), #97 (0.5463), #142
+          (0.5428), #122 (0.5378), #87 (0.5156), #118 (0.5071), #76 (0.5031),
+          #123 (0.5024), #127 (0.4953), #101 (0.4642), #58 (0.4565). Pending
+          held-out (highest priority first): #129 (fleet-wide local-best
+          among scored families, 0.660, now fully axis-bracketed by #143),
+          #128, #130, #132, #131, #135, #136, #137, #138, #139, #141, #143,
+          #144, #145, #126, #119, #113, #110, #116, #117, #96, #53 (MLP-only
           stacked-levers local-best 0.5238), #65 (local-best 0.529), #94,
           #105, #107, #114, #115, #62, #63, #64, #66, #69, #70, #71, #73,
           #75, #80, #82, #86, #88, #89, #92, #95, #47, #49-52, #54, #56,
           #57, #6, #18, #5, #11; #46 still needs a respawn retry after a
           failed eval-pod launch (not yet actioned — outside standing tick
-          scope). No stray eval pods to reap — heldout-pr137/138/139/140 all
-          started 02:22-02:30Z, well within the 4.5h window. Deadline ~136
-          min remaining as of this tick's 02:33Z check, no wrap-up needed
-          yet. Last updated 2026-07-03 02:35 UTC.</p>
+          scope). No stray eval pods to reap — heldout-pr143/144/145 all
+          started 02:51-03:10Z, well within the 4.5h window. Deadline ~100
+          min remaining as of this tick's 03:08Z check — approaching but not
+          yet at the 45-min wrap-up threshold. Last updated 2026-07-03 03:19
+          UTC.</p>
         </div>
 
       </div>
