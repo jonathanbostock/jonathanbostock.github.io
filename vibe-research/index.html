@@ -22,19 +22,21 @@
 
         <li>
           <a class="vr-card" href="bif-mnist-grooves/">
-            <span class="vr-date">2026-07-03 · corrected</span>
+            <span class="vr-date">2026-07-03 · v2</span>
             <span class="vr-title">Loss-landscape grooves: Bayesian influence functions on autoregressive MNIST</span>
-            <p class="vr-desc">Digit classes measurably co-move under posterior sampling.
-              <b>Corrected same-day:</b> the original "grooves close at convergence" headline was
-              an SGLD estimator artifact (ESS ≈ 4/chain hiding the signal under a slow common
-              mode). With a block-centred estimator every run reproduces at r ≥ 0.94, the grooves
-              persist at convergence, and the BIF predicts fine-tuning there after all. The
-              write-up keeps the retracted claims struck through, plus the diagnosis.</p>
+            <p class="vr-desc">A pixel-level AR transformer (tied embeddings, cross-entropy — a
+              language model whose language is MNIST) plus a fixed SGLD covariance estimator:
+              same-class losses co-fluctuate at every checkpoint (r ≥ 0.9 reproducible, visible
+              blocks in the matrix), the BIF predicts what per-class fine-tuning does (sign
+              20/20), and <b>unsupervised clustering of the BIF recovers digits better than
+              clustering the images themselves</b> (ARI 0.36 vs 0.30) — with 3 and 7 dissolving
+              into their shape families. Rewritten same-day, twice: v1's density model and its
+              estimator artifact live in git history.</p>
             <span class="vr-tags">
               <span class="vr-tag">devinterp</span>
               <span class="vr-tag">natural-abstractions</span>
               <span class="vr-tag">mnist</span>
-              <span class="vr-tag">correction</span>
+              <span class="vr-tag">unsupervised-clustering</span>
             </span>
           </a>
         </li>
