@@ -2484,45 +2484,18 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training
-          since launch (12:49 UTC), no restarts needed the entire run. 157
-          PRs open so far. Leaderboard #1 unchanged this tick: PR #140
-          (idea-12, MLP-only full-param, attention frozen) still holds
-          <b>0.6362</b>. One NEW held-out score landed: <b>PR #152</b>
-          (idea-12 x idea-2, frozen-attn + L2-SP 2e-2 stack at hotter lr
-          1.3e-4) scored <b>0.5730</b> (#4 overall) — a negative result, both
-          axes worse than sibling #146, confirming lr 1e-4 stays the fixed
-          optimum across every anchor combination on this structure. 5 other
-          NEW open PRs, held-out pending, closing/probing branches: #151
-          (idea-12, #87's L2-SP 2e-2 doesn't transfer onto MLP-only, local
-          over-anchored), #153 (idea-10, rank 112/rehearsal 0.35 closing
-          draw, local 0.532), #154 (mechanistic control: attention-only
-          training crystallizes far worse than MLP-only, test 0.37 vs 0.82,
-          confirms the concept lives in the MLP not attention), #156
-          (correction of near-miss #136: dropping rehearsal helps test
-          0.32→0.58 but the frozen-attn+L2-SP recipe still needs the full
-          1000-step schedule for retention, local only 0.330). <b>HEADLINE,
-          top-priority watch item for wrap-up:</b> PR #155 and PR #157
-          independently found that stopping #140's MLP-only recipe at
-          <b>600 steps instead of 1000</b> is a second Pareto lever stacked
-          on the module-freeze one — retention rises to 0.895-0.946 while
-          test_acc holds at 0.87, <b>local score 0.82 for both</b>, a wide
-          margin over #140's own local 0.7315 and the fleet-wide local-best
-          of the entire run. Held-out pods for both started ~04:08-04:14Z;
-          neither has scored yet as of this tick. Top-15 leaderboard
-          unchanged in ranking: #140 (0.6362), #143 (0.6166), #133 (0.5779),
-          #152 (0.5730, NEW), #85 (0.5626, flagged anomaly), #78 (0.5614),
-          #99 (0.5545), #97 (0.5463), #142 (0.5428), #122 (0.5378), #87
-          (0.5156), #118 (0.5071), #76 (0.5031), #123 (0.5024), #127
-          (0.4953). Pending held-out (highest priority first): <b>#155,
-          #157</b> (both local 0.82, fleet-wide local-best — the run's last
-          chance at a new #1 before wrap-up), #129 (local-best among the
-          idea-2 family, 0.660), #149, #150, #151, #153, #154, #156, plus a
-          long tail of earlier-tick pending PRs unchanged from prior ticks.
-          No stray eval pods to reap — heldout-pr150/151/155/156/157 running,
-          started 03:38-04:14Z, all well within the 4.5h window. <b>Deadline
-          ~35 min remaining as of this tick's 04:14Z check — wrap-up is
-          imminent; tick.sh will fire the wrap-up prompt separately.</b> Last
-          updated 2026-07-03 04:19 UTC.</p>
+          since launch (12:49 UTC), no restarts the entire run. Leaderboard
+          #1 still unchanged: PR #140 (idea-12, MLP-only full-param, attention
+          frozen) holds <b>0.6362</b>; no new held-out scores landed this
+          tick. Fleet fired a large last-minute burst of 14 new held-out eval
+          pods (PR #160 through #173) between 04:31-04:42Z, all within the
+          4.5h window, none stray/reapable. <b>PR #155 and #157</b> (600-step
+          early-stop on #140's recipe, local 0.82, fleet-wide local-best)
+          remain the top-priority watch item — still unscored as of this
+          tick, this run's last real shot at a new #1. <b>Deadline reached
+          zero as of this check (~04:56Z) — wrap-up is imminent/underway;
+          tick.sh fires the wrap-up prompt separately, this tick does not
+          wrap up.</b> Last updated 2026-07-03 04:56 UTC.</p>
         </div>
 
       </div>
