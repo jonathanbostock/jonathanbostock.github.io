@@ -384,3 +384,6 @@ html::after  { right: 3.75rem; }
 
 /* CIFAR hierarchy nodes (mirror of #hier-svg .hn) */
 #chier-svg .chn:hover .chn-outline, #chier-svg .chn.pinned .chn-outline { stroke-width: 2.4; }
+
+/* STL hierarchy nodes */
+#shier-svg .shn:hover .shn-outline, #shier-svg .shn.pinned .shn-outline { stroke-width: 2.4; }
