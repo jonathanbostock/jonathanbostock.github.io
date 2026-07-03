@@ -550,6 +550,11 @@ const Ants = (function () {
   let repellors = [];     // obstacles the ants curve around
 
   const cvs = document.getElementById("pher");
+  if (!cvs) {
+    // Pages without the ant canvas (vibe-research etc.): expose a dormant
+    // API instead of crashing the rest of this file at getContext(null).
+    return { toggle: () => null, recolor: () => {} };
+  }
   const ctx = cvs.getContext("2d");
 
   let ants = [], raf = null;
