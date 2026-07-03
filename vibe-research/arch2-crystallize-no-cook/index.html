@@ -28,15 +28,38 @@
 
         <h2><span class="vr-section-num">§0</span>TL;DR — conclusion</h2>
 
-        <p>Earlier work showed that <b>concept crystallization</b>
-        (forward-transitive generalization on Bostock's matching game) ports
-        from Pythia-70M up to Qwen2.5-14B under full-parameter fine-tuning —
-        held-out test-edge accuracy ~0.79. But measuring what that fine-tuning
-        does to the <em>rest</em> of the model showed the catch: the FT'd
-        Qwen2.5-14B-Instruct's <b>μ-decisiveness</b> (how opinionated it is over
-        a 155-item preference set, via the aligne Thurstonian panel)
-        <b>collapsed from 0.735 to ~0</b>. The model learned the concept by
-        being cooked into only ever emitting matching-game tokens.</p>
+        <div class="vr-lab">
+          <dl>
+            <dt>winner</dt><dd><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/140">PR #140</a> —
+              full-parameter fine-tune of the <b>MLP blocks only</b>
+              (gate/up/down_proj, all layers, + norms) with attention
+              (q/k/v/o_proj) <b>frozen</b>, anchored by an L2-SP shrinkage
+              prior (λ=1e-2) toward the pretrained weights, exactly 1000
+              steps at lr 1e-4</dd>
+            <dt>held-out score</dt><dd><b>0.6362</b> = test_acc 0.6776 ×
+              decisiveness_retention 0.9388 — the run's best held-out score
+              (its local self-report was 0.7315 = 0.817 × 0.895; held-out
+              transfer costs every recipe something)</dd>
+            <dt>runners-up</dt><dd><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/143">#143</a>
+              (full-param, L2-SP λ=2e-2, 1500 steps) 0.6166 ·
+              <a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/163">#163</a> (MLP-only, λ halved to 5e-3)
+              0.6009</dd>
+            <dt>takeaway</dt><dd><b>crystallization lives in the MLP
+              key-value memories; decisiveness lives in attention.</b>
+              Freeze attention, train the MLPs, anchor with L2-SP.</dd>
+          </dl>
+        </div>
+
+        <p>Why this was worth 16 hours of fleet: earlier work showed that
+        <b>concept crystallization</b> (forward-transitive generalization on
+        Bostock's matching game) ports from Pythia-70M up to Qwen2.5-14B under
+        full-parameter fine-tuning — held-out test-edge accuracy ~0.79. But
+        measuring what that fine-tuning does to the <em>rest</em> of the model
+        showed the catch: the FT'd Qwen2.5-14B-Instruct's <b>μ-decisiveness</b>
+        (how opinionated it is over a 155-item preference set, via the aligne
+        Thurstonian panel) <b>collapsed from 0.735 to ~0</b>. The model learned
+        the concept by being cooked into only ever emitting matching-game
+        tokens.</p>
 
         <p>This ARCH run pushed a 4×H200 worker fleet for 16 hours to find a
         training method that installs the concept while preserving the model.
@@ -56,18 +79,10 @@
         retention term → 0, killing the score. A do-nothing method leaves
         accuracy at chance. The maximum is a genuine crystallize-and-preserve
         recipe — and after 176 PRs and 93 held-out-scored attempts, the fleet
-        found one. <b>Winner: PR <a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/140">#140</a>
-        — train only the MLP blocks (gate/up/down_proj, all layers + norms)
-        with attention (q/k/v/o_proj) FROZEN, anchored by an L2-SP shrinkage
-        prior (λ=1e-2) toward the pretrained weights, for exactly 1000 steps at
-        lr 1e-4.</b> Held-out score <b>0.6362</b> (test_acc 0.817 ×
-        decisiveness_retention 0.895) — the fleet's best held-out result on
-        <em>both</em> axes simultaneously, not a trade. One-sentence takeaway:
-        <b>crystallization lives in the MLP key-value memories, decisiveness
-        lives in attention, so freeze attention and train the MLPs</b> — a
-        genuine Pareto win over every all-parameter or adapter-constrained
-        recipe the fleet tried. See <a href="https://github.com/jonathanbostock/a-is-b-is-c/blob/arch/crystallize-no-cook/findings/crystallize-no-cook/blogpost.md">the
-        full write-up</a> for the complete results table and interpretation.</p>
+        found the winner above. The idea-by-idea account is in §1 (each log
+        folds open), the single authoritative leaderboard is in §2, and
+        <a href="https://github.com/jonathanbostock/a-is-b-is-c/blob/arch/crystallize-no-cook/findings/crystallize-no-cook/blogpost.md">the
+        full write-up</a> has the complete interpretation.</p>
 
         <h2><span class="vr-section-num">§1</span>Top suggested ideas — final ranking</h2>
 
@@ -208,7 +223,7 @@
         </div>
 
         <ol class="vr-idea-thread">
-          <li id="idea-1"><b>idea-1 · LoRA / high-rank adapters.</b> Adapters
+          <li id="idea-1"><details class="vr-fold"><summary><b>idea-1 · LoRA / high-rank adapters.</b><span class="vr-fold-verdict">best structural lever of the first half — low-rank constraint is what protects; peak #78 held-out 0.5614 · <em>expand for the tick-by-tick log</em></span></summary> Adapters
             leave base weights intact, so the model's preference structure should
             survive while the adapter installs the associations. The most direct
             answer to the full-param catastrophic-forgetting failure.
@@ -384,8 +399,8 @@
             topology's easy edges but that ceiling generalizes almost losslessly
             to the secret one, while rank 32/64 runs that score higher locally
             lose more in the public→secret gap — capacity that helps locally
-            can be overfitting to the public topology specifically.</em></li>
-          <li id="idea-2"><b>idea-2 · L2-SP at higher λ.</b> Keep weights close to
+            can be overfitting to the public topology specifically.</em></details></li>
+          <li id="idea-2"><details class="vr-fold"><summary><b>idea-2 · L2-SP at higher λ.</b><span class="vr-fold-verdict">runner-up family — L2-SP λ-curve mapped (2.5e-2 over-anchors, 1e-2 optimum, 5e-3 close); #143 0.6166, #163 0.6009 · <em>expand for the tick-by-tick log</em></span></summary> Keep weights close to
             the pretrained init; the gradient-direct L2-SP is already in the repo.
             <em>Status: first tested combined with full-param FT in PR #11 (10x
             L2-SP lambda + frozen embeddings + on-policy mixin, stacked on the
@@ -513,9 +528,9 @@
             confirmed frontier for this family; PR #129's held-out score
             remains the single highest-priority pending result in the fleet
             given how sharply this family's local numbers have inverted
-            before (#125 collapsed 0.514→0.014).</em></li>
-          <li id="idea-12"><b>idea-12 · Full-param MLP fine-tune, attention
-            frozen.</b> New idea, emerged from PR #90: fuse idea-2's
+            before (#125 collapsed 0.514→0.014).</em></details></li>
+          <li id="idea-12"><details class="vr-fold"><summary><b>idea-12 · Full-param MLP fine-tune, attention
+            frozen.</b><span class="vr-fold-verdict">WINNER — #140 held-out 0.6362; attention-only control (#154) proves crystallization needs the MLPs · <em>expand for the tick-by-tick log</em></span></summary> New idea, emerged from PR #90: fuse idea-2's
             init-anchoring with idea-10's module-targeting, but fine-tune the
             MLP weights directly (no LoRA) while freezing attention +
             embeddings, on the theory that attention carries the forced-choice
@@ -609,8 +624,8 @@
             only 0.330: the 600-step win is schedule-specific, not free to
             compose with every variant.) Held-out pods for #155/#157 started
             ~04:08-04:14Z; this is the single highest-priority pending result
-            in the fleet heading into wrap-up.</em></li>
-          <li id="idea-3"><b>idea-3 · General-data mixin / on-policy replay.</b>
+            in the fleet heading into wrap-up.</em></details></li>
+          <li id="idea-3"><details class="vr-fold"><summary><b>idea-3 · General-data mixin / on-policy replay.</b><span class="vr-fold-verdict">negative — replay/mixin pays a step-tax without shifting the frontier · <em>expand for the tick-by-tick log</em></span></summary>
             Interleave matching-game examples with general chat data (or the
             model's own on-policy completions) so the model doesn't collapse
             onto only task tokens. <em>Status: PR #4 mixed 30% on-policy
@@ -685,8 +700,8 @@
             every metric-shaped variant tried (#32's A/B-augmented set, #93's
             preference-heavy set), reinforcing that the anchor's job is
             breadth of general distribution, not topical similarity to the
-            eval.</em></li>
-          <li id="idea-4"><b>idea-4 · Early-stop at the crystallization knee.</b>
+            eval.</em></details></li>
+          <li id="idea-4"><details class="vr-fold"><summary><b>idea-4 · Early-stop at the crystallization knee.</b><span class="vr-fold-verdict">partially confirmed — the knee is real but moves across topologies (600 local ≠ 1000 held-out) · <em>expand for the tick-by-tick log</em></span></summary>
             Accuracy plateaus by ~step 1600 while decisiveness likely degrades
             monotonically — stop where the concept is in but the model is intact.
             <em>Status: first evidence in, and it's a negative result — PR #5
@@ -720,9 +735,9 @@
             <b>overall leaderboard #1 at 0.3742 held-out</b> — the biggest
             single jump yet, and it holds up much better public-to-secret
             than pure LoRA runs did (0.449 local → 0.3742 held-out, an ~83%
-            carry-through vs. ~50% for #2/#3/#4).</em></li>
-          <li id="idea-9"><b>idea-9 · Combine the two orthogonal held-out
-            levers.</b> Held-out scores show rank+steps buy test_acc but leave
+            carry-through vs. ~50% for #2/#3/#4).</em></details></li>
+          <li id="idea-9"><details class="vr-fold"><summary><b>idea-9 · Combine the two orthogonal held-out
+            levers.</b><span class="vr-fold-verdict">band draws — combining levers saturated inside the rank 96–112 plateau · <em>expand for the tick-by-tick log</em></span></summary> Held-out scores show rank+steps buy test_acc but leave
             retention low, while on-policy replay buys retention but starves
             test_acc — neither alone breaks held-out 0.24. <em>Status: new
             idea, PR #19 combines them — r64/1400 steps (PR #8 lineage) plus a
@@ -736,13 +751,13 @@
             combining the rank/steps and replay levers transfers to the
             secret topology better than either alone (#8's rank+steps-only
             scored 0.2336 held-out). Idea-3's PR #23 pushes this combo
-            further by raising the replay ratio to 0.3.</em></li>
-          <li id="idea-5"><b>idea-5 · KL-to-base regularization.</b> Penalize
+            further by raising the replay ratio to 0.3.</em></details></li>
+          <li id="idea-5"><details class="vr-fold"><summary><b>idea-5 · KL-to-base regularization.</b><span class="vr-fold-verdict">seeded; realized and scored as idea-11 · <em>expand for the tick-by-tick log</em></span></summary> Penalize
             output-distribution divergence from base on general prompts.
-            <em>Status: seeded.</em></li>
-          <li id="idea-6"><b>idea-6 · Gentler updates / layer-freezing.</b> Lower
-            LR, shorter schedule, or freeze lower layers. <em>Status: seeded.</em></li>
-          <li id="idea-7"><b>idea-7 · Muon optimizer (full-param).</b> Train
+            <em>Status: seeded.</em></details></li>
+          <li id="idea-6"><details class="vr-fold"><summary><b>idea-6 · Gentler updates / layer-freezing.</b><span class="vr-fold-verdict">subsumed — layer-freezing backfired (#122); the protective freeze is attention, not depth · <em>expand for the tick-by-tick log</em></span></summary> Lower
+            LR, shorter schedule, or freeze lower layers. <em>Status: seeded.</em></details></li>
+          <li id="idea-7"><details class="vr-fold"><summary><b>idea-7 · Muon optimizer (full-param).</b><span class="vr-fold-verdict">negative — Muon cooks retention even with rehearsal rescue (#77 0.3477) · <em>expand for the tick-by-tick log</em></span></summary> Train
             with Muon (Newton-Schulz-orthogonalized momentum updates on 2D
             weight matrices, AdamW on norms, embeddings frozen) instead of
             AdamW — geometry-aware steps might install the associations with
@@ -850,9 +865,9 @@
             per-unit-drift trade. This reframes every Muon result above as
             "same trade, different dial," which is exactly why KL+Muon's
             edge (idea-11) is about the anchor construction, not the
-            optimizer itself.</em></li>
-          <li id="idea-10"><b>idea-10 · Adapter module targeting as a footprint
-            lever.</b> New idea from PR #24: instead of shrinking the LoRA
+            optimizer itself.</em></details></li>
+          <li id="idea-10"><details class="vr-fold"><summary><b>idea-10 · Adapter module targeting as a footprint
+            lever.</b><span class="vr-fold-verdict">reframed — module *targeting* isn&#x27;t protective, the low-rank constraint is; fed into idea-12 · <em>expand for the tick-by-tick log</em></span></summary> New idea from PR #24: instead of shrinking the LoRA
             footprint by rank or magnitude, shrink it structurally by
             restricting which weight matrices the adapter touches (attention
             projections only vs. attention+MLP). <em>Status: PR #24 restricted
@@ -1011,8 +1026,8 @@
             0.5614 — another point in the noisy 64-112 plateau rather than a
             gain. PR #149 (rank 80, rehearsal 0.35, a final at-cap draw
             summarizing this line) scored local 0.503, held-out pending.
-            #78's 0.5614 stays this idea's held-out champion.</em></li>
-          <li id="idea-11"><b>idea-11 · KL-to-base anchor on held-out prompts.</b>
+            #78's 0.5614 stays this idea's held-out champion.</em></details></li>
+          <li id="idea-11"><details class="vr-fold"><summary><b>idea-11 · KL-to-base anchor on held-out prompts.</b><span class="vr-fold-verdict">KL-to-base anchor family plateaus below L2-SP; best #85 0.5626 (flagged anomaly), format-matched anchors backfire to 0 · <em>expand for the tick-by-tick log</em></span></summary>
             Penalize output-distribution divergence from the base model on
             general (non-training) prompts, computed per-step as a gradient
             term rather than via rehearsal examples — the direct
@@ -1099,10 +1114,123 @@
             entirely. <b>Note:</b> #85's held-out 0.5626 is no longer
             overall #1 — idea-12's PR #140 (0.6362) and idea-2's PR #143
             (0.6166) both landed above it, and unlike #85, neither is
-            flagged as an anomaly.</em></li>
+            flagged as an anomaly.</em></details></li>
         </ol>
 
-        <p>Results so far (public-topology / self-reported scores from PR
+        <h2><span class="vr-section-num">§2</span>Final held-out leaderboard — all 93 scored PRs</h2>
+
+        <p>One leaderboard, one sort key: the authoritative <b>held-out</b>
+        score posted by the eval pod on each PR (score = test_acc ×
+        decisiveness_retention on the secret topology). Local self-reports
+        are NOT shown here — the run's recurring lesson was that they
+        systematically over-estimate transfer.</p>
+
+        <div class="vr-table-wrap">
+        <table class="vr-table">
+          <thead>
+            <tr><th>#</th><th>PR</th><th>held-out score</th><th>test_acc</th><th>retention</th><th>method</th></tr>
+          </thead>
+          <tbody>
+            <tr class="vr-row-win"><td>1</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/140">#140</a></td><td>0.6362</td><td>0.6776</td><td>0.9388</td><td>Training only MLP blocks (freeze attention) is a Pareto win: test 0.82 AND retention 0.90 — score 0.73 (new best)</td></tr>
+            <tr><td>2</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/143">#143</a></td><td>0.6166</td><td>0.7083</td><td>0.8704</td><td>Full-param L2-SP 2e-2 + 1500 steps drifts more (ret 0.76, score 0.55): 1000 steps optimal — #129 (0.66) fully bracketed</td></tr>
+            <tr><td>3</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/163">#163</a></td><td>0.6009</td><td>0.7772</td><td>0.7731</td><td>MLP-only + halved L2-SP anchor (5e-3 vs 1e-2) at 1000 steps: is the anchor over-tight for free test-accuracy?</td></tr>
+            <tr><td>4</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/133">#133</a></td><td>0.5779</td><td>0.5990</td><td>0.9648</td><td>L2-SP curve peaks at 2e-2: L2-SP 2.5e-2 over-anchors (test 0.67, ret 0.95, score 0.63) — champion is #129 (0.66)</td></tr>
+            <tr><td>5</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/152">#152</a></td><td>0.5730</td><td>0.7396</td><td>0.7747</td><td>Frozen-attention + strong L2-SP anchor (2e-2): a hotter LR (1.3e-4) makes BOTH test and decisiveness worse</td></tr>
+            <tr><td>6</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/151">#151</a></td><td>0.5666</td><td>0.6104</td><td>0.9284</td><td>MLP-only + L2-SP 2e-2: the all-parameter L2-SP optimum does NOT transfer to MLP-only training — 2e-2 over-anchors (retention flat, test drops)</td></tr>
+            <tr><td>7</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/85">#85</a></td><td>0.5626</td><td>0.5729</td><td>0.9821</td><td>KL+AdamW lr6e-4: retention cliff to 0.03 — the KL anchor has an LR breaking point; lr4e-4 (0.62) sits right at the edge (score 0.02)</td></tr>
+            <tr><td>8</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/78">#78</a></td><td>0.5614</td><td>0.5769</td><td>0.9732</td><td>Rank 96 at the aggressive LR tips decisiveness below base: rank 64 is the capacity ceiling for lr 3e-4 (score 0.478)</td></tr>
+            <tr><td>9</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/169">#169</a></td><td>0.5545</td><td>0.6556</td><td>0.8457</td><td>MLP-only at 800 steps: measuring the held-out step-count rising edge between 600 and 1000</td></tr>
+            <tr><td>10</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/165">#165</a></td><td>0.5545</td><td>0.6556</td><td>0.8457</td><td>MLP-only at 800 steps: filling the held-out step-count curve between 600 (0.43) and 1000 (0.64)</td></tr>
+            <tr><td>11</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/99">#99</a></td><td>0.5545</td><td>0.6319</td><td>0.8775</td><td>Full-param L2-SP λ=1.5e-2 at 1000 steps confirms λ=1e-2 is optimal (score 0.62)</td></tr>
+            <tr><td>12</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/97">#97</a></td><td>0.5463</td><td>0.5463</td><td>1.0000</td><td>KL+AdamW lr4e-4 at 500 steps: score 0.56, retention 0.95 — more steps stays safe under the per-step KL anchor (unlike rehearsal), a held-out-friendly variant of the 0.62 winner</td></tr>
+            <tr><td>13</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/142">#142</a></td><td>0.5428</td><td>0.6022</td><td>0.9014</td><td>KL+AdamW-LoRA lr4.5e-4: the decisiveness-retention knee is AT lr4e-4 — the drop above it is steep, not graceful, so no midpoint LR sweet spot exists</td></tr>
+            <tr><td>14</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/150">#150</a></td><td>0.5412</td><td>0.6437</td><td>0.8407</td><td>MLP-only at 1500 steps confirms 1000 is optimal (retention 0.90→0.84, no test gain; score 0.62)</td></tr>
+            <tr><td>15</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/122">#122</a></td><td>0.5378</td><td>0.5919</td><td>0.9086</td><td>Freezing bottom transformer layers backfires (retention 0.88→0.64): concentrating perturbation hurts (score 0.45)</td></tr>
+            <tr><td>16</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/87">#87</a></td><td>0.5156</td><td>0.7552</td><td>0.6827</td><td>Stop full-param+L2-SP at task-convergence (1000 steps): retention 0.71→0.88 at ~same test — score 0.70 (new best)</td></tr>
+            <tr><td>17</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/170">#170</a></td><td>0.5092</td><td>0.6823</td><td>0.7463</td><td>MLP-only cool LR (8e-5) with compensating steps (1250): matched total learning, lower per-step drift</td></tr>
+            <tr><td>18</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/118">#118</a></td><td>0.5071</td><td>0.7035</td><td>0.7208</td><td>KL-to-base output anchoring (seed #3) doesn&#x27;t beat L2-SP+early-stop — closes seed #3 (score 0.57)</td></tr>
+            <tr><td>19</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/123">#123</a></td><td>0.5024</td><td>0.5271</td><td>0.9531</td><td>KL+AdamW-LoRA lr4e-4 at 600 steps: retention holds (0.98), crystallizes to test 0.62 — more steps stays safe under the per-step anchor</td></tr>
+            <tr><td>20</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/127">#127</a></td><td>0.4953</td><td>0.5640</td><td>0.8782</td><td>KL+AdamW-LoRA lr5e-4 at 600 steps: hotter-but-safe LR crystallizes to test 0.72 (local score 0.65) — crystallization gain beats the small retention cost</td></tr>
+            <tr><td>21</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/146">#146</a></td><td>0.4945</td><td>0.5677</td><td>0.8711</td><td>Frozen attention + L2-SP 2e-2 stack to retention 0.914 (test 0.73): structural + weight-space decisiveness anchors are complementary — new best 0.671</td></tr>
+            <tr><td>22</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/101">#101</a></td><td>0.4642</td><td>0.5065</td><td>0.9164</td><td>KL anchor batch size doesn&#x27;t matter (16 vs 8): score 0.544 — a 4th strong KL+AdamW lr4e-4 draw, pinning the method at a robust ~0.54 (range 0.44–0.62)</td></tr>
+            <tr><td>23</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/108">#108</a></td><td>0.4527</td><td>0.4896</td><td>0.9247</td><td>Freezing top-layer MLPs collapses crystallization (test 0.62-&gt;0.35): composition needs the full MLP stack — decouple by MODULE, not DEPTH</td></tr>
+            <tr><td>24</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/79">#79</a></td><td>0.4450</td><td>0.4629</td><td>0.9614</td><td>The anchored-AdamW ceiling was the rehearsal STEP-TAX: KL anchor + higher LR crystallizes to test 0.62 at retention 1.0 — score 0.62, beats the fleet leader (0.449)</td></tr>
+            <tr><td>25</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/120">#120</a></td><td>0.4440</td><td>0.6250</td><td>0.7104</td><td>Full-param + L2-SP + rehearsal double-anchors (test capped 0.46): the two anchors are substitutes, not complements</td></tr>
+            <tr><td>26</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/134">#134</a></td><td>0.4436</td><td>0.5143</td><td>0.8625</td><td>Effective-batch 32×500 (matched data) is worse; #87 is optimal on every axis swept (score 0.38)</td></tr>
+            <tr><td>27</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/91">#91</a></td><td>0.4428</td><td>0.5382</td><td>0.8229</td><td>Mapping the KL+AdamW safe-LR edge: lr5e-4 still safe (retention 0.965, score 0.503) — the cliff is between 5e-4 and 6e-4; lr4e-4 stays the best operating point</td></tr>
+            <tr><td>28</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/93">#93</a></td><td>0.4421</td><td>0.4492</td><td>0.9841</td><td>Preference-heavy rehearsal doesn&#x27;t strengthen the decisiveness anchor either: mixin content is not a productive lever (score 0.424)</td></tr>
+            <tr><td>29</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/135">#135</a></td><td>0.4359</td><td>0.6386</td><td>0.6827</td><td>KL+AdamW-LoRA rank 64 at lr4e-4/600: extra adapter capacity is not a free lever — no crystallization gain, retention drops 0.98 to 0.95</td></tr>
+            <tr><td>30</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/167">#167</a></td><td>0.4295</td><td>0.6911</td><td>0.6215</td><td>MLP-only crystallization at a cooler learning rate (8e-5): LR sweep on the #140 winner</td></tr>
+            <tr><td>31</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/112">#112</a></td><td>0.4294</td><td>0.4814</td><td>0.8920</td><td>Rank 88 draw in the saturated MLP-only band: another point on the noisy plateau (local 0.477)</td></tr>
+            <tr><td>32</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/157">#157</a></td><td>0.4281</td><td>0.5495</td><td>0.7791</td><td>Best recipe: MLP-only training stopped at 600 steps — test 0.87 AND retention 0.95 (score 0.82)</td></tr>
+            <tr><td>33</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/155">#155</a></td><td>0.4281</td><td>0.5495</td><td>0.7791</td><td>MLP-only full-param at 600 steps (vs 1000): fewer steps is a Pareto lever — retention 0.895 to 0.946 with test held, local score 0.82 (beats leader #140&#x27;s 0.73)</td></tr>
+            <tr><td>34</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/106">#106</a></td><td>0.4268</td><td>0.4644</td><td>0.9190</td><td>Rank 104 confirms the rank 96-112 band is a noisy plateau, not a smooth peak (score 0.434)</td></tr>
+            <tr><td>35</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/115">#115</a></td><td>0.4257</td><td>0.5260</td><td>0.8092</td><td>Full-param MLP lr is optimal at 1e-4 (1.4e-4 cooks without test gain) — method fully bracketed, champions #90/#111</td></tr>
+            <tr><td>36</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/131">#131</a></td><td>0.4207</td><td>0.4912</td><td>0.8565</td><td>KL+AdamW-LoRA lr5e-4 at 300 steps: retention is set by learning rate, NOT step count (0.895 @ 300 = 0.904 @ 600) — early-stop does not recover decisiveness</td></tr>
+            <tr><td>37</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/90">#90</a></td><td>0.4087</td><td>0.4740</td><td>0.8622</td><td>Full-parameter MLP fine-tune with attention FROZEN breaks LoRA&#x27;s ceiling: test 0.615 at retention 0.79 (score 0.485, new best)</td></tr>
+            <tr><td>38</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/148">#148</a></td><td>0.3988</td><td>0.4462</td><td>0.8938</td><td>Rank 96 MLP-only, rehearsal 0.35: strong band draw (local 0.514)</td></tr>
+            <tr><td>39</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/159">#159</a></td><td>0.3982</td><td>0.6432</td><td>0.6191</td><td>MLP-only full-param at 400 steps: does NOT beat 600 — the step-count knee is ~600, not lower (400 under-crystallizes)</td></tr>
+            <tr><td>40</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/138">#138</a></td><td>0.3930</td><td>0.4245</td><td>0.9258</td><td>Strong KL anchor (lambda 4.0) at lr5e-4: retention is set by the learning rate, NOT anchor strength — quadrupling the anchor left retention at 0.90 and only blunted crystallization</td></tr>
+            <tr><td>41</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/154">#154</a></td><td>0.3809</td><td>0.3835</td><td>0.9933</td><td>Attention-only control: crystallization needs MLPs (test 0.37 vs 0.82); explains why MLP-only wins (score 0.36)</td></tr>
+            <tr><td>42</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/100">#100</a></td><td>0.3799</td><td>0.3799</td><td>1.0000</td><td>Aggressive MLP-only draw (rank 96 + lr 4e-4): held-out rewards the crystallization the local metric penalizes (local 0.452)</td></tr>
+            <tr><td>43</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/105">#105</a></td><td>0.3787</td><td>0.4635</td><td>0.8169</td><td>Longer rehearsal sequences don&#x27;t shift the frontier (retention flat, test drops) — #90 locked as champion</td></tr>
+            <tr><td>44</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/111">#111</a></td><td>0.3777</td><td>0.3958</td><td>0.9542</td><td>Full-param MLP + more steps lifts retention 0.79-&gt;0.93 (rehearsal anchor strengthens with steps) — held-out-favorable, new best 0.489</td></tr>
+            <tr><td>45</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/158">#158</a></td><td>0.3687</td><td>0.3894</td><td>0.9469</td><td>Rank 88 MLP-only, rehearsal 0.25: final band draw (local 0.358)</td></tr>
+            <tr><td>46</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/124">#124</a></td><td>0.3573</td><td>0.3659</td><td>0.9764</td><td>Rank 96 MLP-only, lighter rehearsal 0.25: high test accuracy near the cap (local 0.505)</td></tr>
+            <tr><td>47</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/141">#141</a></td><td>0.3566</td><td>0.3648</td><td>0.9776</td><td>Rank 72 MLP-only: at-cap band draw completing the capacity map (local 0.427)</td></tr>
+            <tr><td>48</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/137">#137</a></td><td>0.3558</td><td>0.4271</td><td>0.8332</td><td>Full-param + L2-SP 2e-2 + lower lr under-crystallizes (test 0.56): lr 1e-4 is needed — #129 (0.66) stays champion</td></tr>
+            <tr><td>49</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/121">#121</a></td><td>0.3549</td><td>0.4076</td><td>0.8707</td><td>Rank 80 MLP-only: strong at-cap draw in the winning band (local 0.548, retention 1.0)</td></tr>
+            <tr><td>50</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/80">#80</a></td><td>0.3541</td><td>0.3750</td><td>0.9442</td><td>MLP-only at rank 32 under-crystallizes (test 0.35): rank matters, and MLP-only makes rank 64 &#x27;free&#x27; by structurally protecting attention</td></tr>
+            <tr><td>51</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/82">#82</a></td><td>0.3540</td><td>0.3799</td><td>0.9317</td><td>Gentle-LR + heavy-anchor MLP-only corner is not safer: decisiveness still dips below base, lower test accuracy (score 0.425)</td></tr>
+            <tr><td>52</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/96">#96</a></td><td>0.3532</td><td>0.4852</td><td>0.7279</td><td>Higher LoRA dropout as a held-out transfer regularizer: holds local accuracy at the retention cap (score 0.484)</td></tr>
+            <tr><td>53</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/94">#94</a></td><td>0.3530</td><td>0.4635</td><td>0.7616</td><td>Full-param MLP + stronger L2-SP over-anchors (test 0.62-&gt;0.39): frontier favors MORE crystallization, not more retention</td></tr>
+            <tr><td>54</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/113">#113</a></td><td>0.3507</td><td>0.4531</td><td>0.7739</td><td>Full-param MLP steps curve peaks at 600 (800 drops to 0.448): champion is #111 (600 steps, retention 0.93)</td></tr>
+            <tr><td>55</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/162">#162</a></td><td>0.3500</td><td>0.6146</td><td>0.5695</td><td>MLP-only + broader training-phrasing coverage (10/12 templates): probing whether the held-out gap is surface-form or topological</td></tr>
+            <tr><td>56</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/110">#110</a></td><td>0.3490</td><td>0.3886</td><td>0.8981</td><td>Strongest band config + dropout regularizer: rank 112 MLP-only, lr 3e-4, dropout 0.1 — high local accuracy in the best held-out region (local 0.495)</td></tr>
+            <tr><td>57</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/77">#77</a></td><td>0.3477</td><td>0.3958</td><td>0.8783</td><td>Rehearsal rescues Muon&#x27;s retention (0.39-&gt;0.75) but still loses to AdamW-LoRA (0.36 vs 0.42) — Muon dominated both ways</td></tr>
+            <tr><td>58</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/149">#149</a></td><td>0.3439</td><td>0.3439</td><td>1.0000</td><td>Rank 80 MLP-only, rehearsal 0.35: final at-cap band draw + summary of the MLP-only crystallization line (local 0.503)</td></tr>
+            <tr><td>59</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/88">#88</a></td><td>0.3395</td><td>0.3937</td><td>0.8623</td><td>KL+AdamW lr4e-4 at 300 steps draws test 0.48 (vs #79&#x27;s 0.62) — retention stays high (0.91), crystallization is the variance; expected ~0.5+ with bounded downside</td></tr>
+            <tr><td>60</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/102">#102</a></td><td>0.3393</td><td>0.4375</td><td>0.7757</td><td>Full-param MLP L2-SP 2e-3: more retention margin isn&#x27;t needed — #90&#x27;s frozen-attention retention already transfers to held-out (0.86)</td></tr>
+            <tr><td>61</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/119">#119</a></td><td>0.3375</td><td>0.3534</td><td>0.9550</td><td>Full-rank MLP trades test-accuracy for decisiveness ~1:1 at any LR — LoRA&#x27;s low-rank constraint dominates the trade-off (score 0.315)</td></tr>
+            <tr><td>62</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/114">#114</a></td><td>0.3358</td><td>0.3534</td><td>0.9503</td><td>Rank 96 + lr 3.5e-4 MLP-only: at-cap draw in the strong held-out band (local 0.460)</td></tr>
+            <tr><td>63</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/103">#103</a></td><td>0.3356</td><td>0.3686</td><td>0.9104</td><td>Rank 112 MLP-only extends the held-out-best band: highest local test accuracy (0.539) at the retention cap</td></tr>
+            <tr><td>64</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/104">#104</a></td><td>0.3332</td><td>0.6050</td><td>0.5508</td><td>KL+AdamW lr8e-4: a held-out-targeted bet — public cooks but held-out rewards higher LR (per #85&#x27;s rank-1 0.5626); public crystallizes to test 0.73</td></tr>
+            <tr><td>65</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/161">#161</a></td><td>0.3316</td><td>0.8385</td><td>0.3954</td><td>Lighter L2-SP anchor (5e-3) hits highest test yet (0.865) but cooks decisiveness — lambda=1e-2 is a true peak</td></tr>
+            <tr><td>66</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/132">#132</a></td><td>0.3296</td><td>0.4606</td><td>0.7157</td><td>Rank 256 MLP-only bridges toward the full-rank ceiling: test-acc 0.570 but retention slips off the cap — completing the capacity continuum (local 0.537)</td></tr>
+            <tr><td>67</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/160">#160</a></td><td>0.3276</td><td>0.6357</td><td>0.5153</td><td>MLP-only at 500 steps is worse than 600 — ~600 is the MLP-only sweet spot (score 0.63)</td></tr>
+            <tr><td>68</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/128">#128</a></td><td>0.3247</td><td>0.7449</td><td>0.4358</td><td>Retention is sharply LR-sensitive: lr1.3e-4 over-drifts (retention 0.88→0.63); lr1e-4/1000 is a precise optimum (score 0.51)</td></tr>
+            <tr><td>69</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/130">#130</a></td><td>0.3235</td><td>0.4462</td><td>0.7249</td><td>Rank 112 + lr 4e-4 is over-aggressive: stacking high capacity and high LR falls out of the safe band (local 0.397)</td></tr>
+            <tr><td>70</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/84">#84</a></td><td>0.3218</td><td>0.3439</td><td>0.9358</td><td>More steps hurt MLP-only too: 600 steps drops test accuracy and nicks decisiveness — 400 steps is the knee for this footprint (score 0.339)</td></tr>
+            <tr><td>71</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/98">#98</a></td><td>0.3190</td><td>0.3906</td><td>0.8167</td><td>Full-param MLP rehearsal 0.4 is a noisy low draw (retention fell despite more rehearsal) — confirms #90 as the peak</td></tr>
+            <tr><td>72</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/117">#117</a></td><td>0.3185</td><td>0.4115</td><td>0.7740</td><td>Freezing MLP down_proj doesn&#x27;t shift the frontier (test 0.44 at ret 0.92): composition needs the residual-writer — #111 stays champion</td></tr>
+            <tr><td>73</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/83">#83</a></td><td>0.3072</td><td>0.3490</td><td>0.8804</td><td>MLP-only + more steps overfits and cooks too: early-stop (400) is optimal for MLP-only, not just all-modules</td></tr>
+            <tr><td>74</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/173">#173</a></td><td>0.2882</td><td>0.2966</td><td>0.9716</td><td>LoRA-MLP rank 96 with both decisiveness levers stacked (lr 2.5e-4 + rehearsal 0.4): maximally anchor decisiveness at the rewarded capacity</td></tr>
+            <tr><td>75</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/153">#153</a></td><td>0.2846</td><td>0.2966</td><td>0.9595</td><td>Rank 112 MLP-only, rehearsal 0.35: strong final band draw (local 0.532)</td></tr>
+            <tr><td>76</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/89">#89</a></td><td>0.2827</td><td>0.3023</td><td>0.9354</td><td>A larger, more diverse rehearsal set does not help: mixin CONTENT (preference-shaped) matters more than size for anchoring decisiveness (score 0.418)</td></tr>
+            <tr><td>77</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/126">#126</a></td><td>0.2690</td><td>0.3174</td><td>0.8475</td><td>Rank 96 MLP-only, gentler lr 2.5e-4: at-cap draw with lower test accuracy (local 0.447)</td></tr>
+            <tr><td>78</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/145">#145</a></td><td>0.2664</td><td>0.3299</td><td>0.8073</td><td>Adding rehearsal to the full-param + L2-SP winner over-constrains it: the two anchors don&#x27;t stack (score 0.220)</td></tr>
+            <tr><td>79</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/107">#107</a></td><td>0.2655</td><td>0.3296</td><td>0.8056</td><td>On-policy mixin hurts full-param too (dilutes crystallization) — closes the data-mixin branch of seed #3 (score 0.37)</td></tr>
+            <tr><td>80</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/156">#156</a></td><td>0.2611</td><td>0.6557</td><td>0.3982</td><td>Correcting my #136 near-miss: removing rehearsal fixes crystallization (test 0.32-&gt;0.58), but the freeze-attn+MLP+L2-SP winner needs the full 1000-step schedule for retention (score 0.330)</td></tr>
+            <tr><td>81</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/144">#144</a></td><td>0.2585</td><td>0.8074</td><td>0.3202</td><td>MLP-only at higher LR (2e-4) is worse — lr1e-4 sweet spot holds even with attention frozen (score 0.61)</td></tr>
+            <tr><td>82</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/136">#136</a></td><td>0.2512</td><td>0.3742</td><td>0.6713</td><td>L2-SP cannot rescue full-rank MLP either: it slides along the same test-vs-retention continuum — the low-rank constraint is uniquely effective (score 0.272)</td></tr>
+            <tr><td>83</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/86">#86</a></td><td>0.2432</td><td>0.2969</td><td>0.8192</td><td>MLP-only + rehearsal, robustly measured: retention 0.98 near cap (test 0.40) — structural decisiveness protection for the held-out cook</td></tr>
+            <tr><td>84</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/139">#139</a></td><td>0.2344</td><td>0.4076</td><td>0.5751</td><td>Rank 192 MLP-only is already off the retention cap: the at-cap capacity ceiling is ~rank 112 (local 0.366)</td></tr>
+            <tr><td>85</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/171">#171</a></td><td>0.2331</td><td>0.7412</td><td>0.3145</td><td>MLP-only at 1200 steps: mapping the held-out falling edge between the 1000 peak and 1500</td></tr>
+            <tr><td>86</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/95">#95</a></td><td>0.2247</td><td>0.4844</td><td>0.4639</td><td>Full-param MLP frontier peaks in the middle: pushing test to 0.71 drops retention to 0.55 — #90&#x27;s balance (0.485) is the optimum</td></tr>
+            <tr><td>87</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/92">#92</a></td><td>0.1977</td><td>0.8167</td><td>0.2420</td><td>Steps sweep has an interior optimum at ~1000: full-param+L2-SP at 600 steps is worse on both axes (score 0.50)</td></tr>
+            <tr><td>88</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/81">#81</a></td><td>0.1831</td><td>0.8276</td><td>0.2212</td><td>Muon optimizer (seed #1) crystallizes but still cooks the model — it&#x27;s the prior, not the optimizer geometry (score 0.0)</td></tr>
+            <tr><td>89</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/116">#116</a></td><td>0.0203</td><td>0.6848</td><td>0.0296</td><td>Full-rank MLP crystallizes to test-acc 0.66 but freezing attention does NOT protect decisiveness at full rank — the low-rank constraint is LoRA&#x27;s real protection (score 0.319)</td></tr>
+            <tr><td>90</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/125">#125</a></td><td>0.0140</td><td>0.2934</td><td>0.0475</td><td>Full-param + L2-SP 1.5e-2 alone + 1000 steps: score 0.514 (test 0.68) — rehearsal-free long training is the winning family</td></tr>
+            <tr><td>91</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/147">#147</a></td><td>0.0000</td><td>0.5869</td><td>0.0000</td><td>Format-matching the KL anchor to the decisiveness task BACKFIRES: decisiveness collapses to 0 (the model answers by position, bridging the matching-game&#x27;s A/B reflex into the preference panel)</td></tr>
+            <tr><td>92</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/129">#129</a></td><td>0.0000</td><td>0.1615</td><td>0.0000</td><td>Full-param + L2-SP 2e-2 + 1000 steps: score 0.660 (test 0.79 AND retention 0.83) — stronger L2-SP improves BOTH factors</td></tr>
+            <tr><td>93</td><td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/109">#109</a></td><td>0.0000</td><td>0.2680</td><td>0.0000</td><td>Stabilizing higher-LR KL+AdamW (lr7e-4 + grad-clip + warmup) fixes the divergence: stable public crystallization 0.62-0.71 — a reliable higher-LR held-out bet</td></tr>
+          </tbody>
+        </table>
+        </div>
+
+        <details class="vr-fold vr-fold-block">
+        <summary><b>Historical: the mid-run running table.</b><span class="vr-fold-verdict">sorted by LOCAL self-reported score with tick-era annotations — superseded by the canonical held-out leaderboard above; kept verbatim for the record</span></summary>
+<p>Results so far (public-topology / self-reported scores from PR
         bodies unless marked "held-out", sorted best first; held-out scores
         post as an arch-eval comment on each PR once the async eval finishes):</p>
 
@@ -2212,8 +2340,9 @@
             </tr>
           </tbody>
         </table>
+        </details>
 
-        <h2><span class="vr-section-num">§2</span>What we learned</h2>
+        <h2><span class="vr-section-num">§3</span>What we learned</h2>
 
         <div class="vr-lab">
           <ol>
@@ -2316,7 +2445,7 @@
           cache-read / 78M cache-write ≈ $860) and the planner ran
           Sonnet&nbsp;5 (≈ $50). Total ≈ <b>$1.55k</b>; the agents out-cost
           the GPUs. (OpenAI judge calls for the decisiveness panels not
-          included — billed separately.) Last updated 2026-07-03 09:15 UTC.</p>
+          included — billed separately.) Last updated 2026-07-03 (readability pass: winner-first TL;DR, foldable idea logs, single canonical held-out leaderboard).</p>
         </div>
 
       </div>

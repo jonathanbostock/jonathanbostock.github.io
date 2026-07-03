@@ -320,3 +320,32 @@ html::after  { right: 3.75rem; }
   text-decoration-thickness: 1.5px;
   opacity: 0.75;
 }
+
+/* ── Collapsible folds (idea logs, historical tables) ─────────────────── */
+.vr-fold { margin: 0; }
+.vr-fold > summary {
+  cursor: pointer;
+  list-style: none;
+  position: relative;
+  padding-left: 1.15em;
+}
+.vr-fold > summary::-webkit-details-marker { display: none; }
+.vr-fold > summary::before {
+  content: "\25B8";           /* ▸ */
+  position: absolute;
+  left: 0;
+  top: 0.05em;
+  color: #1a6b06;             /* h2 green */
+  transition: transform 0.15s ease;
+}
+.vr-fold[open] > summary::before { transform: rotate(90deg); }
+.vr-fold > summary:hover { background: rgba(26, 107, 6, 0.06); }
+.vr-fold-verdict {
+  display: block;
+  font-size: 0.85em;
+  opacity: 0.78;
+  margin-top: 0.15em;
+  font-weight: 400;
+}
+.vr-fold-block { margin: 1.2em 0; }
+.vr-row-win td { font-weight: 650; }
