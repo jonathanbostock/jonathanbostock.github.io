@@ -84,6 +84,23 @@
         <a href="https://github.com/jonathanbostock/a-is-b-is-c/blob/arch/crystallize-no-cook/findings/crystallize-no-cook/blogpost.md">the
         full write-up</a> has the complete interpretation.</p>
 
+        <figure class="vr-fig breakout">
+          <img src="figs/score-frontier.png"
+               alt="Scatter of all 161 held-out eval events over the 16-hour run, with the running-best frontier drawn as an orange staircase climbing from #2 (0.17) through #9, #42–#58, #78, #85 and #133 to the winner #140 at 0.6362, marked with a gold star.">
+          <figcaption><b>The fleet's 16 hours, one dot per held-out score.</b>
+            The orange staircase is the running best: <b>#2</b> (first LoRA,
+            0.17) → <b>#3/#4/#7</b> (early LoRA tuning) → <b>#9</b>
+            (early-stop + rehearsal, 0.37) → <b>#42/#48/#55/#58</b> (the
+            mid-run LoRA capacity/LR climb to 0.46) → <b>#78</b> (rank 96,
+            0.56) → <b>#85</b> (KL-anchor, 0.5626 — the flagged anomaly) →
+            <b>#133</b> (L2-SP λ-curve, 0.578) → <b>#140</b> (MLP-only,
+            attention frozen: <b>0.6362</b>, gold star). Dots include re-runs
+            and scores on later-superseded commits (161 events total — the
+            final-head leaderboard in §2 sees 93); the dotted line is the 16-h
+            worker deadline, after which in-flight evals kept landing.
+            <a href="figs/score-frontier.pdf">PDF</a>.</figcaption>
+        </figure>
+
         <h2><span class="vr-section-num">§1</span>Top suggested ideas — final ranking</h2>
 
         <p>The central planner maintained this thread while the fleet ran,
