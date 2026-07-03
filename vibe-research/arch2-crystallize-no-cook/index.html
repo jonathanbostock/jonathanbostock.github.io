@@ -65,16 +65,36 @@
           <p><b>Ranked by current held-out evidence (best first):</b></p>
           <ol>
             <li><b>idea-12</b> — full-parameter MLP fine-tune with attention
-              frozen. <b>NEW overall leaderboard #1 this tick — PR #140's
-              held-out score landed at 0.6362</b> (test_acc/retention detail
-              below), unseating idea-2's PR #133 (0.5779, now #2) by a wide
-              margin and confirming last tick's flagged top-priority local
-              result (0.7315) as a genuine, real Pareto win rather than
-              another local/held-out inversion. See full idea-12 entry below
-              for the mechanistic read and PR #141/#144 bracketing.</li>
+              frozen. <b>Still overall #1 — PR #140's held-out score is
+              0.6362</b> (test_acc/retention detail below), the fleet's
+              genuine Pareto win. <b>New this tick:</b> PR #146 fused idea-12
+              with idea-2 — full-param MLP training, attention <em>and</em>
+              embeddings frozen, <em>plus</em> L2-SP 2e-2 on the trainable
+              MLP (stacking #90's structural anchor with #129's weight-space
+              anchor) — local score <b>0.671</b>, a new fleet-wide local-best
+              (retention 0.914, test 0.734), but held-out landed only
+              <b>0.4945</b> (mid-pack, below #140's 0.6362) — the two anchors
+              combine well locally but don't beat #140's plainer recipe on
+              the held-out topology. PR #150 extended #140 to 1500 steps —
+              retention slips 0.90→0.84 with no test gain, local score 0.62,
+              confirming 1000 steps is #140's optimum too (mirrors #143's
+              idea-2 finding); held-out pending. See full idea-12 entry below
+              for the mechanistic read and PR #141/#144/#146/#150
+              bracketing.</li>
+            <li><b>idea-2</b> — L2-SP shrinkage prior, stacked on full-param
+              FT. <b>NEW family-best and NEW overall #2 this tick: PR #143's
+              held-out score landed at 0.6166</b>, beating the family's prior
+              held-out leader #133 (0.5779) even though #143 scored worse
+              locally (0.548, steps 1000→1500 hurt both axes) — another
+              local/held-out inversion. The family is now fully bracketed on
+              λ, lr, and steps; #129 (λ=2e-2, 1000 steps, local fleet-wide-best
+              0.660) remains the single highest-priority pending held-out
+              result in the fleet — if it carries through even 90% of local
+              it would contest #140 for overall #1. See full entry below for
+              the λ/lr/steps bracket and PR #146's idea-12 hybrid.</li>
             <li><b>idea-11</b> — KL-to-base anchor on held-out prompts (new
               idea, emerged from PR #60). <b>Now overall #3 (behind idea-12's
-              new #1 and idea-2's #2) — #85 still flagged as an anomaly, not a
+              #1 and idea-2's #2) — #85 still flagged as an anomaly, not a
               design win:</b> PR #76
               (reproduction of #63's KL+Muon on a fresh draw, local
               only 0.4178) landed held-out at <b>0.5031</b> — test_acc 0.628 ×
@@ -171,10 +191,20 @@
               above either: the retention/crystallization knee sits sharply
               AT lr4e-4, not on a smooth curve, so no midpoint sweet spot
               exists — #97's lr4e-4 stays this family's trustworthy
-              champion.</li>
+              champion. <b>New — striking negative, closes a sub-branch:</b>
+              PR #147 tried a "format-matched" anchor (KL to base on
+              forced-choice-style prompts instead of generic prose,
+              hypothesizing it would protect decisiveness more directly) —
+              backfires completely, held-out <b>0.0000</b>: the model starts
+              answering the general preference panel by position (always "A")
+              rather than by preference, i.e. the format-matched anchor
+              taught the matching-game's A/B reflex to bleed into the
+              decisiveness probe itself. Generic-prose KL anchoring (#97) is
+              confirmed the safer design; task-shaped anchors risk teaching
+              the wrong invariant.</li>
             <li><b>idea-10</b> — adapter module targeting (footprint lever).
               #4 on trustworthy evidence (behind idea-12's #140, idea-2's
-              #133, and #85's flagged anomaly): PR #78
+              #143, and #85's flagged anomaly): PR #78
               (rank 96 at the aggressive lr 3e-4, testing whether capacity
               can be pushed past #58's rank 64) held-out <b>0.5614</b> —
               decisiveness landed <em>above</em> base (0.715 vs 0.735 ⇒
@@ -262,7 +292,12 @@
               the full-rank ceiling — test_acc reaches 0.570 but retention
               slips off the cap (local 0.537), completing the capacity
               continuum from r32 through full-rank: the 64-112 band remains
-              the practical operating range.</li>
+              the practical operating range. <b>New:</b> PR #148 (rank 96,
+              rehearsal 0.35 vs #78's 0.3, a slightly heavier anchor) held-out
+              <b>0.3988</b> — below #78's 0.5614, another point inside the
+              noisy 64-112 rank/rehearsal plateau rather than a new lever. PR
+              #149 (rank 80, rehearsal 0.35, a closing summary draw for this
+              line) scored local 0.503, held-out pending.</li>
             <li><b>idea-2</b> — L2-SP shrinkage prior, stacked on full-param
               FT. <b>Now overall #2 (unseated this tick by idea-12's PR #140,
               0.6362) — but still a trustworthy result, not an anomaly:</b>
@@ -373,14 +408,30 @@
               anywhere near its local edge over #133, it would put it in
               contention behind idea-12's new #140 leader. <b>New — closes
               the steps axis:</b> PR #143 extended #129's 1000 steps to 1500
-              — more steps hurt (retention 0.834→0.762, test 0.792→0.719,
-              local score 0.548), confirming 1000 steps is the champion's
-              interior optimum, not an endpoint. The family is now fully
-              bracketed on every axis (λ: 1.5e-2/2e-2/2.5e-2 → 0.514/0.660/
-              0.633 local; lr: 7e-5/1e-4 → 0.461/0.660; steps: 1000/1500 →
-              0.660/0.548), with #129 (λ=2e-2, 1000 steps) the settled local
-              champion and its held-out score the fleet's top remaining
-              pending result in this family.</li>
+              — more steps hurt locally (retention 0.834→0.762, test
+              0.792→0.719, local score 0.548), confirming 1000 steps is the
+              champion's interior optimum, not an endpoint. The family is now
+              fully bracketed on every axis (λ: 1.5e-2/2e-2/2.5e-2 →
+              0.514/0.660/0.633 local; lr: 7e-5/1e-4 → 0.461/0.660; steps:
+              1000/1500 → 0.660/0.548), with #129 (λ=2e-2, 1000 steps) the
+              settled local champion and its held-out score the fleet's top
+              remaining pending result in this family. <b>CONFIRMED this
+              tick — #143's held-out score landed at 0.6166, a NEW overall
+              #2</b> (behind idea-12's #140, 0.6362), beating #133's own
+              held-out (0.5779) despite scoring worse on every local axis —
+              the sharpest local/held-out inversion in this family yet, and
+              a reminder that #129 (still pending, local 0.660, the actual
+              local champion) could go either direction on the held-out
+              topology. <b>New — idea-12 hybrid:</b> PR #146 stacked
+              idea-12's structural anchor (frozen attention) onto this
+              family's L2-SP 2e-2 champion — the two anchors proved
+              complementary locally: retention rose 0.834→0.914 for only a
+              small test cost (0.792→0.734), a new fleet-wide local-best
+              score of <b>0.671</b>. Held-out landed at <b>0.4945</b> —
+              solidly mid-pack but below both #143 (0.6166) and #140
+              (0.6362), so the hybrid's local gain didn't translate; the
+              plainer single-anchor recipes still win on the held-out
+              topology.</li>
             <li><b>idea-12</b> — full-parameter MLP fine-tune with attention
               frozen (new idea, emerged from PR #90 — fuses idea-2's anchoring
               with idea-10's module-targeting, but on full weights, no adapter).
@@ -455,7 +506,19 @@
               remains the sweet spot even with attention frozen. #140/#87's
               recipe (MLP-only, freeze attention, L2-SP 1e-2, lr 1e-4, 1000
               steps) is now the fleet's best-understood and best-scoring
-              design, on both public and held-out metrics.</li>
+              design, on both public and held-out metrics. <b>New — idea-2
+              hybrid, held-out landed:</b> PR #146 stacked #140's frozen
+              attention onto idea-2's L2-SP 2e-2 champion (#129) — local
+              score <b>0.671</b>, a new fleet-wide local-best (retention
+              0.914, test 0.734, beating both #129's 0.660 and #90's 0.485
+              alone) — but held-out came back at only <b>0.4945</b>, below
+              both #140 (0.6362) and #143 (0.6166): the anchors compose well
+              locally but the plainer single-anchor recipes still win on the
+              held-out topology. <b>New:</b> PR #150 pushed #140 to 1500
+              steps — retention slips 0.90→0.84 with no test gain, local
+              score 0.62, confirming 1000 steps is #140's optimum too (the
+              same interior-peak shape idea-2's #143 found), held-out
+              pending.</li>
             <li><b>idea-4</b> — early-stop + on-policy rehearsal combo. Best:
               PR #9, held-out <b>0.3742</b> (#5 overall). PR #49 reran #9's
               exact recipe on a fresh draw — retention reproduced almost
@@ -1285,7 +1348,13 @@
             operating range.] <b>New this tick:</b> PR #139 draws rank 192
             (between #132's 256 and the 64-112 band) — already off the
             retention cap (local 0.366), confirming the capacity ceiling
-            found earlier sits at ~rank 112, not further out.</em></li>
+            found earlier sits at ~rank 112, not further out. <b>New —
+            closing draws in the winning band:</b> PR #148 (rank 96,
+            rehearsal 0.35 vs #78's 0.3) held-out <b>0.3988</b>, below #78's
+            0.5614 — another point in the noisy 64-112 plateau rather than a
+            gain. PR #149 (rank 80, rehearsal 0.35, a final at-cap draw
+            summarizing this line) scored local 0.503, held-out pending.
+            #78's 0.5614 stays this idea's held-out champion.</em></li>
           <li id="idea-11"><b>idea-11 · KL-to-base anchor on held-out prompts.</b>
             Penalize output-distribution divergence from the base model on
             general (non-training) prompts, computed per-step as a gradient
@@ -1360,9 +1429,20 @@
             gentler anchors, just blunting crystallization further:
             <b>retention in this family is set by LR, not anchor
             strength</b>, extending #131's step-count finding to the anchor
-            weight too. <b>Note:</b> #85's held-out 0.5626 is no longer
-            overall #1 — idea-2's PR #133 landed 0.5779 this tick (see
-            idea-2), and unlike #85, #133 is not flagged as an anomaly.</em></li>
+            weight too. <b>New — striking negative:</b> PR #147 tested
+            whether "format-matching" the KL anchor's prompts to the
+            forced-choice decisiveness-panel format (instead of generic
+            prose) would protect decisiveness more directly — it backfires
+            completely, held-out <b>0.0000</b>: the model starts answering
+            the general preference panel by position ("always A") rather
+            than by preference, i.e. the anchor taught the matching-game's
+            A/B-selection reflex to leak into the decisiveness probe itself.
+            Generic-prose KL anchoring (#97, 0.5463) remains the safe
+            design; task-shaped anchors risk installing the wrong invariant
+            entirely. <b>Note:</b> #85's held-out 0.5626 is no longer
+            overall #1 — idea-12's PR #140 (0.6362) and idea-2's PR #143
+            (0.6166) both landed above it, and unlike #85, neither is
+            flagged as an anomaly.</em></li>
         </ol>
 
         <p>Results so far (public-topology / self-reported scores from PR
@@ -1379,7 +1459,7 @@
               <td>Full-param + L2-SP λ 2.5e-2 (#129 lineage, bracketing its peak)</td>
               <td>0.667</td>
               <td>0.949</td>
-              <td>0.633 (local, over-anchored) / <b>0.5779 (held-out) — #2 (unseated by #140), trustworthy (not an anomaly, see idea-2)</b></td>
+              <td>0.633 (local, over-anchored) / <b>0.5779 (held-out) — #3 (unseated by #140 then #143), trustworthy (not an anomaly, see idea-2)</b></td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/85">#85</a></td>
@@ -2296,7 +2376,7 @@
               <td>Full-param + L2-SP λ 2e-2 (idea-2, #129 lineage), steps 1000→1500</td>
               <td>0.719</td>
               <td>0.762</td>
-              <td>0.548 (local), held-out pending — more steps hurt, closes the steps axis: #129's 1000 steps stays the interior optimum</td>
+              <td>0.548 (local) / <b>0.6166 (held-out) — NEW overall #2</b>, beats #133's own held-out (0.5779) despite scoring worse on every local axis</td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/144">#144</a></td>
@@ -2312,6 +2392,41 @@
               <td>—</td>
               <td>0.220 (local), held-out pending — the two anchors don't stack, over-constrains the champion recipe</td>
             </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/146">#146</a></td>
+              <td>Frozen attention + L2-SP 2e-2 stacked (idea-12 × idea-2 hybrid, #90 + #129)</td>
+              <td>0.734</td>
+              <td>0.914</td>
+              <td>0.671 (local, new fleet-wide local-best) / <b>0.4945 (held-out)</b> — mid-pack, below both #140 (0.6362) and #143 (0.6166); the hybrid's local gain didn't transfer</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/147">#147</a></td>
+              <td>Format-matched KL anchor (idea-11, forced-choice-style prompts instead of generic prose)</td>
+              <td>—</td>
+              <td>0.00</td>
+              <td><b>0.0000 (held-out)</b> — backfires completely: model answers the preference panel by position, not preference; generic-prose anchoring (#97) confirmed safer</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/148">#148</a></td>
+              <td>MLP-only LoRA rank 96, rehearsal 0.35 (idea-10, #78 lineage)</td>
+              <td>—</td>
+              <td>—</td>
+              <td><b>0.3988 (held-out)</b> — below #78's 0.5614, another point in the noisy 64-112 rank/rehearsal plateau</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/149">#149</a></td>
+              <td>MLP-only LoRA rank 80, rehearsal 0.35 (idea-10, closing draw)</td>
+              <td>—</td>
+              <td>—</td>
+              <td>0.503 (local), held-out pending — final at-cap draw summarizing the MLP-only LoRA line</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/150">#150</a></td>
+              <td>MLP-only full-param, attention frozen (idea-12, #140 lineage), steps 1000→1500</td>
+              <td>—</td>
+              <td>0.84</td>
+              <td>0.62 (local), held-out pending — retention slips 0.90→0.84 with no test gain, confirms #140's 1000-step optimum</td>
+            </tr>
           </tbody>
         </table>
 
@@ -2320,47 +2435,48 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training
-          since launch (12:49 UTC), no restarts needed the entire run. 145
-          PRs open so far. <b>NEW overall leaderboard #1 this tick: PR #140</b>
-          (idea-12, MLP-only full-param, attention frozen, atop #87's L2-SP
-          recipe) scored <b>0.6362</b> held-out — a ~87% carry-through of its
-          local 0.7315, unseating idea-2's #133 (0.5779) by a wide margin and
-          confirming last tick's flagged headline as a genuine Pareto win
-          (test_acc <em>and</em> retention both beat #87), not a local/held-out
-          inversion like #85. Mechanistic read holds: matching-game
-          associations live in MLP key-value memories while attention carries
-          general/preference behavior, so MLP-only training installs the
-          concept while sparing decisiveness. One other NEW held-out score
-          landed: #142 (idea-11, KL+AdamW-LoRA lr 4.5e-4 midpoint probe)
-          scored <b>0.5428</b> (#7) — confirms the retention knee sits sharply
-          AT lr4e-4 (#97), not on a smooth curve, so no LR-midpoint sweet spot
-          exists. 3 other NEW open PRs this tick, all held-out pending, all
-          closing/narrowing branches: #141 (idea-10, MLP-only LoRA rank 72) —
-          local 0.427, completes the capacity map below #140's full-rank
-          result; #143 (idea-2, #129 lineage at 1500 steps) — local 0.548,
-          more steps hurt, closes the steps axis at #129's 1000-step optimum;
-          #144 (idea-12, #140 lineage at lr 2e-4) — local 0.61, worse than
-          #140, confirms lr 1e-4 sweet spot holds with attention frozen too;
-          #145 (idea-2, champion + rehearsal stacked) — local 0.220, the two
-          anchors don't stack, over-constrains the champion recipe. Top-15
-          leaderboard: #140 (0.6362, NEW #1), #133 (0.5779), #85 (0.5626,
-          flagged anomaly), #78 (0.5614), #99 (0.5545), #97 (0.5463), #142
-          (0.5428), #122 (0.5378), #87 (0.5156), #118 (0.5071), #76 (0.5031),
-          #123 (0.5024), #127 (0.4953), #101 (0.4642), #58 (0.4565). Pending
-          held-out (highest priority first): #129 (fleet-wide local-best
-          among scored families, 0.660, now fully axis-bracketed by #143),
-          #128, #130, #132, #131, #135, #136, #137, #138, #139, #141, #143,
-          #144, #145, #126, #119, #113, #110, #116, #117, #96, #53 (MLP-only
-          stacked-levers local-best 0.5238), #65 (local-best 0.529), #94,
-          #105, #107, #114, #115, #62, #63, #64, #66, #69, #70, #71, #73,
-          #75, #80, #82, #86, #88, #89, #92, #95, #47, #49-52, #54, #56,
-          #57, #6, #18, #5, #11; #46 still needs a respawn retry after a
-          failed eval-pod launch (not yet actioned — outside standing tick
-          scope). No stray eval pods to reap — heldout-pr143/144/145 all
-          started 02:51-03:10Z, well within the 4.5h window. Deadline ~100
-          min remaining as of this tick's 03:08Z check — approaching but not
-          yet at the 45-min wrap-up threshold. Last updated 2026-07-03 03:19
-          UTC.</p>
+          since launch (12:49 UTC), no restarts needed the entire run. 150
+          PRs open so far. Leaderboard #1 unchanged: PR #140 (idea-12,
+          MLP-only full-param, attention frozen) still holds <b>0.6362</b>.
+          <b>NEW overall #2 this tick: PR #143</b> (idea-2, #129 lineage
+          extended 1000→1500 steps) scored <b>0.6166</b> held-out, beating
+          #133's own held-out (0.5779, now #3) despite scoring worse on
+          every local axis (0.548 vs 0.633) — another sharp local/held-out
+          inversion. 3 other NEW held-out scores landed: #146 (idea-12 ×
+          idea-2 hybrid — frozen attention stacked onto the L2-SP 2e-2
+          champion) posted a new fleet-wide <em>local</em> best of 0.671
+          (retention 0.914, test 0.734) but held-out only <b>0.4945</b>,
+          mid-pack — the two anchors compose well locally but the plainer
+          single-anchor recipes still win held-out; #147 (idea-11,
+          format-matched KL anchor using forced-choice-style prompts instead
+          of generic prose) <b>backfired completely, held-out 0.0000</b> —
+          the model starts answering the general preference panel by
+          position instead of preference, confirming generic-prose anchoring
+          (#97) is the safer design; #148 (idea-10, MLP-only rank 96,
+          rehearsal 0.35) held-out <b>0.3988</b>, below #78's 0.5614, another
+          point in the noisy rank/rehearsal plateau. 2 other NEW open PRs,
+          held-out pending: #149 (idea-10, rank 80/rehearsal 0.35, closing
+          draw, local 0.503) and #150 (idea-12, #140 lineage at 1500 steps,
+          local 0.62, retention slips 0.90→0.84 with no test gain — mirrors
+          #143's steps finding, confirms 1000 steps is #140's optimum too).
+          Top-15 leaderboard: #140 (0.6362), #143 (0.6166, NEW #2), #133
+          (0.5779), #85 (0.5626, flagged anomaly), #78 (0.5614), #99
+          (0.5545), #97 (0.5463), #142 (0.5428), #122 (0.5378), #87 (0.5156),
+          #118 (0.5071), #76 (0.5031), #123 (0.5024), #127 (0.4953), #146
+          (0.4945). Pending held-out (highest priority first): #129
+          (fleet-wide local-best among scored families, 0.660, fully
+          axis-bracketed — could still contest #140 for overall #1), #149,
+          #150, #128, #130, #132, #131, #135, #136, #137, #138, #139, #126,
+          #119, #113, #110, #116, #117, #96, #53 (MLP-only stacked-levers
+          local-best 0.5238), #65 (local-best 0.529), #94, #105, #107, #114,
+          #115, #62, #63, #64, #66, #69, #70, #71, #73, #75, #80, #82, #86,
+          #88, #89, #92, #95, #47, #49-52, #54, #56, #57, #6, #18, #5, #11;
+          #46 still needs a respawn retry after a failed eval-pod launch
+          (not yet actioned — outside standing tick scope). No stray eval
+          pods to reap — heldout-pr149/pr150 running, started 03:37-03:38Z,
+          well within the 4.5h window. Deadline ~70 min remaining as of this
+          tick's 03:39Z check — approaching the 45-min wrap-up threshold,
+          watch closely next tick. Last updated 2026-07-03 03:44 UTC.</p>
         </div>
 
       </div>
