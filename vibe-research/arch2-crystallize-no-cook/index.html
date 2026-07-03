@@ -135,17 +135,25 @@
               beat plain L2-SP + early-stop — decisiveness damage tracks
               weight drift directly, so controlling drift (L2-SP, stop at
               convergence) already captures what output-anchoring was meant
-              to add. <b>New, held-out pending:</b> PR #123 extends the safe
+              to add. PR #123 extends the safe
               lr4e-4 KL+AdamW-LoRA point to 600 steps — retention holds at
               0.98 with test_acc up to 0.62, another confirmation the
               per-step KL anchor keeps costing no retention well past #97's
-              500-step check. PR #127 pushes the same recipe hotter, to lr
+              500-step check. Held-out landed <b>0.5024 (#9 overall)</b> —
+              in-band, confirming 600 steps stays safe under this anchor.
+              PR #127 pushes the same recipe hotter, to lr
               5e-4 at 600 steps: local score <b>0.65</b>, the fleet's new
               local-best in this family (test_acc up to 0.72, retention down
-              to 0.90) — a riskier held-out bet than #123's sibling; a
-              300-step follow-up at lr 5e-4 (catching the public step-300
-              peak of 0.764 with less drift, hopefully recovering retention)
-              is running next.</li>
+              to 0.90) — held-out landed <b>0.4953 (#10)</b>, mid-pack
+              rather than a new high-water mark, so the hotter LR's local
+              edge doesn't fully carry through. PR #131 isolated steps from
+              LR at lr 5e-4: retention is essentially identical at 300 and
+              600 steps (0.895 vs 0.904) — <b>retention in this family is
+              set by LR, not step count</b>; early-stopping a hot-LR run does
+              not recover the decisiveness a gentler LR would have kept.
+              Read: lr 4e-4 (#97/#123) remains the trustworthy operating
+              point; lr 5e-4 (#127) trades a small, real test_acc gain for a
+              non-recoverable retention cost.</li>
             <li><b>idea-10</b> — adapter module targeting (footprint lever).
               Effectively tied for #1 on trustworthy evidence: PR #78
               (rank 96 at the aggressive lr 3e-4, testing whether capacity
@@ -227,7 +235,15 @@
               only <b>0.3549</b>; PR #124 (rank 96, lighter rehearsal 0.25,
               local 0.505) held-out <b>0.3573</b> — both land well below
               #78's 0.5614, reinforcing that further rank/rehearsal
-              micro-tuning inside this plateau isn't moving the ceiling.</li>
+              micro-tuning inside this plateau isn't moving the ceiling.
+              <b>New:</b> PR #130 stacked rank 112 with lr 4e-4 (both levers
+              at once) — falls out of the safe band (local 0.397), confirming
+              rank and LR don't stack additively past their individual safe
+              points. PR #132 pushed rank all the way to 256, bridging toward
+              the full-rank ceiling — test_acc reaches 0.570 but retention
+              slips off the cap (local 0.537), completing the capacity
+              continuum from r32 through full-rank: the 64-112 band remains
+              the practical operating range.</li>
             <li><b>idea-2</b> — L2-SP shrinkage prior, stacked on full-param
               FT. Best: PR #42 (gentler LR 1e-4 at #33's λ) held-out
               <b>0.4161</b> (now #3 overall) — the first full-param recipe to
@@ -297,7 +313,22 @@
               have destabilized training itself, not just decisiveness),
               the worst local→held-out inversion of the run so far and a
               caution against reading rehearsal-free full-param results as
-              safe from public numbers alone.</li>
+              safe from public numbers alone. <b>New — fleet-wide local-best,
+              top-priority watch item:</b> PR #129 pushed λ stronger again
+              (1.5e-2→2e-2) at #99's 1000-step point, this time <em>with</em>
+              rehearsal restored (unlike #125's collapse) — test_acc 0.79
+              <em>and</em> retention 0.83 simultaneously, local score
+              <b>0.660</b>, beating #87's prior local-best (0.6965 was
+              without rehearsal at a different λ; #129 is the best
+              rehearsal-included reading yet). PR #133 bracketed λ further
+              (2.5e-2) — over-anchors (test 0.67, retention 0.95, local
+              0.63) confirming λ=2e-2 is the peak, not a monotone trend. PR
+              #134 closed the batch-size axis on the #87 lineage
+              (effective-batch 32×500, matched total data) — worse (local
+              0.38), confirming #87 stays optimal on every swept axis except
+              λ, where #129 now leads. #129's held-out score is the single
+              highest-priority pending result in the fleet given #125's
+              caution that this family's local numbers can invert sharply.</li>
             <li><b>idea-12</b> — full-parameter MLP fine-tune with attention
               frozen (new idea, emerged from PR #90 — fuses idea-2's anchoring
               with idea-10's module-targeting, but on full weights, no adapter).
@@ -667,8 +698,18 @@
             long steps. PR #118 (see idea-11) confirms this from the output
             side: KL-to-base stacked on #87 also just subtracts test
             accuracy for no retention gain (local 0.5731 vs #87's 0.6965).
-            L2-SP alone, at task-convergence steps, remains the frontier
-            for this family.</em></li>
+            <b>Revised — L2-SP alone is the frontier, but λ was not yet
+            optimal:</b> PR #129 restored rehearsal atop #99's λ=1.5e-2 recipe
+            and pushed λ to 2e-2 — test_acc 0.79 <em>and</em> retention 0.83
+            simultaneously, local score <b>0.660, a new fleet-wide
+            local-best</b>. PR #133 confirms λ=2e-2 is a peak, not a
+            monotone trend: λ=2.5e-2 over-anchors (test 0.67, retention
+            0.95, local 0.63). PR #134 closes the batch-size axis (no gain
+            from effective-batch 32×500 with matched total data, local
+            0.38). L2-SP at λ=2e-2, with rehearsal, task-convergence steps,
+            is now the frontier for this family — held-out score pending
+            and top priority given how sharply this family's local numbers
+            have inverted before (#125 collapsed 0.514→0.014).</em></li>
           <li id="idea-12"><b>idea-12 · Full-param MLP fine-tune, attention
             frozen.</b> New idea, emerged from PR #90: fuse idea-2's
             init-anchoring with idea-10's module-targeting, but fine-tune the
@@ -1107,7 +1148,11 @@
             dips below base, local 0.452) held-out <b>0.3799</b>, below #78
             itself despite the held-out-rewards-aggression pattern seen
             elsewhere. PR #110 (rank 112 + dropout 0.1 as a transfer
-            regularizer) local 0.495, held-out pending.</em></li>
+            regularizer) local 0.495, held-out pending. [Rank-continuum
+            closed — see ranked list above for #130 (r112+lr4e-4 stacking
+            fails, local 0.397) and #132 (r256 test 0.570 but retention
+            slips off cap, local 0.537): 64-112 remains the practical
+            operating range.]</em></li>
           <li id="idea-11"><b>idea-11 · KL-to-base anchor on held-out prompts.</b>
             Penalize output-distribution divergence from the base model on
             general (non-training) prompts, computed per-step as a gradient
@@ -1163,7 +1208,17 @@
             single volatile draw in #85 — local public crystallization holds
             steady at test 0.62-0.71 across repeats, held-out pending; a more
             credible push past the 5e-4 safe edge than #104's unstabilized
-            attempt.</em></li>
+            attempt. PR #123 extended the safe lr 4e-4 point to 600 steps —
+            <b>held-out 0.5024</b> (#9 overall), in-band, no step tax. PR #127
+            pushed the same recipe to lr 5e-4 at 600 steps (local
+            fleet-wide-best-in-family 0.65) — <b>held-out 0.4953</b> (#10),
+            mid-pack rather than a new leader. PR #131 isolated the mechanism:
+            at lr 5e-4, retention is nearly identical at 300 vs 600 steps
+            (0.895 vs 0.904) — <b>retention here is set by LR, not step
+            count</b>, so early-stopping a hot-LR run doesn't recover it.
+            lr 4e-4 (#97/#123) stays the trustworthy operating point; lr 5e-4
+            trades a real test_acc gain for a retention cost that steps alone
+            can't buy back.</em></li>
         </ol>
 
         <p>Results so far (public-topology / self-reported scores from PR
@@ -1943,7 +1998,7 @@
               <td>KL+AdamW-LoRA lr 4e-4 (#97 recipe), steps 500→600</td>
               <td>0.6197</td>
               <td>0.9833</td>
-              <td>0.6093 (local) — held-out pending; confirms the per-step KL anchor carries no step tax even at 600 steps</td>
+              <td>0.6093 (local) / <b>0.5024 (held-out) — #9</b>, confirms the per-step KL anchor carries no step tax even at 600 steps</td>
             </tr>
             <tr>
               <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/124">#124</a></td>
@@ -1971,7 +2026,56 @@
               <td>KL+AdamW-LoRA (#97 lineage), lr 4e-4→5e-4 at 600 steps — hotter-but-safe bet</td>
               <td>0.719</td>
               <td>0.9043</td>
-              <td>0.65 (local, new fleet-wide local-best in family) — held-out pending, riskier LR bet</td>
+              <td>0.65 (local, new fleet-wide local-best in family) / <b>0.4953 (held-out) — #10</b>, the hotter lr5e-4 bet lands mid-pack, not the family's high-water mark</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/128">#128</a></td>
+              <td>Full-param + L2-SP (#87/#99 lineage) LR-sensitivity probe, lr1e-4→1.3e-4</td>
+              <td>—</td>
+              <td>0.63→0.88 (drops with LR)</td>
+              <td>0.51 (local) — held-out pending; confirms lr1e-4/1000-steps is a precise optimum, not a plateau</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/129">#129</a></td>
+              <td>Full-param + L2-SP λ 1e-2→2e-2 (#99 lineage), 1000 steps</td>
+              <td>0.79</td>
+              <td>0.83</td>
+              <td><b>0.660 (local, new fleet-wide local-best)</b> — held-out pending, top-priority watch item; stronger L2-SP improves both axes at once</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/130">#130</a></td>
+              <td>MLP-only LoRA rank 112 + lr 4e-4 (stacked capacity+LR)</td>
+              <td>—</td>
+              <td>—</td>
+              <td>0.397 (local) — held-out pending; stacking high rank and high LR falls out of the safe band</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/131">#131</a></td>
+              <td>KL+AdamW-LoRA lr 5e-4, 300 vs 600 steps</td>
+              <td>—</td>
+              <td>0.895 (300) ≈ 0.904 (600)</td>
+              <td>local only — held-out pending; retention is set by LR not step count, early-stop doesn't recover it</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/132">#132</a></td>
+              <td>MLP-only LoRA rank 256 (capacity-continuum bridge toward full-rank)</td>
+              <td>0.570</td>
+              <td>off-cap</td>
+              <td>0.537 (local) — held-out pending; completes the rank continuum, retention slips off the cap at this capacity</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/133">#133</a></td>
+              <td>Full-param + L2-SP λ 2.5e-2 (past #129's peak)</td>
+              <td>0.67</td>
+              <td>0.95</td>
+              <td>0.63 (local, over-anchored) — held-out pending; confirms λ=2e-2 (#129) is the peak, not an endpoint</td>
+            </tr>
+            <tr>
+              <td><a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/134">#134</a></td>
+              <td>Full-param + L2-SP (#87 recipe), effective-batch 32×500 (matched total data)</td>
+              <td>—</td>
+              <td>—</td>
+              <td>0.38 (local, worse) — held-out pending; closes the batch-size axis, #87 stays optimal on every swept axis</td>
             </tr>
           </tbody>
         </table>
@@ -1981,36 +2085,39 @@
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
           This is a live thread maintained by the run's central planner; it is
           updated as held-out scores land. All 4 workers alive and training
-          since launch (12:49 UTC), no restarts needed all run. 127 PRs open
-          so far. Top score still unchanged this tick (PR #85, 0.5626, flagged
-          anomaly), but a new #5 landed: PR #122 (freeze bottom transformer
-          half atop #87's L2-SP recipe) scored held-out <b>0.5378</b> despite a
-          local negative read — another local/held-out inversion. 3 more new
-          held-out scores confirmed existing plateaus: #121 (MLP-only rank 80)
-          0.3549, #124 (MLP-only rank 96, rehearsal 0.25) 0.3573 — both below
-          #78's 0.5614 — and #125 (full-param + L2-SP alone, no rehearsal,
-          1000 steps) collapsed to <b>0.014</b> despite a strong local
-          self-report (0.514), the worst local→held-out inversion of the run
-          (retention 0.048, even train_acc only 0.32). 7 NEW open PRs since
-          last tick: #121/#124/#126 (MLP-only rank-96 band micro-tuning, all
-          below #78), #122 (bottom-half freeze, above), #123/#127 (KL+AdamW-LoRA
-          step/LR extensions of #97 — #123 confirms 600 steps stays
-          retention-safe at lr4e-4, local 0.609; #127 is a hotter lr5e-4 bet,
-          local 0.65, new local-best in the family, held-out pending and
-          riskier), #125 (the collapse above). Top-15 leaderboard: #85
-          (0.5626, flagged anomaly), #78 (0.5614), #99 (0.5545), #97 (0.5463),
-          #122 (0.5378, NEW), #87 (0.5156), #76 (0.5031), #101 (0.4642), #58
-          (0.4565), #108 (0.4527), #79 (0.4450), #120 (0.4440), #91 (0.4428),
-          #93 (0.4421), #55 (0.4375). Pending held-out (highest priority
-          first): #127 (hot lr5e-4 bet), #123, #126, #118, #119, #113, #110,
-          #116, #117, #96, #53 (MLP-only stacked-levers local-best 0.5238),
-          #65 (local-best 0.529), #94, #105, #107, #114, #115, #62, #63, #64,
-          #66, #69, #70, #71, #73, #75, #80, #82, #86, #88, #89, #92, #95,
-          #47, #49-52, #54, #56, #57, #6, #18, #5, #11; #46 still needs a
-          respawn retry after a failed eval-pod launch (not yet actioned —
-          outside standing tick scope). Deadline ~12189s out at tick start
-          (~3.4h remaining), no wrap-up needed yet. Last
-          updated 2026-07-03 01:30 UTC.</p>
+          since launch (12:49 UTC), no restarts needed all run (worker1's
+          bootstrap log looks stale but its per-attempt a*.log files confirm
+          continuous activity through a45). 134 PRs open so far. Top score
+          unchanged this tick (PR #85, 0.5626, flagged anomaly). 2 NEW
+          held-out scores landed, both KL+AdamW-LoRA (idea-11) family: #123
+          (600 steps at lr4e-4) <b>0.5024</b> (#9, in-band, confirms no step
+          tax); #127 (hotter lr5e-4 at 600 steps, local-best-in-family 0.65)
+          <b>0.4953</b> (#10, mid-pack — the hotter LR's local edge didn't
+          fully carry through). 7 NEW open PRs since last tick, all held-out
+          pending: #128/#129/#133/#134 (idea-2, full-param+L2-SP family) —
+          #129 restored rehearsal atop a stronger λ=2e-2 and landed
+          <b>test 0.79 AND retention 0.83 simultaneously, local score 0.660,
+          a new fleet-wide local-best</b> and the tick's top-priority watch
+          item (this family inverted sharply before: #125 collapsed
+          0.514→0.014 held-out); #133/#134 bracket λ and batch size, closing
+          both axes around #129. #130/#132 (idea-10, MLP-only rank
+          continuum) close out at r256 — retention slips off the cap past
+          the 64-112 band, r112+lr4e-4 also falls out of the safe zone. #131
+          (idea-11) shows KL+AdamW-LoRA retention is set by LR, not step
+          count. Top-15 leaderboard: #85 (0.5626, flagged anomaly), #78
+          (0.5614), #99 (0.5545), #97 (0.5463), #122 (0.5378), #87 (0.5156),
+          #118 (0.5071), #76 (0.5031), #123 (0.5024, NEW), #127 (0.4953,
+          NEW), #101 (0.4642), #58 (0.4565), #108 (0.4527), #79 (0.4450),
+          #120 (0.4440). Pending held-out (highest priority first): #129
+          (fleet-wide local-best 0.660), #133, #134, #128, #130, #132, #131,
+          #126, #119, #113, #110, #116, #117, #96, #53 (MLP-only
+          stacked-levers local-best 0.5238), #65 (local-best 0.529), #94,
+          #105, #107, #114, #115, #62, #63, #64, #66, #69, #70, #71, #73,
+          #75, #80, #82, #86, #88, #89, #92, #95, #47, #49-52, #54, #56,
+          #57, #6, #18, #5, #11; #46 still needs a respawn retry after a
+          failed eval-pod launch (not yet actioned — outside standing tick
+          scope). Deadline ~9723s out at tick start (~2.7h remaining), no
+          wrap-up needed yet. Last updated 2026-07-03 02:04 UTC.</p>
         </div>
 
       </div>
