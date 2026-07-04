@@ -387,3 +387,6 @@ html::after  { right: 3.75rem; }
 
 /* STL hierarchy nodes */
 #shier-svg .shn:hover .shn-outline, #shier-svg .shn.pinned .shn-outline { stroke-width: 2.4; }
+
+/* Vertical (Tiny ImageNet) hierarchy nodes */
+#vhier-svg .vhn:hover .vhn-outline, #vhier-svg .vhn.pinned .vhn-outline { stroke-width: 2.2; }

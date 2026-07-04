@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Where it washes out: influence functions on 200-class Tiny ImageNet — Vibe Research</title>
+    <link rel="stylesheet" href="../../../style.css">
+    <link rel="stylesheet" href="../../style.css?v=itip1">
+    <meta name="description" content="Scaling the BIF grooves study to 200-class Tiny ImageNet. The animate/inanimate abstraction still lives in the class-mean loss coupling (animals couple, anti-couple to non-animals; graded similarity tracks WordNet), but at 200 classes it drops below the threshold for unsupervised hard clustering.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Where it washes out: influence functions on 200-class Tiny ImageNet</h1>
+        <p class="vr-byline">
+          <span>2026-07-04</span>
+          <span>1× H100 · ~$12</span>
+          <span><a href="..">BIF experiments</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>The <a href="../cifar-vq/">CIFAR</a> and <a href="../stl-64/">STL-10</a> pieces found that
+        the loss-landscape grooves recover a coarse animate/inanimate split — cleanly, at ten
+        classes. This piece pushes to <b>Tiny ImageNet: 200 classes, 100k images, a real WordNet
+        taxonomy</b>, same 64px VQ-token recipe, and asks where the finding breaks. It breaks at the
+        clustering step, and interestingly <em>not</em> at the level of the underlying structure:</p>
+
+        <ul>
+          <li><b>Unsupervised hard clustering fails.</b> Recovering the six WordNet super-categories,
+          or even animal-vs-rest, is at chance (ARI ≈ 0.01) — no better than clustering the pixels.</li>
+          <li><b>But the abstraction is still in the grooves.</b> At the level of class-mean coupling,
+          animal classes positively couple with each other (+0.042), anti-couple with non-animals
+          (−0.035), and the graded class-similarity tracks WordNet distance (Spearman 0.08 over 20k
+          pairs, p ≪ 0.001). The signal persists; it just drops below the threshold a partitioning
+          algorithm needs.</li>
+          <li>The estimates are reproducible (ensemble r ≈ 0.93), so this is a real scale limit, not
+          sampling noise.</li>
+        </ul>
+
+        <p class="vr-pull">At 200 classes the animate/inanimate abstraction survives in the mean
+        loss-coupling — animals couple, and anti-couple to artifacts — but the per-example signal is
+        too weak, and "artifact" too heterogeneous, for unsupervised clustering to carve it out.</p>
+
+        <h2><span class="vr-section-num">§1</span>Setup</h2>
+
+        <p>Same pipeline as STL, scaled to 200 classes: a VQ-VAE (1024 codes) turns each 64×64 image
+        into a 16×16 = 256-code grid, and a token-AR transformer trains on the 100k training images
+        with labels ignored (class-agnostic generative training). BIF probes are 1,000 labelled
+        validation images, 5 per class across all 200. Super-categories are derived from each
+        class's WordNet id (animal / artifact / food / plant / structure / other).</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>data</dt><dd>Tiny ImageNet — 200 WordNet classes, 100k train (labels ignored), 10k val (probes)</dd>
+            <dt>tokeniser</dt><dd>VQ-VAE f=4, codebook 1024, 64×64 → 256 codes</dd>
+            <dt>model</dt><dd>d256 · 6 layers · 8 heads, 256 tokens, vocab 1024, tied embeddings</dd>
+            <dt>BIF</dt><dd>SGLD, 8 chains × 1,200 draws, per-checkpoint ε, two independent runs, block-centred; 1,000 probes across 200 classes</dd>
+            <dt>artefacts</dt><dd>arcadia-impact/small-abstraction-test-{logs, mnist-ar} on HF; VQ under <code>tin-vq/</code></dd>
+          </dl>
+        </div>
+
+        <figure class="vr-fig">
+          <img src="figs/vq_recon.png" alt="Tiny ImageNet originals and VQ reconstructions at 64px.">
+          <figcaption><b>Fig. 1</b> · VQ reconstructions (64px). 200-class Tiny ImageNet is far more
+          varied than CIFAR or STL; a 1024-code book at f=4 keeps scene gist but loses fine detail.</figcaption>
+        </figure>
+
+        <figure class="vr-fig">
+          <img src="figs/t1_rollouts.png" alt="Free samples from the 200-class model at epochs 5 and 30 — painterly textures and scenes, less object-coherent than STL.">
+          <figcaption><b>Fig. 2</b> · Free rollouts. With 200 heterogeneous classes and a lossy
+          tokeniser, samples are more texture-and-scene than clean objects.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§2</span>Clustering fails — but the signal is still there</h2>
+
+        <p>The headline pair of panels. Left: every unsupervised recovery of the semantic structure —
+        six-way super-category, two-way animal-vs-rest — sits at chance, indistinguishable from
+        clustering the raw pixels. Right: yet the class-mean BIF coupling is clearly structured —
+        animal–animal pairs couple positively, animal–non-animal pairs <em>anti</em>-couple, and
+        non-animal pairs sit in between. The abstraction is present in the averages; it is simply too
+        weak per-example to survive a hard partition of 1,000 points into groups.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/t2_signal.png" alt="Left: BIF 6-way, BIF animal, and pixel animal clustering all near ARI 0. Right: class-mean coupling animal-animal +0.042, other-other +0.017, animal-other -0.035.">
+          <figcaption><b>Fig. 3</b> · Left: hard clustering vs the semantic labels is at chance at
+          200 classes (same as pixels). Right: the class-mean loss coupling still carries the
+          animate/inanimate distinction — animals couple (+0.042) and anti-couple to non-animals
+          (−0.035). Graded class similarity tracks WordNet at Spearman 0.08 (p ≪ 0.001).</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§3</span>The hierarchy, top to bottom</h2>
+
+        <p>Because 200 classes need far more clusters than a left-to-right alluvial can show, here the
+        hierarchy runs <b>vertically</b> — k grows as you scroll down, from 2 at the top to 64 at the
+        bottom, nodes coloured by WordNet super-category. <b>Hover any node to see its member images;
+        click to pin, click away or Esc to dismiss.</b> The story is legible in the colours: at the
+        top there is no clean animal/artifact split (it's one artifact-dominated mass), but as k
+        grows, green animal clusters visibly coalesce out of the teal — the animate structure is
+        there, emerging only at fine granularity, never as a clean top-level cut. Hovering the green
+        nodes confirms they are genuinely animals; hovering the mixed nodes shows the heterogeneity
+        that defeats the clustering.</p>
+
+        <figure class="vr-fig breakout">
+          <!-- TVHIER_SVG_START -->
+<svg id="vhier-svg" viewBox="0 0 1040 1264" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Vertical interactive cluster hierarchy; hover a node for member images." font-family="sans-serif" data-sprite="figs/tin_hier_sprites.png" data-cols="32" data-cell="56">
+<rect width="1040" height="1264" fill="#fafcf2"/>
+<path d="M24.0,70.0 C24.0,155.0 24.0,155.0 24.0,240.0 L416.6,240.0 C416.6,155.0 421.4,155.0 421.4,70.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M421.4,70.0 C421.4,155.0 422.5,155.0 422.5,240.0 L492.7,240.0 C492.7,155.0 492.4,155.0 492.4,70.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M492.4,70.0 C492.4,155.0 498.6,155.0 498.6,240.0 L965.2,240.0 C965.2,155.0 964.7,155.0 964.7,70.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M964.7,70.0 C964.7,155.0 974.1,155.0 974.1,240.0 L975.1,240.0 C975.1,155.0 965.7,155.0 965.7,70.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M971.6,70.0 C971.6,155.0 965.2,155.0 965.2,240.0 L968.2,240.0 C968.2,155.0 974.6,155.0 974.6,70.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M974.6,70.0 C974.6,155.0 975.1,155.0 975.1,240.0 L1016.0,240.0 C1016.0,155.0 1016.0,155.0 1016.0,70.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M24.0,270.0 C24.0,355.0 24.0,355.0 24.0,440.0 L167.5,440.0 C167.5,355.0 171.1,355.0 171.1,270.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M171.1,270.0 C171.1,355.0 181.1,355.0 181.1,440.0 L337.9,440.0 C337.9,355.0 331.8,355.0 331.8,270.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M331.8,270.0 C331.8,355.0 439.1,355.0 439.1,440.0 L492.3,440.0 C492.3,355.0 386.4,355.0 386.4,270.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M386.4,270.0 C386.4,355.0 577.1,355.0 577.1,440.0 L604.7,440.0 C604.7,355.0 414.6,355.0 414.6,270.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M414.6,270.0 C414.6,355.0 796.0,355.0 796.0,440.0 L797.9,440.0 C797.9,355.0 416.6,355.0 416.6,270.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M422.5,270.0 C422.5,355.0 337.9,355.0 337.9,440.0 L343.6,440.0 C343.6,355.0 428.4,355.0 428.4,270.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M428.4,270.0 C428.4,355.0 375.2,355.0 375.2,440.0 L433.1,440.0 C433.1,355.0 487.8,355.0 487.8,270.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M487.8,270.0 C487.8,355.0 492.3,355.0 492.3,440.0 L494.2,440.0 C494.2,355.0 489.7,355.0 489.7,270.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M489.7,270.0 C489.7,355.0 604.7,355.0 604.7,440.0 L606.6,440.0 C606.6,355.0 491.7,355.0 491.7,270.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M491.7,270.0 C491.7,355.0 919.8,355.0 919.8,440.0 L920.7,440.0 C920.7,355.0 492.7,355.0 492.7,270.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M498.6,270.0 C498.6,355.0 167.5,355.0 167.5,440.0 L175.1,440.0 C175.1,355.0 506.4,355.0 506.4,270.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M506.4,270.0 C506.4,355.0 343.6,355.0 343.6,440.0 L368.3,440.0 C368.3,355.0 531.7,355.0 531.7,270.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M531.7,270.0 C531.7,355.0 494.2,355.0 494.2,440.0 L571.2,440.0 C571.2,355.0 610.6,355.0 610.6,270.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M610.6,270.0 C610.6,355.0 606.6,355.0 606.6,440.0 L789.1,440.0 C789.1,355.0 797.7,355.0 797.7,270.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M797.7,270.0 C797.7,355.0 797.9,355.0 797.9,440.0 L913.8,440.0 C913.8,355.0 916.5,355.0 916.5,270.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M916.5,270.0 C916.5,355.0 920.7,355.0 920.7,440.0 L971.1,440.0 C971.1,355.0 968.2,355.0 968.2,270.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M974.1,270.0 C974.1,355.0 368.3,355.0 368.3,440.0 L369.2,440.0 C369.2,355.0 975.1,355.0 975.1,270.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M975.1,270.0 C975.1,355.0 789.1,355.0 789.1,440.0 L790.0,440.0 C790.0,355.0 976.1,355.0 976.1,270.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M976.1,270.0 C976.1,355.0 971.1,355.0 971.1,440.0 L973.0,440.0 C973.0,355.0 978.0,355.0 978.0,270.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M978.0,270.0 C978.0,355.0 978.9,355.0 978.9,440.0 L1016.0,440.0 C1016.0,355.0 1016.0,355.0 1016.0,270.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M24.0,470.0 C24.0,555.0 24.0,555.0 24.0,640.0 L45.7,640.0 C45.7,555.0 46.8,555.0 46.8,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M46.8,470.0 C46.8,555.0 51.6,555.0 51.6,640.0 L113.0,640.0 C113.0,555.0 111.4,555.0 111.4,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M111.4,470.0 C111.4,555.0 122.6,555.0 122.6,640.0 L149.6,640.0 C149.6,555.0 139.9,555.0 139.9,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M139.9,470.0 C139.9,555.0 186.3,555.0 186.3,640.0 L189.9,640.0 C189.9,555.0 143.7,555.0 143.7,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M143.7,470.0 C143.7,555.0 265.4,555.0 265.4,640.0 L273.5,640.0 C273.5,555.0 152.3,555.0 152.3,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M152.3,470.0 C152.3,555.0 288.5,555.0 288.5,640.0 L289.4,640.0 C289.4,555.0 153.2,555.0 153.2,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M153.2,470.0 C153.2,555.0 464.8,555.0 464.8,640.0 L467.5,640.0 C467.5,555.0 156.1,555.0 156.1,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M156.1,470.0 C156.1,555.0 567.4,555.0 567.4,640.0 L584.5,640.0 C584.5,555.0 174.2,555.0 174.2,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M174.2,470.0 C174.2,555.0 699.7,555.0 699.7,640.0 L700.6,640.0 C700.6,555.0 175.1,555.0 175.1,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M181.1,470.0 C181.1,555.0 149.6,555.0 149.6,640.0 L174.0,640.0 C174.0,555.0 206.7,555.0 206.7,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M206.7,470.0 C206.7,555.0 189.9,555.0 189.9,640.0 L259.4,640.0 C259.4,555.0 279.9,555.0 279.9,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M279.9,470.0 C279.9,555.0 289.4,555.0 289.4,640.0 L325.5,640.0 C325.5,555.0 317.9,555.0 317.9,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M317.9,470.0 C317.9,555.0 435.4,555.0 435.4,640.0 L439.9,640.0 C439.9,555.0 322.7,555.0 322.7,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M322.7,470.0 C322.7,555.0 467.5,555.0 467.5,640.0 L480.2,640.0 C480.2,555.0 336.0,555.0 336.0,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M336.0,470.0 C336.0,555.0 584.5,555.0 584.5,640.0 L589.0,640.0 C589.0,555.0 340.7,555.0 340.7,470.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M340.7,470.0 C340.7,555.0 700.6,555.0 700.6,640.0 L717.8,640.0 C717.8,555.0 358.8,555.0 358.8,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M358.8,470.0 C358.8,555.0 746.3,555.0 746.3,640.0 L754.4,640.0 C754.4,555.0 367.3,555.0 367.3,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M367.3,470.0 C367.3,555.0 847.9,555.0 847.9,640.0 L848.8,640.0 C848.8,555.0 368.3,555.0 368.3,470.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M368.3,470.0 C368.3,555.0 927.0,555.0 927.0,640.0 L927.9,640.0 C927.9,555.0 369.2,555.0 369.2,470.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M375.2,470.0 C375.2,555.0 363.9,555.0 363.9,640.0 L384.7,640.0 C384.7,555.0 397.0,555.0 397.0,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M397.0,470.0 C397.0,555.0 391.5,555.0 391.5,640.0 L413.2,640.0 C413.2,555.0 419.8,555.0 419.8,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M419.8,470.0 C419.8,555.0 439.9,555.0 439.9,640.0 L450.8,640.0 C450.8,555.0 431.2,555.0 431.2,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M431.2,470.0 C431.2,555.0 717.8,555.0 717.8,640.0 L718.7,640.0 C718.7,555.0 432.2,555.0 432.2,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M432.2,470.0 C432.2,555.0 848.8,555.0 848.8,640.0 L849.7,640.0 C849.7,555.0 433.1,555.0 433.1,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M439.1,470.0 C439.1,555.0 273.5,555.0 273.5,640.0 L282.5,640.0 C282.5,555.0 448.6,555.0 448.6,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M448.6,470.0 C448.6,555.0 325.5,555.0 325.5,640.0 L346.2,640.0 C346.2,555.0 470.5,555.0 470.5,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M470.5,470.0 C470.5,555.0 413.2,555.0 413.2,640.0 L418.6,640.0 C418.6,555.0 476.2,555.0 476.2,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M476.2,470.0 C476.2,555.0 450.8,555.0 450.8,640.0 L453.5,640.0 C453.5,555.0 479.0,555.0 479.0,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M479.0,470.0 C479.0,555.0 480.2,555.0 480.2,640.0 L541.6,640.0 C541.6,555.0 543.6,555.0 543.6,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M543.6,470.0 C543.6,555.0 589.0,555.0 589.0,640.0 L610.7,640.0 C610.7,555.0 566.4,555.0 566.4,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M566.4,470.0 C566.4,555.0 849.7,555.0 849.7,640.0 L854.2,640.0 C854.2,555.0 571.2,555.0 571.2,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M577.1,470.0 C577.1,555.0 113.0,555.0 113.0,640.0 L116.6,640.0 C116.6,555.0 580.9,555.0 580.9,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M580.9,470.0 C580.9,555.0 174.0,555.0 174.0,640.0 L177.6,640.0 C177.6,555.0 584.7,555.0 584.7,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M584.7,470.0 C584.7,555.0 346.2,555.0 346.2,640.0 L357.1,640.0 C357.1,555.0 596.2,555.0 596.2,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M596.2,470.0 C596.2,555.0 418.6,555.0 418.6,640.0 L429.5,640.0 C429.5,555.0 607.6,555.0 607.6,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M607.6,470.0 C607.6,555.0 453.5,555.0 453.5,640.0 L454.4,640.0 C454.4,555.0 608.5,555.0 608.5,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M608.5,470.0 C608.5,555.0 541.6,555.0 541.6,640.0 L549.7,640.0 C549.7,555.0 617.1,555.0 617.1,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M617.1,470.0 C617.1,555.0 610.7,555.0 610.7,640.0 L690.1,640.0 C690.1,555.0 700.7,555.0 700.7,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M700.7,470.0 C700.7,555.0 718.7,555.0 718.7,640.0 L719.6,640.0 C719.6,555.0 701.6,555.0 701.6,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M701.6,470.0 C701.6,555.0 754.4,555.0 754.4,640.0 L833.8,640.0 C833.8,555.0 785.3,555.0 785.3,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M785.3,470.0 C785.3,555.0 854.2,555.0 854.2,640.0 L858.8,640.0 C858.8,555.0 790.0,555.0 790.0,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M796.0,470.0 C796.0,555.0 177.6,555.0 177.6,640.0 L179.4,640.0 C179.4,555.0 797.9,555.0 797.9,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M797.9,470.0 C797.9,555.0 357.1,555.0 357.1,640.0 L358.0,640.0 C358.0,555.0 798.8,555.0 798.8,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M798.8,470.0 C798.8,555.0 384.7,555.0 384.7,640.0 L385.6,640.0 C385.6,555.0 799.8,555.0 799.8,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M799.8,470.0 C799.8,555.0 454.4,555.0 454.4,640.0 L455.3,640.0 C455.3,555.0 800.7,555.0 800.7,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M800.7,470.0 C800.7,555.0 549.7,555.0 549.7,640.0 L560.5,640.0 C560.5,555.0 812.1,555.0 812.1,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M812.1,470.0 C812.1,555.0 690.1,555.0 690.1,640.0 L692.9,640.0 C692.9,555.0 815.0,555.0 815.0,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M815.0,470.0 C815.0,555.0 719.6,555.0 719.6,640.0 L740.3,640.0 C740.3,555.0 836.8,555.0 836.8,470.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M836.8,470.0 C836.8,555.0 833.8,555.0 833.8,640.0 L842.0,640.0 C842.0,555.0 845.4,555.0 845.4,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M845.4,470.0 C845.4,555.0 858.8,555.0 858.8,640.0 L921.0,640.0 C921.0,555.0 911.0,555.0 911.0,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M911.0,470.0 C911.0,555.0 927.9,555.0 927.9,640.0 L930.6,640.0 C930.6,555.0 913.8,555.0 913.8,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M919.8,470.0 C919.8,555.0 455.3,555.0 455.3,640.0 L458.9,640.0 C458.9,555.0 923.6,555.0 923.6,470.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M923.6,470.0 C923.6,555.0 560.5,555.0 560.5,640.0 L561.4,640.0 C561.4,555.0 924.5,555.0 924.5,470.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M924.5,470.0 C924.5,555.0 930.6,555.0 930.6,640.0 L976.6,640.0 C976.6,555.0 973.0,555.0 973.0,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M978.9,470.0 C978.9,555.0 179.4,555.0 179.4,640.0 L180.3,640.0 C180.3,555.0 979.9,555.0 979.9,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M979.9,470.0 C979.9,555.0 692.9,555.0 692.9,640.0 L693.8,640.0 C693.8,555.0 980.8,555.0 980.8,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M980.8,470.0 C980.8,555.0 982.6,555.0 982.6,640.0 L1016.0,640.0 C1016.0,555.0 1016.0,555.0 1016.0,470.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M24.0,670.0 C24.0,755.0 24.0,755.0 24.0,840.0 L36.1,840.0 C36.1,755.0 37.5,755.0 37.5,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M37.5,670.0 C37.5,755.0 105.6,755.0 105.6,840.0 L107.3,840.0 C107.3,755.0 39.3,755.0 39.3,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M39.3,670.0 C39.3,755.0 143.4,755.0 143.4,840.0 L144.2,840.0 C144.2,755.0 40.2,755.0 40.2,670.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M40.2,670.0 C40.2,755.0 188.4,755.0 188.4,840.0 L189.2,840.0 C189.2,755.0 41.2,755.0 41.2,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M41.2,670.0 C41.2,755.0 444.9,755.0 444.9,840.0 L448.9,840.0 C448.9,755.0 45.7,755.0 45.7,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M51.6,670.0 C51.6,755.0 42.1,755.0 42.1,840.0 L62.3,840.0 C62.3,755.0 74.2,755.0 74.2,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M74.2,670.0 C74.2,755.0 107.3,755.0 107.3,840.0 L112.1,840.0 C112.1,755.0 79.6,755.0 79.6,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M79.6,670.0 C79.6,755.0 144.2,755.0 144.2,840.0 L145.8,840.0 C145.8,755.0 81.4,755.0 81.4,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M81.4,670.0 C81.4,755.0 225.8,755.0 225.8,840.0 L249.3,840.0 C249.3,755.0 107.6,755.0 107.6,670.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M107.6,670.0 C107.6,755.0 375.9,755.0 375.9,840.0 L376.7,840.0 C376.7,755.0 108.5,755.0 108.5,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M108.5,670.0 C108.5,755.0 448.9,755.0 448.9,840.0 L453.7,840.0 C453.7,755.0 113.9,755.0 113.9,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M113.9,670.0 C113.9,755.0 645.9,755.0 645.9,840.0 L646.7,840.0 C646.7,755.0 114.8,755.0 114.8,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M114.8,670.0 C114.8,755.0 760.7,755.0 760.7,840.0 L761.5,840.0 C761.5,755.0 115.7,755.0 115.7,670.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M115.7,670.0 C115.7,755.0 820.7,755.0 820.7,840.0 L821.5,840.0 C821.5,755.0 116.6,755.0 116.6,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M122.6,670.0 C122.6,755.0 69.0,755.0 69.0,840.0 L98.1,840.0 C98.1,755.0 155.1,755.0 155.1,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M155.1,670.0 C155.1,755.0 126.9,755.0 126.9,840.0 L129.4,840.0 C129.4,755.0 157.8,755.0 157.8,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M157.8,670.0 C157.8,755.0 189.2,755.0 189.2,840.0 L202.9,840.0 C202.9,755.0 173.1,755.0 173.1,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M173.1,670.0 C173.1,755.0 376.7,755.0 376.7,840.0 L377.5,840.0 C377.5,755.0 174.0,755.0 174.0,670.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M174.0,670.0 C174.0,755.0 453.7,755.0 453.7,840.0 L454.5,840.0 C454.5,755.0 174.9,755.0 174.9,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M174.9,670.0 C174.9,755.0 515.2,755.0 515.2,840.0 L516.0,840.0 C516.0,755.0 175.8,755.0 175.8,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M175.8,670.0 C175.8,755.0 696.3,755.0 696.3,840.0 L697.9,840.0 C697.9,755.0 177.6,755.0 177.6,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M177.6,670.0 C177.6,755.0 723.2,755.0 723.2,840.0 L724.8,840.0 C724.8,755.0 179.4,755.0 179.4,670.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M179.4,670.0 C179.4,755.0 821.5,755.0 821.5,840.0 L822.3,840.0 C822.3,755.0 180.3,755.0 180.3,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M186.3,670.0 C186.3,755.0 129.4,755.0 129.4,840.0 L137.4,840.0 C137.4,755.0 195.3,755.0 195.3,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M195.3,670.0 C195.3,755.0 145.8,755.0 145.8,840.0 L162.8,840.0 C162.8,755.0 214.3,755.0 214.3,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M214.3,670.0 C214.3,755.0 202.9,755.0 202.9,840.0 L212.6,840.0 C212.6,755.0 225.1,755.0 225.1,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M225.1,670.0 C225.1,755.0 249.3,755.0 249.3,840.0 L254.1,840.0 C254.1,755.0 230.5,755.0 230.5,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M230.5,670.0 C230.5,755.0 377.5,755.0 377.5,840.0 L397.7,840.0 C397.7,755.0 253.1,755.0 253.1,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M253.1,670.0 C253.1,755.0 550.2,755.0 550.2,840.0 L551.0,840.0 C551.0,755.0 254.0,755.0 254.0,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M254.0,670.0 C254.0,755.0 573.9,755.0 573.9,840.0 L574.7,840.0 C574.7,755.0 254.9,755.0 254.9,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M254.9,670.0 C254.9,755.0 646.7,755.0 646.7,840.0 L647.5,840.0 C647.5,755.0 255.8,755.0 255.8,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M255.8,670.0 C255.8,755.0 697.9,755.0 697.9,840.0 L698.7,840.0 C698.7,755.0 256.7,755.0 256.7,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M256.7,670.0 C256.7,755.0 761.5,755.0 761.5,840.0 L762.3,840.0 C762.3,755.0 257.6,755.0 257.6,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M257.6,670.0 C257.6,755.0 822.3,755.0 822.3,840.0 L823.9,840.0 C823.9,755.0 259.4,755.0 259.4,670.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M265.4,670.0 C265.4,755.0 112.1,755.0 112.1,840.0 L121.0,840.0 C121.0,755.0 275.3,755.0 275.3,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M275.3,670.0 C275.3,755.0 176.8,755.0 176.8,840.0 L182.5,840.0 C182.5,755.0 281.6,755.0 281.6,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M281.6,670.0 C281.6,755.0 397.7,755.0 397.7,840.0 L398.5,840.0 C398.5,755.0 282.5,755.0 282.5,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M288.5,670.0 C288.5,755.0 162.8,755.0 162.8,840.0 L170.8,840.0 C170.8,755.0 297.5,755.0 297.5,670.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M297.5,670.0 C297.5,755.0 212.6,755.0 212.6,840.0 L215.0,840.0 C215.0,755.0 300.2,755.0 300.2,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M300.2,670.0 C300.2,755.0 254.1,755.0 254.1,840.0 L255.7,840.0 C255.7,755.0 302.0,755.0 302.0,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M302.0,670.0 C302.0,755.0 297.5,755.0 297.5,840.0 L318.5,840.0 C318.5,755.0 325.5,755.0 325.5,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M325.5,670.0 C325.5,755.0 398.5,755.0 398.5,840.0 L400.1,840.0 C400.1,755.0 327.3,755.0 327.3,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M327.3,670.0 C327.3,755.0 454.5,755.0 454.5,840.0 L455.4,840.0 C455.4,755.0 328.2,755.0 328.2,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M328.2,670.0 C328.2,755.0 516.0,755.0 516.0,840.0 L528.1,840.0 C528.1,755.0 341.7,755.0 341.7,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M341.7,670.0 C341.7,755.0 551.0,755.0 551.0,840.0 L557.5,840.0 C557.5,755.0 348.9,755.0 348.9,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M348.9,670.0 C348.9,755.0 627.0,755.0 627.0,840.0 L631.9,840.0 C631.9,755.0 354.4,755.0 354.4,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M354.4,670.0 C354.4,755.0 647.5,755.0 647.5,840.0 L649.9,840.0 C649.9,755.0 357.1,755.0 357.1,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M357.1,670.0 C357.1,755.0 940.3,755.0 940.3,840.0 L941.1,840.0 C941.1,755.0 358.0,755.0 358.0,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M363.9,670.0 C363.9,755.0 278.6,755.0 278.6,840.0 L290.7,840.0 C290.7,755.0 377.5,755.0 377.5,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M377.5,670.0 C377.5,755.0 334.1,755.0 334.1,840.0 L340.6,840.0 C340.6,755.0 384.7,755.0 384.7,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M384.7,670.0 C384.7,755.0 823.9,755.0 823.9,840.0 L824.7,840.0 C824.7,755.0 385.6,755.0 385.6,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M391.5,670.0 C391.5,755.0 340.6,755.0 340.6,840.0 L347.1,840.0 C347.1,755.0 398.8,755.0 398.8,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M398.8,670.0 C398.8,755.0 353.0,755.0 353.0,840.0 L370.0,840.0 C370.0,755.0 417.7,755.0 417.7,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M417.7,670.0 C417.7,755.0 528.1,755.0 528.1,840.0 L532.2,840.0 C532.2,755.0 422.2,755.0 422.2,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M422.2,670.0 C422.2,755.0 762.3,755.0 762.3,840.0 L768.7,840.0 C768.7,755.0 429.5,755.0 429.5,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M435.4,670.0 C435.4,755.0 290.7,755.0 290.7,840.0 L291.6,840.0 C291.6,755.0 436.3,755.0 436.3,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M436.3,670.0 C436.3,755.0 479.9,755.0 479.9,840.0 L489.6,840.0 C489.6,755.0 447.1,755.0 447.1,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M447.1,670.0 C447.1,755.0 574.7,755.0 574.7,840.0 L582.0,840.0 C582.0,755.0 455.3,755.0 455.3,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M455.3,670.0 C455.3,755.0 631.9,755.0 631.9,840.0 L633.5,840.0 C633.5,755.0 457.1,755.0 457.1,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M457.1,670.0 C457.1,755.0 724.8,755.0 724.8,840.0 L726.4,840.0 C726.4,755.0 458.9,755.0 458.9,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M464.8,670.0 C464.8,755.0 98.1,755.0 98.1,840.0 L98.9,840.0 C98.9,755.0 465.7,755.0 465.7,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M465.7,670.0 C465.7,755.0 215.0,755.0 215.0,840.0 L215.9,840.0 C215.9,755.0 466.6,755.0 466.6,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M466.6,670.0 C466.6,755.0 318.5,755.0 318.5,840.0 L328.2,840.0 C328.2,755.0 477.5,755.0 477.5,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M477.5,670.0 C477.5,755.0 400.1,755.0 400.1,840.0 L432.4,840.0 C432.4,755.0 513.6,755.0 513.6,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M513.6,670.0 C513.6,755.0 455.4,755.0 455.4,840.0 L456.2,840.0 C456.2,755.0 514.5,755.0 514.5,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M514.5,670.0 C514.5,755.0 495.5,755.0 495.5,840.0 L509.2,840.0 C509.2,755.0 529.8,755.0 529.8,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M529.8,670.0 C529.8,755.0 532.2,755.0 532.2,840.0 L533.0,840.0 C533.0,755.0 530.7,755.0 530.7,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M530.7,670.0 C530.7,755.0 557.5,755.0 557.5,840.0 L558.3,840.0 C558.3,755.0 531.6,755.0 531.6,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M531.6,670.0 C531.6,755.0 590.4,755.0 590.4,840.0 L605.7,840.0 C605.7,755.0 548.8,755.0 548.8,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M548.8,670.0 C548.8,755.0 649.9,755.0 649.9,840.0 L650.7,840.0 C650.7,755.0 549.7,755.0 549.7,670.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M549.7,670.0 C549.7,755.0 698.7,755.0 698.7,840.0 L699.5,840.0 C699.5,755.0 550.6,755.0 550.6,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M550.6,670.0 C550.6,755.0 768.7,755.0 768.7,840.0 L772.0,840.0 C772.0,755.0 554.2,755.0 554.2,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M554.2,670.0 C554.2,755.0 824.7,755.0 824.7,840.0 L825.5,840.0 C825.5,755.0 555.1,755.0 555.1,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M555.1,670.0 C555.1,755.0 859.0,755.0 859.0,840.0 L863.0,840.0 C863.0,755.0 559.6,755.0 559.6,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M559.6,670.0 C559.6,755.0 906.9,755.0 906.9,840.0 L907.7,840.0 C907.7,755.0 560.5,755.0 560.5,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M560.5,670.0 C560.5,755.0 941.1,755.0 941.1,840.0 L941.9,840.0 C941.9,755.0 561.4,755.0 561.4,670.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M567.4,670.0 C567.4,755.0 255.7,755.0 255.7,840.0 L270.3,840.0 C270.3,755.0 583.6,755.0 583.6,670.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M583.6,670.0 C583.6,755.0 432.4,755.0 432.4,840.0 L433.3,840.0 C433.3,755.0 584.5,755.0 584.5,670.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M584.5,670.0 C584.5,755.0 456.2,755.0 456.2,840.0 L473.9,840.0 C473.9,755.0 604.4,755.0 604.4,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M604.4,670.0 C604.4,755.0 605.7,755.0 605.7,840.0 L621.1,840.0 C621.1,755.0 621.5,755.0 621.5,670.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M621.5,670.0 C621.5,755.0 633.5,755.0 633.5,840.0 L634.3,840.0 C634.3,755.0 622.4,755.0 622.4,670.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M622.4,670.0 C622.4,755.0 650.7,755.0 650.7,840.0 L678.2,840.0 C678.2,755.0 653.1,755.0 653.1,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M653.1,670.0 C653.1,755.0 726.4,755.0 726.4,840.0 L741.8,840.0 C741.8,755.0 670.3,755.0 670.3,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M670.3,670.0 C670.3,755.0 772.0,755.0 772.0,840.0 L787.3,840.0 C787.3,755.0 687.4,755.0 687.4,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M687.4,670.0 C687.4,755.0 825.5,755.0 825.5,840.0 L828.8,840.0 C828.8,755.0 691.1,755.0 691.1,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M691.1,670.0 C691.1,755.0 907.7,755.0 907.7,840.0 L908.5,840.0 C908.5,755.0 692.0,755.0 692.0,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M692.0,670.0 C692.0,755.0 941.9,755.0 941.9,840.0 L943.5,840.0 C943.5,755.0 693.8,755.0 693.8,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M699.7,670.0 C699.7,755.0 215.9,755.0 215.9,840.0 L216.7,840.0 C216.7,755.0 700.6,755.0 700.6,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M700.6,670.0 C700.6,755.0 433.3,755.0 433.3,840.0 L435.7,840.0 C435.7,755.0 703.3,755.0 703.3,670.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M703.3,670.0 C703.3,755.0 533.0,755.0 533.0,840.0 L533.8,840.0 C533.8,755.0 704.2,755.0 704.2,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M704.2,670.0 C704.2,755.0 558.3,755.0 558.3,840.0 L567.2,840.0 C567.2,755.0 714.2,755.0 714.2,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M714.2,670.0 C714.2,755.0 634.3,755.0 634.3,840.0 L635.1,840.0 C635.1,755.0 715.1,755.0 715.1,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M715.1,670.0 C715.1,755.0 699.5,755.0 699.5,840.0 L716.4,840.0 C716.4,755.0 734.0,755.0 734.0,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M734.0,670.0 C734.0,755.0 741.8,755.0 741.8,840.0 L745.0,840.0 C745.0,755.0 737.6,755.0 737.6,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M737.6,670.0 C737.6,755.0 908.5,755.0 908.5,840.0 L910.1,840.0 C910.1,755.0 739.4,755.0 739.4,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M739.4,670.0 C739.4,755.0 943.5,755.0 943.5,840.0 L944.3,840.0 C944.3,755.0 740.3,755.0 740.3,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M746.3,670.0 C746.3,755.0 216.7,755.0 216.7,840.0 L219.1,840.0 C219.1,755.0 749.0,755.0 749.0,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M749.0,670.0 C749.0,755.0 270.3,755.0 270.3,840.0 L271.9,840.0 C271.9,755.0 750.8,755.0 750.8,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M750.8,670.0 C750.8,755.0 435.7,755.0 435.7,840.0 L436.5,840.0 C436.5,755.0 751.7,755.0 751.7,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M751.7,670.0 C751.7,755.0 533.8,755.0 533.8,840.0 L544.3,840.0 C544.3,755.0 763.4,755.0 763.4,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M763.4,670.0 C763.4,755.0 567.2,755.0 567.2,840.0 L568.0,840.0 C568.0,755.0 764.3,755.0 764.3,670.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M764.3,670.0 C764.3,755.0 678.2,755.0 678.2,840.0 L689.5,840.0 C689.5,755.0 777.0,755.0 777.0,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M777.0,670.0 C777.0,755.0 745.0,755.0 745.0,840.0 L752.3,840.0 C752.3,755.0 785.1,755.0 785.1,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M785.1,670.0 C785.1,755.0 787.3,755.0 787.3,840.0 L788.1,840.0 C788.1,755.0 786.0,755.0 786.0,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M786.0,670.0 C786.0,755.0 828.8,755.0 828.8,840.0 L840.9,840.0 C840.9,755.0 799.5,755.0 799.5,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M799.5,670.0 C799.5,755.0 863.0,755.0 863.0,840.0 L900.1,840.0 C900.1,755.0 841.1,755.0 841.1,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M841.1,670.0 C841.1,755.0 944.3,755.0 944.3,840.0 L945.1,840.0 C945.1,755.0 842.0,755.0 842.0,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M847.9,670.0 C847.9,755.0 98.9,755.0 98.9,840.0 L99.7,840.0 C99.7,755.0 848.8,755.0 848.8,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M848.8,670.0 C848.8,755.0 271.9,755.0 271.9,840.0 L272.7,840.0 C272.7,755.0 849.7,755.0 849.7,670.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M849.7,670.0 C849.7,755.0 436.5,755.0 436.5,840.0 L438.9,840.0 C438.9,755.0 852.4,755.0 852.4,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M852.4,670.0 C852.4,755.0 635.1,755.0 635.1,840.0 L637.5,840.0 C637.5,755.0 855.1,755.0 855.1,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M855.1,670.0 C855.1,755.0 752.3,755.0 752.3,840.0 L754.7,840.0 C754.7,755.0 857.9,755.0 857.9,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M857.9,670.0 C857.9,755.0 788.1,755.0 788.1,840.0 L814.8,840.0 C814.8,755.0 887.6,755.0 887.6,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M887.6,670.0 C887.6,755.0 840.9,755.0 840.9,840.0 L843.3,840.0 C843.3,755.0 890.4,755.0 890.4,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M890.4,670.0 C890.4,755.0 900.1,755.0 900.1,840.0 L900.9,840.0 C900.9,755.0 891.3,755.0 891.3,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M891.3,670.0 C891.3,755.0 910.1,755.0 910.1,840.0 L934.4,840.0 C934.4,755.0 918.3,755.0 918.3,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M918.3,670.0 C918.3,755.0 945.1,755.0 945.1,840.0 L947.6,840.0 C947.6,755.0 921.0,755.0 921.0,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M927.0,670.0 C927.0,755.0 62.3,755.0 62.3,840.0 L63.1,840.0 C63.1,755.0 927.9,755.0 927.9,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M927.9,670.0 C927.9,755.0 219.1,755.0 219.1,840.0 L219.9,840.0 C219.9,755.0 928.8,755.0 928.8,670.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M928.8,670.0 C928.8,755.0 582.0,755.0 582.0,840.0 L583.6,840.0 C583.6,755.0 930.6,755.0 930.6,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M930.6,670.0 C930.6,755.0 716.4,755.0 716.4,840.0 L717.3,840.0 C717.3,755.0 931.5,755.0 931.5,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M931.5,670.0 C931.5,755.0 843.3,755.0 843.3,840.0 L851.4,840.0 C851.4,755.0 940.5,755.0 940.5,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M940.5,670.0 C940.5,755.0 947.6,755.0 947.6,840.0 L963.7,840.0 C963.7,755.0 958.6,755.0 958.6,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M958.6,670.0 C958.6,755.0 969.7,755.0 969.7,840.0 L985.8,840.0 C985.8,755.0 976.6,755.0 976.6,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M982.6,670.0 C982.6,755.0 583.6,755.0 583.6,840.0 L584.4,840.0 C584.4,755.0 983.5,755.0 983.5,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M983.5,670.0 C983.5,755.0 637.5,755.0 637.5,840.0 L639.9,840.0 C639.9,755.0 986.2,755.0 986.2,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M986.2,670.0 C986.2,755.0 689.5,755.0 689.5,840.0 L690.3,840.0 C690.3,755.0 987.1,755.0 987.1,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M987.1,670.0 C987.1,755.0 851.4,755.0 851.4,840.0 L853.0,840.0 C853.0,755.0 988.9,755.0 988.9,670.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M988.9,670.0 C988.9,755.0 991.8,755.0 991.8,840.0 L1016.0,840.0 C1016.0,755.0 1016.0,755.0 1016.0,670.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M24.0,870.0 C24.0,955.0 24.0,955.0 24.0,1040.0 L30.8,1040.0 C30.8,955.0 32.9,955.0 32.9,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M32.9,870.0 C32.9,955.0 211.6,955.0 211.6,1040.0 L212.2,1040.0 C212.2,955.0 33.7,955.0 33.7,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M33.7,870.0 C33.7,955.0 351.3,955.0 351.3,1040.0 L352.6,1040.0 C352.6,955.0 35.3,955.0 35.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M35.3,870.0 C35.3,955.0 670.9,955.0 670.9,1040.0 L671.5,1040.0 C671.5,955.0 36.1,955.0 36.1,870.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M42.1,870.0 C42.1,955.0 36.7,955.0 36.7,1040.0 L48.5,1040.0 C48.5,955.0 57.4,955.0 57.4,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M57.4,870.0 C57.4,955.0 111.9,955.0 111.9,1040.0 L112.6,1040.0 C112.6,955.0 58.2,955.0 58.2,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M58.2,870.0 C58.2,955.0 174.4,955.0 174.4,1040.0 L175.0,1040.0 C175.0,955.0 59.0,955.0 59.0,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M59.0,870.0 C59.0,955.0 375.8,955.0 375.8,1040.0 L376.4,1040.0 C376.4,955.0 59.8,955.0 59.8,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M59.8,870.0 C59.8,955.0 461.7,955.0 461.7,1040.0 L463.6,1040.0 C463.6,955.0 62.3,955.0 62.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M62.3,870.0 C62.3,955.0 724.6,955.0 724.6,1040.0 L725.2,1040.0 C725.2,955.0 63.1,955.0 63.1,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M69.0,870.0 C69.0,955.0 54.4,955.0 54.4,1040.0 L61.2,1040.0 C61.2,955.0 77.9,955.0 77.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M77.9,870.0 C77.9,955.0 78.7,955.0 78.7,1040.0 L84.2,1040.0 C84.2,955.0 85.2,955.0 85.2,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M85.2,870.0 C85.2,955.0 112.6,955.0 112.6,1040.0 L116.9,1040.0 C116.9,955.0 90.8,955.0 90.8,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M90.8,870.0 C90.8,955.0 198.2,955.0 198.2,1040.0 L199.5,1040.0 C199.5,955.0 92.4,955.0 92.4,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M92.4,870.0 C92.4,955.0 212.2,955.0 212.2,1040.0 L212.8,1040.0 C212.8,955.0 93.2,955.0 93.2,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M93.2,870.0 C93.2,955.0 352.6,955.0 352.6,1040.0 L354.4,1040.0 C354.4,955.0 95.7,955.0 95.7,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M95.7,870.0 C95.7,955.0 639.3,955.0 639.3,1040.0 L639.9,1040.0 C639.9,955.0 96.5,955.0 96.5,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M96.5,870.0 C96.5,955.0 671.5,955.0 671.5,1040.0 L672.1,1040.0 C672.1,955.0 97.3,955.0 97.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M97.3,870.0 C97.3,955.0 801.4,955.0 801.4,1040.0 L802.0,1040.0 C802.0,955.0 98.1,955.0 98.1,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M98.1,870.0 C98.1,955.0 866.8,955.0 866.8,1040.0 L867.4,1040.0 C867.4,955.0 98.9,955.0 98.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M98.9,870.0 C98.9,955.0 933.2,955.0 933.2,1040.0 L933.8,1040.0 C933.8,955.0 99.7,955.0 99.7,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M105.6,870.0 C105.6,955.0 67.2,955.0 67.2,1040.0 L72.7,1040.0 C72.7,955.0 112.9,955.0 112.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M112.9,870.0 C112.9,955.0 90.8,955.0 90.8,1040.0 L93.9,1040.0 C93.9,955.0 117.0,955.0 117.0,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M117.0,870.0 C117.0,955.0 212.8,955.0 212.8,1040.0 L214.1,1040.0 C214.1,955.0 118.6,955.0 118.6,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M118.6,870.0 C118.6,955.0 323.4,955.0 323.4,1040.0 L325.2,1040.0 C325.2,955.0 121.0,955.0 121.0,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M126.9,870.0 C126.9,955.0 100.4,955.0 100.4,1040.0 L105.4,1040.0 C105.4,955.0 133.4,955.0 133.4,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M133.4,870.0 C133.4,955.0 116.9,955.0 116.9,1040.0 L118.1,1040.0 C118.1,955.0 135.0,955.0 135.0,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M135.0,870.0 C135.0,955.0 165.4,955.0 165.4,1040.0 L166.6,1040.0 C166.6,955.0 136.6,955.0 136.6,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M136.6,870.0 C136.6,955.0 289.9,955.0 289.9,1040.0 L290.5,1040.0 C290.5,955.0 137.4,955.0 137.4,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M143.4,870.0 C143.4,955.0 132.5,955.0 132.5,1040.0 L144.8,1040.0 C144.8,955.0 159.5,955.0 159.5,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M159.5,870.0 C159.5,955.0 166.6,955.0 166.6,1040.0 L167.8,1040.0 C167.8,955.0 161.2,955.0 161.2,870.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M161.2,870.0 C161.2,955.0 246.1,955.0 246.1,1040.0 L248.6,1040.0 C248.6,955.0 164.4,955.0 164.4,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M164.4,870.0 C164.4,955.0 274.7,955.0 274.7,1040.0 L275.3,1040.0 C275.3,955.0 165.2,955.0 165.2,870.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M165.2,870.0 C165.2,955.0 290.5,955.0 290.5,1040.0 L292.4,1040.0 C292.4,955.0 167.6,955.0 167.6,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M167.6,870.0 C167.6,955.0 393.5,955.0 393.5,1040.0 L395.3,1040.0 C395.3,955.0 170.0,955.0 170.0,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M170.0,870.0 C170.0,955.0 463.6,955.0 463.6,1040.0 L464.2,1040.0 C464.2,955.0 170.8,955.0 170.8,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M176.8,870.0 C176.8,955.0 93.9,955.0 93.9,1040.0 L94.5,1040.0 C94.5,955.0 177.6,955.0 177.6,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M177.6,870.0 C177.6,955.0 124.7,955.0 124.7,1040.0 L126.5,1040.0 C126.5,955.0 180.0,955.0 180.0,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M180.0,870.0 C180.0,955.0 706.3,955.0 706.3,1040.0 L706.9,1040.0 C706.9,955.0 180.8,955.0 180.8,870.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M180.8,870.0 C180.8,955.0 751.5,955.0 751.5,1040.0 L752.1,1040.0 C752.1,955.0 181.6,955.0 181.6,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M181.6,870.0 C181.6,955.0 802.0,955.0 802.0,1040.0 L802.7,1040.0 C802.7,955.0 182.5,955.0 182.5,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M188.4,870.0 C188.4,955.0 152.6,955.0 152.6,1040.0 L159.4,1040.0 C159.4,955.0 197.3,955.0 197.3,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M197.3,870.0 C197.3,955.0 199.5,955.0 199.5,1040.0 L203.2,1040.0 C203.2,955.0 202.1,955.0 202.1,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M202.1,870.0 C202.1,955.0 292.4,955.0 292.4,1040.0 L296.1,1040.0 C296.1,955.0 207.0,955.0 207.0,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M207.0,870.0 C207.0,955.0 354.4,955.0 354.4,1040.0 L356.9,1040.0 C356.9,955.0 210.2,955.0 210.2,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M210.2,870.0 C210.2,955.0 395.3,955.0 395.3,1040.0 L395.9,1040.0 C395.9,955.0 211.0,955.0 211.0,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M211.0,870.0 C211.0,955.0 486.0,955.0 486.0,1040.0 L489.0,1040.0 C489.0,955.0 215.0,955.0 215.0,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M215.0,870.0 C215.0,955.0 553.4,955.0 553.4,1040.0 L554.0,1040.0 C554.0,955.0 215.9,955.0 215.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M215.9,870.0 C215.9,955.0 672.1,955.0 672.1,1040.0 L672.8,1040.0 C672.8,955.0 216.7,955.0 216.7,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M216.7,870.0 C216.7,955.0 694.1,955.0 694.1,1040.0 L694.8,1040.0 C694.8,955.0 217.5,955.0 217.5,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M217.5,870.0 C217.5,955.0 867.4,955.0 867.4,1040.0 L868.0,1040.0 C868.0,955.0 218.3,955.0 218.3,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M218.3,870.0 C218.3,955.0 905.8,955.0 905.8,1040.0 L906.5,1040.0 C906.5,955.0 219.1,955.0 219.1,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M219.1,870.0 C219.1,955.0 978.2,955.0 978.2,1040.0 L978.8,1040.0 C978.8,955.0 219.9,955.0 219.9,870.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M225.8,870.0 C225.8,955.0 105.4,955.0 105.4,1040.0 L106.0,1040.0 C106.0,955.0 226.7,955.0 226.7,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M226.7,870.0 C226.7,955.0 175.0,955.0 175.0,1040.0 L192.3,1040.0 C192.3,955.0 249.3,955.0 249.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M249.3,870.0 C249.3,955.0 203.2,955.0 203.2,1040.0 L204.4,1040.0 C204.4,955.0 250.9,955.0 250.9,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M250.9,870.0 C250.9,955.0 248.6,955.0 248.6,1040.0 L250.4,1040.0 C250.4,955.0 253.3,955.0 253.3,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M253.3,870.0 C253.3,955.0 258.2,955.0 258.2,1040.0 L266.9,1040.0 C266.9,955.0 264.6,955.0 264.6,870.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M264.6,870.0 C264.6,955.0 296.1,955.0 296.1,1040.0 L296.7,1040.0 C296.7,955.0 265.4,955.0 265.4,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M265.4,870.0 C265.4,955.0 325.2,955.0 325.2,1040.0 L325.9,1040.0 C325.9,955.0 266.2,955.0 266.2,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M266.2,870.0 C266.2,955.0 356.9,955.0 356.9,1040.0 L357.5,1040.0 C357.5,955.0 267.0,955.0 267.0,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M267.0,870.0 C267.0,955.0 395.9,955.0 395.9,1040.0 L398.4,1040.0 C398.4,955.0 270.3,955.0 270.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M270.3,870.0 C270.3,955.0 706.9,955.0 706.9,1040.0 L708.1,1040.0 C708.1,955.0 271.9,955.0 271.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M271.9,870.0 C271.9,955.0 947.1,955.0 947.1,1040.0 L947.8,1040.0 C947.8,955.0 272.7,955.0 272.7,870.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M278.6,870.0 C278.6,955.0 221.9,955.0 221.9,1040.0 L231.1,1040.0 C231.1,955.0 290.7,955.0 290.7,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M290.7,870.0 C290.7,955.0 439.9,955.0 439.9,1040.0 L440.6,1040.0 C440.6,955.0 291.6,955.0 291.6,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M297.5,870.0 C297.5,955.0 214.1,955.0 214.1,1040.0 L214.7,1040.0 C214.7,955.0 298.3,955.0 298.3,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M298.3,870.0 C298.3,955.0 237.1,955.0 237.1,1040.0 L239.6,1040.0 C239.6,955.0 301.5,955.0 301.5,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M301.5,870.0 C301.5,955.0 275.3,955.0 275.3,1040.0 L283.3,1040.0 C283.3,955.0 312.0,955.0 312.0,870.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M312.0,870.0 C312.0,955.0 357.5,955.0 357.5,1040.0 L358.1,1040.0 C358.1,955.0 312.8,955.0 312.8,870.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M312.8,870.0 C312.8,955.0 376.4,955.0 376.4,1040.0 L380.7,1040.0 C380.7,955.0 318.5,955.0 318.5,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M318.5,870.0 C318.5,955.0 398.4,955.0 398.4,1040.0 L400.9,1040.0 C400.9,955.0 321.7,955.0 321.7,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M321.7,870.0 C321.7,955.0 415.5,955.0 415.5,1040.0 L416.1,1040.0 C416.1,955.0 322.5,955.0 322.5,870.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M322.5,870.0 C322.5,955.0 440.6,955.0 440.6,1040.0 L441.2,1040.0 C441.2,955.0 323.3,955.0 323.3,870.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M323.3,870.0 C323.3,955.0 517.0,955.0 517.0,1040.0 L518.2,1040.0 C518.2,955.0 325.0,955.0 325.0,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M325.0,870.0 C325.0,955.0 529.7,955.0 529.7,1040.0 L530.3,1040.0 C530.3,955.0 325.8,955.0 325.8,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M325.8,870.0 C325.8,955.0 554.0,955.0 554.0,1040.0 L554.6,1040.0 C554.6,955.0 326.6,955.0 326.6,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M326.6,870.0 C326.6,955.0 598.0,955.0 598.0,1040.0 L599.2,1040.0 C599.2,955.0 328.2,955.0 328.2,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M334.1,870.0 C334.1,955.0 310.7,955.0 310.7,1040.0 L317.4,1040.0 C317.4,955.0 343.0,955.0 343.0,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M343.0,870.0 C343.0,955.0 441.2,955.0 441.2,1040.0 L444.3,1040.0 C444.3,955.0 347.1,955.0 347.1,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M353.0,870.0 C353.0,955.0 239.6,955.0 239.6,1040.0 L240.2,1040.0 C240.2,955.0 353.8,955.0 353.8,870.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M353.8,870.0 C353.8,955.0 336.7,955.0 336.7,1040.0 L345.4,1040.0 C345.4,955.0 365.1,955.0 365.1,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M365.1,870.0 C365.1,955.0 452.1,955.0 452.1,1040.0 L453.9,1040.0 C453.9,955.0 367.5,955.0 367.5,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M367.5,870.0 C367.5,955.0 539.4,955.0 539.4,1040.0 L540.0,1040.0 C540.0,955.0 368.4,955.0 368.4,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M368.4,870.0 C368.4,955.0 672.8,955.0 672.8,1040.0 L673.4,1040.0 C673.4,955.0 369.2,955.0 369.2,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M369.2,870.0 C369.2,955.0 802.7,955.0 802.7,1040.0 L803.3,1040.0 C803.3,955.0 370.0,955.0 370.0,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M375.9,870.0 C375.9,955.0 84.2,955.0 84.2,1040.0 L84.8,1040.0 C84.8,955.0 376.7,955.0 376.7,870.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M376.7,870.0 C376.7,955.0 144.8,955.0 144.8,1040.0 L145.4,1040.0 C145.4,955.0 377.5,955.0 377.5,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M377.5,870.0 C377.5,955.0 296.7,955.0 296.7,1040.0 L302.8,1040.0 C302.8,955.0 385.6,955.0 385.6,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M385.6,870.0 C385.6,955.0 325.9,955.0 325.9,1040.0 L329.6,1040.0 C329.6,955.0 390.5,955.0 390.5,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M390.5,870.0 C390.5,955.0 358.1,955.0 358.1,1040.0 L360.0,1040.0 C360.0,955.0 392.9,955.0 392.9,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M392.9,870.0 C392.9,955.0 380.7,955.0 380.7,1040.0 L383.8,1040.0 C383.8,955.0 396.9,955.0 396.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M396.9,870.0 C396.9,955.0 400.9,955.0 400.9,1040.0 L403.3,1040.0 C403.3,955.0 400.1,955.0 400.1,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M400.1,870.0 C400.1,955.0 416.1,955.0 416.1,1040.0 L432.7,1040.0 C432.7,955.0 421.9,955.0 421.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M421.9,870.0 C421.9,955.0 554.6,955.0 554.6,1040.0 L557.1,1040.0 C557.1,955.0 425.2,955.0 425.2,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M425.2,870.0 C425.2,955.0 599.2,955.0 599.2,1040.0 L602.3,1040.0 C602.3,955.0 429.2,955.0 429.2,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M429.2,870.0 C429.2,955.0 639.9,955.0 639.9,1040.0 L642.3,1040.0 C642.3,955.0 432.4,955.0 432.4,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M432.4,870.0 C432.4,955.0 752.1,955.0 752.1,1040.0 L752.7,1040.0 C752.7,955.0 433.3,955.0 433.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M433.3,870.0 C433.3,955.0 803.3,955.0 803.3,1040.0 L807.0,1040.0 C807.0,955.0 438.1,955.0 438.1,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M438.1,870.0 C438.1,955.0 933.8,955.0 933.8,1040.0 L934.4,1040.0 C934.4,955.0 438.9,955.0 438.9,870.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M444.9,870.0 C444.9,955.0 167.8,955.0 167.8,1040.0 L168.5,1040.0 C168.5,955.0 445.7,955.0 445.7,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M445.7,870.0 C445.7,955.0 204.4,955.0 204.4,1040.0 L205.0,1040.0 C205.0,955.0 446.5,955.0 446.5,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M446.5,870.0 C446.5,955.0 250.4,955.0 250.4,1040.0 L251.7,1040.0 C251.7,955.0 448.1,955.0 448.1,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M448.1,870.0 C448.1,955.0 360.0,955.0 360.0,1040.0 L367.4,1040.0 C367.4,955.0 457.8,955.0 457.8,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M457.8,870.0 C457.8,955.0 383.8,955.0 383.8,1040.0 L385.1,1040.0 C385.1,955.0 459.4,955.0 459.4,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M459.4,870.0 C459.4,955.0 575.3,955.0 575.3,1040.0 L584.0,1040.0 C584.0,955.0 470.7,955.0 470.7,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M470.7,870.0 C470.7,955.0 784.4,955.0 784.4,1040.0 L785.0,1040.0 C785.0,955.0 471.5,955.0 471.5,870.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M471.5,870.0 C471.5,955.0 906.5,955.0 906.5,1040.0 L908.3,1040.0 C908.3,955.0 473.9,955.0 473.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M479.9,870.0 C479.9,955.0 472.6,955.0 472.6,1040.0 L480.0,1040.0 C480.0,955.0 489.6,955.0 489.6,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M495.5,870.0 C495.5,955.0 329.6,955.0 329.6,1040.0 L330.2,1040.0 C330.2,955.0 496.3,955.0 496.3,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M496.3,870.0 C496.3,955.0 385.1,955.0 385.1,1040.0 L385.7,1040.0 C385.7,955.0 497.1,955.0 497.1,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M497.1,870.0 C497.1,955.0 504.9,955.0 504.9,1040.0 L511.0,1040.0 C511.0,955.0 505.2,955.0 505.2,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M505.2,870.0 C505.2,955.0 584.0,955.0 584.0,1040.0 L584.6,1040.0 C584.6,955.0 506.0,955.0 506.0,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M506.0,870.0 C506.0,955.0 622.8,955.0 622.8,1040.0 L623.4,1040.0 C623.4,955.0 506.8,955.0 506.8,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M506.8,870.0 C506.8,955.0 752.7,955.0 752.7,1040.0 L754.6,1040.0 C754.6,955.0 509.2,955.0 509.2,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M515.2,870.0 C515.2,955.0 145.4,955.0 145.4,1040.0 L146.1,1040.0 C146.1,955.0 516.0,955.0 516.0,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M516.0,870.0 C516.0,955.0 403.3,955.0 403.3,1040.0 L407.1,1040.0 C407.1,955.0 520.9,955.0 520.9,870.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M520.9,870.0 C520.9,955.0 444.3,955.0 444.3,1040.0 L444.9,1040.0 C444.9,955.0 521.7,955.0 521.7,870.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M521.7,870.0 C521.7,955.0 453.9,955.0 453.9,1040.0 L455.8,1040.0 C455.8,955.0 524.1,955.0 524.1,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M524.1,870.0 C524.1,955.0 489.0,955.0 489.0,1040.0 L494.6,1040.0 C494.6,955.0 531.4,955.0 531.4,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M531.4,870.0 C531.4,955.0 530.3,955.0 530.3,1040.0 L531.6,1040.0 C531.6,955.0 533.0,955.0 533.0,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M533.0,870.0 C533.0,955.0 540.0,955.0 540.0,1040.0 L546.8,1040.0 C546.8,955.0 541.8,955.0 541.8,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M541.8,870.0 C541.8,955.0 673.4,955.0 673.4,1040.0 L674.0,1040.0 C674.0,955.0 542.7,955.0 542.7,870.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M542.7,870.0 C542.7,955.0 708.1,955.0 708.1,1040.0 L708.7,1040.0 C708.7,955.0 543.5,955.0 543.5,870.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M543.5,870.0 C543.5,955.0 837.0,955.0 837.0,1040.0 L837.6,1040.0 C837.6,955.0 544.3,955.0 544.3,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M550.2,870.0 C550.2,955.0 302.8,955.0 302.8,1040.0 L303.5,1040.0 C303.5,955.0 551.0,955.0 551.0,870.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M551.0,870.0 C551.0,955.0 367.4,955.0 367.4,1040.0 L368.0,1040.0 C368.0,955.0 551.8,955.0 551.8,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M551.8,870.0 C551.8,955.0 407.1,955.0 407.1,1040.0 L407.7,1040.0 C407.7,955.0 552.6,955.0 552.6,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M552.6,870.0 C552.6,955.0 432.7,955.0 432.7,1040.0 L434.0,1040.0 C434.0,955.0 554.3,955.0 554.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M554.3,870.0 C554.3,955.0 494.6,955.0 494.6,1040.0 L496.4,1040.0 C496.4,955.0 556.7,955.0 556.7,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M556.7,870.0 C556.7,955.0 518.2,955.0 518.2,1040.0 L523.8,1040.0 C523.8,955.0 563.9,955.0 563.9,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M563.9,870.0 C563.9,955.0 531.6,955.0 531.6,1040.0 L532.8,1040.0 C532.8,955.0 565.6,955.0 565.6,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M565.6,870.0 C565.6,955.0 642.3,955.0 642.3,1040.0 L643.0,1040.0 C643.0,955.0 566.4,955.0 566.4,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M566.4,870.0 C566.4,955.0 853.4,955.0 853.4,1040.0 L854.1,1040.0 C854.1,955.0 567.2,955.0 567.2,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M567.2,870.0 C567.2,955.0 868.0,955.0 868.0,1040.0 L868.6,1040.0 C868.6,955.0 568.0,955.0 568.0,870.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M573.9,870.0 C573.9,955.0 146.1,955.0 146.1,1040.0 L146.7,1040.0 C146.7,955.0 574.7,955.0 574.7,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M574.7,870.0 C574.7,955.0 385.7,955.0 385.7,1040.0 L386.3,1040.0 C386.3,955.0 575.6,955.0 575.6,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M575.6,870.0 C575.6,955.0 612.5,955.0 612.5,1040.0 L616.9,1040.0 C616.9,955.0 581.2,955.0 581.2,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M581.2,870.0 C581.2,955.0 888.2,955.0 888.2,1040.0 L890.0,1040.0 C890.0,955.0 583.6,955.0 583.6,870.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M583.6,870.0 C583.6,955.0 923.5,955.0 923.5,1040.0 L924.1,1040.0 C924.1,955.0 584.4,955.0 584.4,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M590.4,870.0 C590.4,955.0 386.3,955.0 386.3,1040.0 L387.5,1040.0 C387.5,955.0 592.0,955.0 592.0,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M592.0,870.0 C592.0,955.0 557.1,955.0 557.1,1040.0 L568.2,1040.0 C568.2,955.0 606.5,955.0 606.5,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M606.5,870.0 C606.5,955.0 584.6,955.0 584.6,1040.0 L587.1,1040.0 C587.1,955.0 609.8,955.0 609.8,870.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M609.8,870.0 C609.8,955.0 602.3,955.0 602.3,1040.0 L604.1,1040.0 C604.1,955.0 612.2,955.0 612.2,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M612.2,870.0 C612.2,955.0 655.7,955.0 655.7,1040.0 L661.9,1040.0 C661.9,955.0 620.3,955.0 620.3,870.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M620.3,870.0 C620.3,955.0 754.6,955.0 754.6,1040.0 L755.2,1040.0 C755.2,955.0 621.1,955.0 621.1,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M627.0,870.0 C627.0,955.0 623.4,955.0 623.4,1040.0 L633.3,1040.0 C633.3,955.0 639.9,955.0 639.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M645.9,870.0 C645.9,955.0 214.7,955.0 214.7,1040.0 L215.9,1040.0 C215.9,955.0 647.5,955.0 647.5,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M647.5,870.0 C647.5,955.0 330.2,955.0 330.2,1040.0 L330.8,1040.0 C330.8,955.0 648.3,955.0 648.3,870.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M648.3,870.0 C648.3,955.0 368.0,955.0 368.0,1040.0 L368.6,1040.0 C368.6,955.0 649.1,955.0 649.1,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M649.1,870.0 C649.1,955.0 407.7,955.0 407.7,1040.0 L409.5,1040.0 C409.5,955.0 651.5,955.0 651.5,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M651.5,870.0 C651.5,955.0 532.8,955.0 532.8,1040.0 L533.4,1040.0 C533.4,955.0 652.4,955.0 652.4,870.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M652.4,870.0 C652.4,955.0 568.2,955.0 568.2,1040.0 L568.8,1040.0 C568.8,955.0 653.2,955.0 653.2,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M653.2,870.0 C653.2,955.0 587.1,955.0 587.1,1040.0 L590.2,1040.0 C590.2,955.0 657.2,955.0 657.2,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M657.2,870.0 C657.2,955.0 674.0,955.0 674.0,1040.0 L682.6,1040.0 C682.6,955.0 668.5,955.0 668.5,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M668.5,870.0 C668.5,955.0 708.7,955.0 708.7,1040.0 L709.3,1040.0 C709.3,955.0 669.3,955.0 669.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M669.3,870.0 C669.3,955.0 725.2,955.0 725.2,1040.0 L739.4,1040.0 C739.4,955.0 687.9,955.0 687.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M687.9,870.0 C687.9,955.0 785.0,955.0 785.0,1040.0 L785.6,1040.0 C785.6,955.0 688.7,955.0 688.7,870.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M688.7,870.0 C688.7,955.0 807.0,955.0 807.0,1040.0 L807.6,1040.0 C807.6,955.0 689.5,955.0 689.5,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M689.5,870.0 C689.5,955.0 908.3,955.0 908.3,1040.0 L908.9,1040.0 C908.9,955.0 690.3,955.0 690.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M696.3,870.0 C696.3,955.0 118.1,955.0 118.1,1040.0 L118.7,1040.0 C118.7,955.0 697.1,955.0 697.1,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M697.1,870.0 C697.1,955.0 303.5,955.0 303.5,1040.0 L304.7,1040.0 C304.7,955.0 698.7,955.0 698.7,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M698.7,870.0 C698.7,955.0 694.8,955.0 694.8,1040.0 L700.3,1040.0 C700.3,955.0 706.0,955.0 706.0,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M706.0,870.0 C706.0,955.0 772.2,955.0 772.2,1040.0 L778.4,1040.0 C778.4,955.0 714.0,955.0 714.0,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M714.0,870.0 C714.0,955.0 854.1,955.0 854.1,1040.0 L856.5,1040.0 C856.5,955.0 717.3,955.0 717.3,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M723.2,870.0 C723.2,955.0 266.9,955.0 266.9,1040.0 L268.7,1040.0 C268.7,955.0 725.6,955.0 725.6,870.0 Z" fill="#865ecf" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M725.6,870.0 C725.6,955.0 496.4,955.0 496.4,1040.0 L498.9,1040.0 C498.9,955.0 728.9,955.0 728.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M728.9,870.0 C728.9,955.0 643.0,955.0 643.0,1040.0 L644.8,1040.0 C644.8,955.0 731.3,955.0 731.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M731.3,870.0 C731.3,955.0 661.9,955.0 661.9,1040.0 L665.0,1040.0 C665.0,955.0 735.3,955.0 735.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M735.3,870.0 C735.3,955.0 739.4,955.0 739.4,1040.0 L740.6,1040.0 C740.6,955.0 736.9,955.0 736.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M736.9,870.0 C736.9,955.0 785.6,955.0 785.6,1040.0 L795.5,1040.0 C795.5,955.0 749.9,955.0 749.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M749.9,870.0 C749.9,955.0 856.5,955.0 856.5,1040.0 L857.8,1040.0 C857.8,955.0 751.5,955.0 751.5,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M751.5,870.0 C751.5,955.0 868.6,955.0 868.6,1040.0 L871.1,1040.0 C871.1,955.0 754.7,955.0 754.7,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M760.7,870.0 C760.7,955.0 444.9,955.0 444.9,1040.0 L446.1,1040.0 C446.1,955.0 762.3,955.0 762.3,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M762.3,870.0 C762.3,955.0 546.8,955.0 546.8,1040.0 L547.4,1040.0 C547.4,955.0 763.1,955.0 763.1,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M763.1,870.0 C763.1,955.0 568.8,955.0 568.8,1040.0 L569.4,1040.0 C569.4,955.0 763.9,955.0 763.9,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M763.9,870.0 C763.9,955.0 590.2,955.0 590.2,1040.0 L590.8,1040.0 C590.8,955.0 764.7,955.0 764.7,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M764.7,870.0 C764.7,955.0 644.8,955.0 644.8,1040.0 L648.5,1040.0 C648.5,955.0 769.5,955.0 769.5,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M769.5,870.0 C769.5,955.0 709.3,955.0 709.3,1040.0 L718.6,1040.0 C718.6,955.0 781.6,955.0 781.6,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M781.6,870.0 C781.6,955.0 740.6,955.0 740.6,1040.0 L741.8,1040.0 C741.8,955.0 783.3,955.0 783.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M783.3,870.0 C783.3,955.0 755.2,955.0 755.2,1040.0 L766.3,1040.0 C766.3,955.0 797.8,955.0 797.8,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M797.8,870.0 C797.8,955.0 807.6,955.0 807.6,1040.0 L810.1,1040.0 C810.1,955.0 801.0,955.0 801.0,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M801.0,870.0 C801.0,955.0 837.6,955.0 837.6,1040.0 L846.9,1040.0 C846.9,955.0 813.1,955.0 813.1,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M813.1,870.0 C813.1,955.0 857.8,955.0 857.8,1040.0 L858.4,1040.0 C858.4,955.0 813.9,955.0 813.9,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M813.9,870.0 C813.9,955.0 947.8,955.0 947.8,1040.0 L948.4,1040.0 C948.4,955.0 814.8,955.0 814.8,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M820.7,870.0 C820.7,955.0 205.0,955.0 205.0,1040.0 L205.7,1040.0 C205.7,955.0 821.5,955.0 821.5,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M821.5,870.0 C821.5,955.0 283.3,955.0 283.3,1040.0 L283.9,1040.0 C283.9,955.0 822.3,955.0 822.3,870.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M822.3,870.0 C822.3,955.0 368.6,955.0 368.6,1040.0 L369.2,1040.0 C369.2,955.0 823.1,955.0 823.1,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M823.1,870.0 C823.1,955.0 464.2,955.0 464.2,1040.0 L466.6,1040.0 C466.6,955.0 826.4,955.0 826.4,870.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M826.4,870.0 C826.4,955.0 590.8,955.0 590.8,1040.0 L591.4,1040.0 C591.4,955.0 827.2,955.0 827.2,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M827.2,870.0 C827.2,955.0 648.5,955.0 648.5,1040.0 L649.1,1040.0 C649.1,955.0 828.0,955.0 828.0,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M828.0,870.0 C828.0,955.0 682.6,955.0 682.6,1040.0 L685.1,1040.0 C685.1,955.0 831.2,955.0 831.2,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M831.2,870.0 C831.2,955.0 846.9,955.0 846.9,1040.0 L847.5,1040.0 C847.5,955.0 832.0,955.0 832.0,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M832.0,870.0 C832.0,955.0 871.1,955.0 871.1,1040.0 L873.6,1040.0 C873.6,955.0 835.2,955.0 835.2,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M835.2,870.0 C835.2,955.0 890.0,955.0 890.0,1040.0 L899.3,1040.0 C899.3,955.0 847.4,955.0 847.4,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M847.4,870.0 C847.4,955.0 908.9,955.0 908.9,1040.0 L910.2,1040.0 C910.2,955.0 849.0,955.0 849.0,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M849.0,870.0 C849.0,955.0 924.1,955.0 924.1,1040.0 L926.0,1040.0 C926.0,955.0 851.4,955.0 851.4,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M851.4,870.0 C851.4,955.0 948.4,955.0 948.4,1040.0 L949.6,1040.0 C949.6,955.0 853.0,955.0 853.0,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M859.0,870.0 C859.0,955.0 604.1,955.0 604.1,1040.0 L606.0,1040.0 C606.0,955.0 861.4,955.0 861.4,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M861.4,870.0 C861.4,955.0 685.1,955.0 685.1,1040.0 L688.2,1040.0 C688.2,955.0 865.4,955.0 865.4,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M865.4,870.0 C865.4,955.0 741.8,955.0 741.8,1040.0 L745.5,1040.0 C745.5,955.0 870.3,955.0 870.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M870.3,870.0 C870.3,955.0 810.1,955.0 810.1,1040.0 L829.8,1040.0 C829.8,955.0 896.1,955.0 896.1,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M896.1,870.0 C896.1,955.0 873.6,955.0 873.6,1040.0 L876.7,1040.0 C876.7,955.0 900.1,955.0 900.1,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M900.1,870.0 C900.1,955.0 934.4,955.0 934.4,1040.0 L935.0,1040.0 C935.0,955.0 900.9,955.0 900.9,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M906.9,870.0 C906.9,955.0 369.2,955.0 369.2,1040.0 L369.8,1040.0 C369.8,955.0 907.7,955.0 907.7,870.0 Z" fill="#c3a322" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M907.7,870.0 C907.7,955.0 606.0,955.0 606.0,1040.0 L606.6,1040.0 C606.6,955.0 908.5,955.0 908.5,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M908.5,870.0 C908.5,955.0 829.8,955.0 829.8,1040.0 L831.0,1040.0 C831.0,955.0 910.1,955.0 910.1,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M910.1,870.0 C910.1,955.0 858.4,955.0 858.4,1040.0 L860.2,1040.0 C860.2,955.0 912.6,955.0 912.6,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M912.6,870.0 C912.6,955.0 876.7,955.0 876.7,1040.0 L877.3,1040.0 C877.3,955.0 913.4,955.0 913.4,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M913.4,870.0 C913.4,955.0 949.6,955.0 949.6,1040.0 L956.4,1040.0 C956.4,955.0 922.2,955.0 922.2,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M922.2,870.0 C922.2,955.0 963.0,955.0 963.0,1040.0 L972.2,1040.0 C972.2,955.0 934.4,955.0 934.4,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M940.3,870.0 C940.3,955.0 591.4,955.0 591.4,1040.0 L592.0,1040.0 C592.0,955.0 941.1,955.0 941.1,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M941.1,870.0 C941.1,955.0 649.1,955.0 649.1,1040.0 L649.8,1040.0 C649.8,955.0 941.9,955.0 941.9,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M941.9,870.0 C941.9,955.0 877.3,955.0 877.3,1040.0 L882.2,1040.0 C882.2,955.0 948.4,955.0 948.4,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M948.4,870.0 C948.4,955.0 935.0,955.0 935.0,1040.0 L940.0,1040.0 C940.0,955.0 954.8,955.0 954.8,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M954.8,870.0 C954.8,955.0 956.4,955.0 956.4,1040.0 L957.0,1040.0 C957.0,955.0 955.6,955.0 955.6,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M955.6,870.0 C955.6,955.0 993.4,955.0 993.4,1040.0 L999.6,1040.0 C999.6,955.0 963.7,955.0 963.7,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M969.7,870.0 C969.7,955.0 860.2,955.0 860.2,1040.0 L860.8,1040.0 C860.8,955.0 970.5,955.0 970.5,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M970.5,870.0 C970.5,955.0 899.3,955.0 899.3,1040.0 L899.9,1040.0 C899.9,955.0 971.3,955.0 971.3,870.0 Z" fill="#7b8074" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M971.3,870.0 C971.3,955.0 926.0,955.0 926.0,1040.0 L927.2,1040.0 C927.2,955.0 972.9,955.0 972.9,870.0 Z" fill="#1a6b06" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M972.9,870.0 C972.9,955.0 940.0,955.0 940.0,1040.0 L941.2,1040.0 C941.2,955.0 974.5,955.0 974.5,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M974.5,870.0 C974.5,955.0 978.8,955.0 978.8,1040.0 L987.4,1040.0 C987.4,955.0 985.8,955.0 985.8,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M991.8,870.0 C991.8,955.0 251.7,955.0 251.7,1040.0 L252.3,1040.0 C252.3,955.0 992.6,955.0 992.6,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M992.6,870.0 C992.6,955.0 910.2,955.0 910.2,1040.0 L917.6,1040.0 C917.6,955.0 1002.3,955.0 1002.3,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<path d="M1002.3,870.0 C1002.3,955.0 1005.5,955.0 1005.5,1040.0 L1016.0,1040.0 C1016.0,955.0 1016.0,955.0 1016.0,870.0 Z" fill="#2f6175" fill-opacity="0.32" stroke="none" pointer-events="none"/>
+<g class="vhn" data-k="2" data-size="955" data-purity="0.45" data-comp="artifact×431 · animal×262 · structure×95 · other×87" data-samples="0,5,10,15,20,25,30,35,40,45,55,60,70,65,75,85" cursor="pointer">
+<rect x="24.0" y="40.0" width="941.68" height="30" fill="#2f6175" fill-opacity="0.68"/>
+<rect class="vhn-outline" x="24.0" y="40.0" width="941.68" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="2" data-size="45" data-purity="0.64" data-comp="artifact×29 · animal×8 · food×4 · other×3" data-samples="666,455,561,505,583,145,53,81,226,180,389,402,447,171,131,135" cursor="pointer">
+<rect x="971.6" y="40.0" width="44.37" height="30" fill="#2f6175" fill-opacity="0.77"/>
+<rect class="vhn-outline" x="971.6" y="40.0" width="44.37" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<text x="24" y="35.0" font-size="12" fill="#7b8074">k = 2 · ARI(fine) 0.00</text>
+<g class="vhn" data-k="4" data-size="403" data-purity="0.40" data-comp="artifact×163 · animal×116 · food×54 · structure×38" data-samples="280,355,380,200,465,920,900,815,620,631,585,480,420,175,195,165" cursor="pointer">
+<rect x="24.0" y="240.0" width="392.58" height="30" fill="#2f6175" fill-opacity="0.65"/>
+<rect class="vhn-outline" x="24.0" y="240.0" width="392.58" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="4" data-size="72" data-purity="0.43" data-comp="artifact×31 · structure×17 · animal×11 · other×11" data-samples="325,460,716,940,962,536,440,108,500,575,732,545,477,765,100,240" cursor="pointer">
+<rect x="422.5" y="240.0" width="70.14" height="30" fill="#2f6175" fill-opacity="0.67"/>
+<rect class="vhn-outline" x="422.5" y="240.0" width="70.14" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="4" data-size="482" data-purity="0.50" data-comp="artifact×239 · animal×135 · other×45 · structure×40" data-samples="55,85,120,205,255,305,230,340,530,490,615,555,515,750,735,725" cursor="pointer">
+<rect x="498.6" y="240.0" width="469.54" height="30" fill="#2f6175" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="498.6" y="240.0" width="469.54" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="4" data-size="43" data-purity="0.63" data-comp="artifact×27 · animal×8 · food×4 · other×3" data-samples="666,505,455,450,561,583,145,53,226,180,171,389,447,81,131,135" cursor="pointer">
+<rect x="974.1" y="240.0" width="41.89" height="30" fill="#2f6175" fill-opacity="0.76"/>
+<rect class="vhn-outline" x="974.1" y="240.0" width="41.89" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<text x="24" y="235.0" font-size="12" fill="#7b8074">k = 4 · ARI(fine) 0.00</text>
+<g class="vhn" data-k="8" data-size="159" data-purity="0.48" data-comp="artifact×76 · animal×35 · food×25 · structure×11" data-samples="210,380,900,740,426,620,215,0,700,845,896,483,311,347,332,46" cursor="pointer">
+<rect x="24.0" y="440.0" width="151.10" height="30" fill="#2f6175" fill-opacity="0.69"/>
+<rect class="vhn-outline" x="24.0" y="440.0" width="151.10" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="8" data-size="198" data-purity="0.37" data-comp="artifact×74 · animal×66 · food×29 · other×15" data-samples="465,115,165,125,406,660,870,155,225,817,887,835,525,956,200,40" cursor="pointer">
+<rect x="181.1" y="440.0" width="188.17" height="30" fill="#2f6175" fill-opacity="0.64"/>
+<rect class="vhn-outline" x="181.1" y="440.0" width="188.17" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="8" data-size="61" data-purity="0.46" data-comp="artifact×28 · structure×14 · animal×9 · other×8" data-samples="460,325,100,108,440,545,536,477,716,732,765,811,940,963,323,241" cursor="pointer">
+<rect x="375.2" y="440.0" width="57.97" height="30" fill="#2f6175" fill-opacity="0.68"/>
+<rect class="vhn-outline" x="375.2" y="440.0" width="57.97" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="8" data-size="139" data-purity="0.39" data-comp="artifact×54 · animal×46 · structure×18 · other×15" data-samples="300,60,250,25,275,285,266,755,975,161,197,292,280,123,398,147" cursor="pointer">
+<rect x="439.1" y="440.0" width="132.10" height="30" fill="#2f6175" fill-opacity="0.64"/>
+<rect class="vhn-outline" x="439.1" y="440.0" width="132.10" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="8" data-size="224" data-purity="0.47" data-comp="artifact×106 · animal×62 · structure×27 · other×24" data-samples="55,825,255,85,205,950,515,230,555,375,695,645,350,90,5,271" cursor="pointer">
+<rect x="577.1" y="440.0" width="212.88" height="30" fill="#2f6175" fill-opacity="0.69"/>
+<rect class="vhn-outline" x="577.1" y="440.0" width="212.88" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="8" data-size="124" data-purity="0.52" data-comp="artifact×65 · animal×37 · food×7 · structure×7" data-samples="745,30,321,305,657,591,595,101,146,142,237,317,400,105,120,41" cursor="pointer">
+<rect x="796.0" y="440.0" width="117.84" height="30" fill="#2f6175" fill-opacity="0.71"/>
+<rect class="vhn-outline" x="796.0" y="440.0" width="117.84" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="8" data-size="56" data-purity="0.57" data-comp="artifact×32 · animal×8 · other×8 · food×4" data-samples="341,345,532,491,735,867,855,752,260,173,334,320,366,121,45,96" cursor="pointer">
+<rect x="919.8" y="440.0" width="53.22" height="30" fill="#2f6175" fill-opacity="0.74"/>
+<rect class="vhn-outline" x="919.8" y="440.0" width="53.22" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="8" data-size="39" data-purity="0.64" data-comp="artifact×25 · animal×7 · food×3 · other×3" data-samples="666,455,561,505,583,171,53,81,389,226,402,434,450,180,131,135" cursor="pointer">
+<rect x="978.9" y="440.0" width="37.06" height="30" fill="#2f6175" fill-opacity="0.77"/>
+<rect class="vhn-outline" x="978.9" y="440.0" width="37.06" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<text x="24" y="435.0" font-size="12" fill="#7b8074">k = 8 · ARI(fine) 0.00</text>
+<g class="vhn" data-k="16" data-size="24" data-purity="0.42" data-comp="artifact×10 · animal×7 · food×4 · other×3" data-samples="997,4,178,51,215,243,245,212,390,483,506,608,641,672,696,380" cursor="pointer">
+<rect x="24.0" y="640.0" width="21.67" height="30" fill="#2f6175" fill-opacity="0.66"/>
+<rect class="vhn-outline" x="24.0" y="640.0" width="21.67" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="72" data-purity="0.50" data-comp="artifact×36 · food×14 · animal×13 · structure×5" data-samples="900,426,741,896,588,0,332,82,845,622,410,883,310,213,217,201" cursor="pointer">
+<rect x="51.6" y="640.0" width="65.00" height="30" fill="#2f6175" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="51.6" y="640.0" width="65.00" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="64" data-purity="0.52" data-comp="artifact×33 · animal×17 · food×6 · other×5" data-samples="40,116,315,435,420,361,355,347,985,840,917,690,132,140,175,46" cursor="pointer">
+<rect x="122.6" y="640.0" width="57.77" height="30" fill="#2f6175" fill-opacity="0.71"/>
+<rect class="vhn-outline" x="122.6" y="640.0" width="57.77" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="81" data-purity="0.37" data-comp="artifact×30 · animal×27 · food×16 · other×5" data-samples="155,905,870,525,580,115,150,866,633,625,887,891,37,19,26,11" cursor="pointer">
+<rect x="186.3" y="640.0" width="73.12" height="30" fill="#2f6175" fill-opacity="0.64"/>
+<rect class="vhn-outline" x="186.3" y="640.0" width="73.12" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="19" data-purity="0.58" data-comp="artifact×11 · animal×4 · food×2 · other×2" data-samples="60,61,62,398,399,721,723,311,383,385,511,269,609,703,763,834" cursor="pointer">
+<rect x="265.4" y="640.0" width="17.15" height="30" fill="#2f6175" fill-opacity="0.74"/>
+<rect class="vhn-outline" x="265.4" y="640.0" width="17.15" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="77" data-purity="0.38" data-comp="animal×29 · artifact×20 · other×11 · food×10" data-samples="166,465,965,130,190,196,172,66,203,923,956,876,730,835,601,21" cursor="pointer">
+<rect x="288.5" y="640.0" width="69.51" height="30" fill="#1a6b06" fill-opacity="0.64"/>
+<rect class="vhn-outline" x="288.5" y="640.0" width="69.51" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="24" data-purity="0.38" data-comp="artifact×9 · structure×6 · animal×5 · other×4" data-samples="100,325,461,545,732,220,241,27,489,432,566,536,716,773,802,941" cursor="pointer">
+<rect x="363.9" y="640.0" width="21.67" height="30" fill="#2f6175" fill-opacity="0.64"/>
+<rect class="vhn-outline" x="363.9" y="640.0" width="21.67" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="42" data-purity="0.40" data-comp="artifact×17 · animal×11 · structure×6 · other×6" data-samples="77,440,575,463,688,69,64,3,108,197,329,207,330,73,80,17" cursor="pointer">
+<rect x="391.5" y="640.0" width="37.91" height="30" fill="#2f6175" fill-opacity="0.65"/>
+<rect class="vhn-outline" x="391.5" y="640.0" width="37.91" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="26" data-purity="0.54" data-comp="artifact×14 · structure×4 · other×4 · animal×3" data-samples="326,565,947,240,323,404,430,117,437,460,479,474,500,520,670,232" cursor="pointer">
+<rect x="435.4" y="640.0" width="23.47" height="30" fill="#2f6175" fill-opacity="0.72"/>
+<rect class="vhn-outline" x="435.4" y="640.0" width="23.47" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="107" data-purity="0.40" data-comp="animal×43 · artifact×41 · structure×11 · other×8" data-samples="25,250,266,246,301,755,975,156,186,278,540,406,422,305,153,22" cursor="pointer">
+<rect x="464.8" y="640.0" width="96.59" height="30" fill="#1a6b06" fill-opacity="0.65"/>
+<rect class="vhn-outline" x="464.8" y="640.0" width="96.59" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="140" data-purity="0.56" data-comp="artifact×78 · structure×30 · animal×21 · other×8" data-samples="375,675,780,280,490,510,470,292,680,555,616,612,825,295,5,95" cursor="pointer">
+<rect x="567.4" y="640.0" width="126.38" height="30" fill="#2f6175" fill-opacity="0.73"/>
+<rect class="vhn-outline" x="567.4" y="640.0" width="126.38" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="45" data-purity="0.44" data-comp="animal×20 · artifact×19 · structure×3 · food×2" data-samples="235,662,718,20,35,43,49,7,50,97,146,127,183,206,225,18" cursor="pointer">
+<rect x="699.7" y="640.0" width="40.62" height="30" fill="#1a6b06" fill-opacity="0.67"/>
+<rect class="vhn-outline" x="699.7" y="640.0" width="40.62" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="106" data-purity="0.41" data-comp="artifact×43 · animal×36 · other×12 · food×8" data-samples="255,231,6,56,142,128,90,87,306,261,770,760,805,518,415,386" cursor="pointer">
+<rect x="746.3" y="640.0" width="95.69" height="30" fill="#2f6175" fill-opacity="0.65"/>
+<rect class="vhn-outline" x="746.3" y="640.0" width="95.69" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="81" data-purity="0.53" data-comp="artifact×43 · animal×19 · other×8 · structure×6" data-samples="105,321,746,591,120,101,91,10,595,937,806,776,400,650,99,71" cursor="pointer">
+<rect x="847.9" y="640.0" width="73.12" height="30" fill="#2f6175" fill-opacity="0.72"/>
+<rect class="vhn-outline" x="847.9" y="640.0" width="73.12" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="55" data-purity="0.60" data-comp="artifact×33 · animal×8 · other×7 · structure×4" data-samples="345,341,532,491,735,673,855,752,260,173,320,297,121,145,45,96" cursor="pointer">
+<rect x="927.0" y="640.0" width="49.65" height="30" fill="#2f6175" fill-opacity="0.75"/>
+<rect class="vhn-outline" x="927.0" y="640.0" width="49.65" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="16" data-size="37" data-purity="0.62" data-comp="artifact×23 · animal×7 · food×3 · other×3" data-samples="666,505,561,583,171,53,131,81,389,402,447,434,450,180,226,135" cursor="pointer">
+<rect x="982.6" y="640.0" width="33.40" height="30" fill="#2f6175" fill-opacity="0.76"/>
+<rect class="vhn-outline" x="982.6" y="640.0" width="33.40" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<text x="24" y="635.0" font-size="12" fill="#7b8074">k = 16 · ARI(fine) 0.01</text>
+<g class="vhn" data-k="32" data-size="15" data-purity="0.40" data-comp="artifact×6 · animal×5 · food×2 · other×2" data-samples="4,51,178,215,245,390,506,672,696,720,740,839,893,925,997" cursor="pointer">
+<rect x="24.0" y="840.0" width="12.11" height="30" fill="#2f6175" fill-opacity="0.65"/>
+<rect class="vhn-outline" x="24.0" y="840.0" width="12.11" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="26" data-purity="0.77" data-comp="artifact×20 · animal×3 · food×3" data-samples="410,412,332,622,741,289,0,201,48,405,396,339,551,588,649,702" cursor="pointer">
+<rect x="42.1" y="840.0" width="20.99" height="30" fill="#2f6175" fill-opacity="0.83"/>
+<rect class="vhn-outline" x="42.1" y="840.0" width="20.99" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="38" data-purity="0.55" data-comp="artifact×21 · animal×11 · other×4 · food×2" data-samples="116,315,347,16,132,153,46,75,175,170,216,187,335,358,370,421" cursor="pointer">
+<rect x="69.0" y="840.0" width="30.68" height="30" fill="#2f6175" fill-opacity="0.73"/>
+<rect class="vhn-outline" x="69.0" y="840.0" width="30.68" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="19" data-purity="0.68" data-comp="artifact×13 · food×3 · animal×2 · other×1" data-samples="310,311,608,609,269,243,383,399,484,511,681,723,744,763,816,834" cursor="pointer">
+<rect x="105.6" y="840.0" width="15.34" height="30" fill="#2f6175" fill-opacity="0.79"/>
+<rect class="vhn-outline" x="105.6" y="840.0" width="15.34" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="13" data-purity="0.38" data-comp="artifact×5 · food×4 · animal×3 · other×1" data-samples="580,581,918,919,188,44,381,525,633,140,875,891,936" cursor="pointer">
+<rect x="126.9" y="840.0" width="10.50" height="30" fill="#2f6175" fill-opacity="0.64"/>
+<rect class="vhn-outline" x="126.9" y="840.0" width="10.50" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="34" data-purity="0.29" data-comp="food×10 · artifact×9 · animal×7 · other×6" data-samples="921,890,887,835,1,19,67,165,408,465,524,586,179,184,204,282" cursor="pointer">
+<rect x="143.4" y="840.0" width="27.45" height="30" fill="#c3a322" fill-opacity="0.60"/>
+<rect class="vhn-outline" x="143.4" y="840.0" width="27.45" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="7" data-purity="0.43" data-comp="animal×3 · artifact×3 · other×1" data-samples="60,61,62,385,398,721,996" cursor="pointer">
+<rect x="176.8" y="840.0" width="5.65" height="30" fill="#1a6b06" fill-opacity="0.66"/>
+<rect class="vhn-outline" x="176.8" y="840.0" width="5.65" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="39" data-purity="0.38" data-comp="artifact×15 · animal×13 · food×7 · structure×2" data-samples="480,227,420,872,76,26,40,37,141,200,206,249,291,111,126,54" cursor="pointer">
+<rect x="188.4" y="840.0" width="31.49" height="30" fill="#2f6175" fill-opacity="0.64"/>
+<rect class="vhn-outline" x="188.4" y="840.0" width="31.49" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="58" data-purity="0.29" data-comp="artifact×17 · animal×15 · structure×14 · food×8" data-samples="82,375,426,900,692,472,38,5,817,676,281,195,31,89,129,213" cursor="pointer">
+<rect x="225.8" y="840.0" width="46.83" height="30" fill="#2f6175" fill-opacity="0.60"/>
+<rect class="vhn-outline" x="225.8" y="840.0" width="46.83" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="16" data-purity="0.44" data-comp="artifact×7 · structure×5 · animal×2 · other×2" data-samples="325,328,545,546,732,733,220,432,461,479,100,489,773,802,963,986" cursor="pointer">
+<rect x="278.6" y="840.0" width="12.92" height="30" fill="#2f6175" fill-opacity="0.67"/>
+<rect class="vhn-outline" x="278.6" y="840.0" width="12.92" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="38" data-purity="0.42" data-comp="animal×16 · artifact×7 · food×6 · other×5" data-samples="166,876,965,302,880,23,66,29,177,194,196,203,74,107,130,172" cursor="pointer">
+<rect x="297.5" y="840.0" width="30.68" height="30" fill="#1a6b06" fill-opacity="0.66"/>
+<rect class="vhn-outline" x="297.5" y="840.0" width="30.68" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="16" data-purity="0.50" data-comp="artifact×8 · structure×4 · animal×2 · other×2" data-samples="462,464,103,329,241,330,440,477,502,536,566,575,716,767,941,981" cursor="pointer">
+<rect x="334.1" y="840.0" width="12.92" height="30" fill="#2f6175" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="334.1" y="840.0" width="12.92" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="21" data-purity="0.38" data-comp="artifact×8 · animal×7 · other×3 · structure×2" data-samples="77,78,688,689,64,17,80,207,368,69,443,463,579,539,647,764" cursor="pointer">
+<rect x="353.0" y="840.0" width="16.96" height="30" fill="#2f6175" fill-opacity="0.64"/>
+<rect class="vhn-outline" x="353.0" y="840.0" width="16.96" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="78" data-purity="0.40" data-comp="artifact×31 · animal×29 · structure×9 · other×5" data-samples="155,113,147,115,150,406,250,286,935,975,703,718,755,795,143,125" cursor="pointer">
+<rect x="375.9" y="840.0" width="62.98" height="30" fill="#2f6175" fill-opacity="0.65"/>
+<rect class="vhn-outline" x="375.9" y="840.0" width="62.98" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="36" data-purity="0.47" data-comp="artifact×17 · animal×7 · food×5 · structure×4" data-samples="190,613,845,137,217,223,164,212,338,374,380,418,453,455,273,295" cursor="pointer">
+<rect x="444.9" y="840.0" width="29.07" height="30" fill="#2f6175" fill-opacity="0.69"/>
+<rect class="vhn-outline" x="444.9" y="840.0" width="29.07" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="12" data-purity="0.50" data-comp="artifact×6 · structure×4 · animal×1 · other×1" data-samples="326,327,240,323,437,460,474,500,670,717,765,947" cursor="pointer">
+<rect x="479.9" y="840.0" width="9.69" height="30" fill="#2f6175" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="479.9" y="840.0" width="9.69" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="17" data-purity="0.65" data-comp="artifact×11 · animal×4 · structure×2" data-samples="278,279,34,236,186,246,301,305,424,504,582,627,667,713,756,779" cursor="pointer">
+<rect x="495.5" y="840.0" width="13.73" height="30" fill="#2f6175" fill-opacity="0.77"/>
+<rect class="vhn-outline" x="495.5" y="840.0" width="13.73" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="36" data-purity="0.33" data-comp="animal×12 · artifact×11 · structure×6 · other×4" data-samples="21,960,815,438,108,2,63,73,244,254,265,306,357,185,199,205" cursor="pointer">
+<rect x="515.2" y="840.0" width="29.07" height="30" fill="#1a6b06" fill-opacity="0.62"/>
+<rect class="vhn-outline" x="515.2" y="840.0" width="29.07" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="22" data-purity="0.50" data-comp="artifact×11 · animal×9 · food×1 · other×1" data-samples="662,15,94,65,133,138,168,127,225,235,407,277,469,496,552,606" cursor="pointer">
+<rect x="550.2" y="840.0" width="17.76" height="30" fill="#2f6175" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="550.2" y="840.0" width="17.76" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="13" data-purity="0.38" data-comp="artifact×5 · other×4 · animal×3 · food×1" data-samples="117,180,232,320,507,567,712,812,859,869,940,948,961" cursor="pointer">
+<rect x="573.9" y="840.0" width="10.50" height="30" fill="#2f6175" fill-opacity="0.64"/>
+<rect class="vhn-outline" x="573.9" y="840.0" width="10.50" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="38" data-purity="0.34" data-comp="animal×13 · artifact×11 · structure×9 · other×4" data-samples="123,292,280,856,79,86,28,9,156,134,161,198,248,209,285,12" cursor="pointer">
+<rect x="590.4" y="840.0" width="30.68" height="30" fill="#1a6b06" fill-opacity="0.62"/>
+<rect class="vhn-outline" x="590.4" y="840.0" width="30.68" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="16" data-purity="0.56" data-comp="artifact×9 · animal×3 · structure×2 · other×2" data-samples="956,957,135,262,226,348,376,404,300,527,533,565,538,611,615,776" cursor="pointer">
+<rect x="627.0" y="840.0" width="12.92" height="30" fill="#2f6175" fill-opacity="0.73"/>
+<rect class="vhn-outline" x="627.0" y="840.0" width="12.92" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="55" data-purity="0.62" data-comp="artifact×34 · animal×11 · structure×8 · other×2" data-samples="825,58,351,340,603,522,515,425,780,790,695,176,160,98,181,6" cursor="pointer">
+<rect x="645.9" y="840.0" width="44.41" height="30" fill="#2f6175" fill-opacity="0.76"/>
+<rect class="vhn-outline" x="645.9" y="840.0" width="44.41" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="26" data-purity="0.54" data-comp="animal×14 · artifact×11 · food×1" data-samples="237,238,42,690,18,49,50,97,7,146,183,189,318,397,451,531" cursor="pointer">
+<rect x="696.3" y="840.0" width="20.99" height="30" fill="#1a6b06" fill-opacity="0.72"/>
+<rect class="vhn-outline" x="696.3" y="840.0" width="20.99" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="39" data-purity="0.79" data-comp="artifact×31 · structure×5 · animal×1 · food×1" data-samples="616,617,543,72,272,309,321,276,299,361,367,373,377,400,430,337" cursor="pointer">
+<rect x="723.2" y="840.0" width="31.49" height="30" fill="#2f6175" fill-opacity="0.85"/>
+<rect class="vhn-outline" x="723.2" y="840.0" width="31.49" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="67" data-purity="0.52" data-comp="artifact×35 · animal×18 · other×8 · structure×4" data-samples="591,105,495,91,736,563,555,823,991,142,136,3,71,30,99,13" cursor="pointer">
+<rect x="760.7" y="840.0" width="54.10" height="30" fill="#2f6175" fill-opacity="0.71"/>
+<rect class="vhn-outline" x="760.7" y="840.0" width="54.10" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="40" data-purity="0.47" data-comp="artifact×19 · animal×12 · food×5 · other×3" data-samples="870,27,87,53,95,104,112,92,131,144,145,210,366,384,488,121" cursor="pointer">
+<rect x="820.7" y="840.0" width="32.30" height="30" fill="#2f6175" fill-opacity="0.69"/>
+<rect class="vhn-outline" x="820.7" y="840.0" width="32.30" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="52" data-purity="0.52" data-comp="animal×27 · artifact×12 · other×9 · food×4" data-samples="255,256,231,945,261,851,926,56,70,128,139,158,152,162,88,32" cursor="pointer">
+<rect x="859.0" y="840.0" width="41.99" height="30" fill="#1a6b06" fill-opacity="0.71"/>
+<rect class="vhn-outline" x="859.0" y="840.0" width="41.99" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="34" data-purity="0.47" data-comp="artifact×16 · animal×8 · food×3 · structure×3" data-samples="322,806,41,10,110,120,148,33,192,365,372,391,436,514,573,101" cursor="pointer">
+<rect x="906.9" y="840.0" width="27.45" height="30" fill="#2f6175" fill-opacity="0.69"/>
+<rect class="vhn-outline" x="906.9" y="840.0" width="27.45" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="29" data-purity="0.59" data-comp="artifact×17 · animal×5 · structure×3 · other×3" data-samples="173,673,45,35,297,312,346,96,387,444,535,490,548,570,577,655" cursor="pointer">
+<rect x="940.3" y="840.0" width="23.42" height="30" fill="#2f6175" fill-opacity="0.74"/>
+<rect class="vhn-outline" x="940.3" y="840.0" width="23.42" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="20" data-purity="0.65" data-comp="artifact×13 · animal×2 · structure×2 · other×2" data-samples="341,344,532,534,260,102,345,448,486,334,493,559,600,739,754,766" cursor="pointer">
+<rect x="969.7" y="840.0" width="16.15" height="30" fill="#2f6175" fill-opacity="0.78"/>
+<rect class="vhn-outline" x="969.7" y="840.0" width="16.15" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="32" data-size="30" data-purity="0.70" data-comp="artifact×21 · food×3 · other×3 · animal×2" data-samples="666,668,583,505,81,434,447,389,171,458,450,561,547,574,605,630" cursor="pointer">
+<rect x="991.8" y="840.0" width="24.22" height="30" fill="#2f6175" fill-opacity="0.80"/>
+<rect class="vhn-outline" x="991.8" y="840.0" width="24.22" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<text x="24" y="835.0" font-size="12" fill="#7b8074">k = 32 · ARI(fine) 0.01</text>
+<g class="vhn" data-k="64" data-size="11" data-purity="0.45" data-comp="animal×5 · artifact×4 · food×1 · other×1" data-samples="4,51,178,215,245,390,506,672,740,893,997" cursor="pointer">
+<rect x="24.0" y="1040.0" width="6.79" height="30" fill="#1a6b06" fill-opacity="0.68"/>
+<rect class="vhn-outline" x="24.0" y="1040.0" width="6.79" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="19" data-purity="0.68" data-comp="artifact×13 · animal×3 · food×3" data-samples="410,412,413,0,201,48,332,339,396,588,622,702,710,742,789,804" cursor="pointer">
+<rect x="36.7" y="1040.0" width="11.72" height="30" fill="#2f6175" fill-opacity="0.79"/>
+<rect class="vhn-outline" x="36.7" y="1040.0" width="11.72" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="11" data-purity="0.55" data-comp="artifact×6 · animal×3 · other×2" data-samples="170,175,187,349,485,631,648,654,687,929,932" cursor="pointer">
+<rect x="54.4" y="1040.0" width="6.79" height="30" fill="#2f6175" fill-opacity="0.72"/>
+<rect class="vhn-outline" x="54.4" y="1040.0" width="6.79" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="9" data-purity="0.78" data-comp="artifact×7 · food×1 · other×1" data-samples="311,383,511,609,681,744,763,834,884" cursor="pointer">
+<rect x="67.2" y="1040.0" width="5.55" height="30" fill="#2f6175" fill-opacity="0.84"/>
+<rect class="vhn-outline" x="67.2" y="1040.0" width="5.55" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="10" data-purity="0.50" data-comp="artifact×5 · animal×2 · food×1 · structure×1" data-samples="75,118,315,335,521,568,727,799,842,993" cursor="pointer">
+<rect x="78.7" y="1040.0" width="6.17" height="30" fill="#2f6175" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="78.7" y="1040.0" width="6.17" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="6" data-purity="0.33" data-comp="animal×2 · artifact×2 · food×2" data-samples="61,269,399,723,914,916" cursor="pointer">
+<rect x="90.8" y="1040.0" width="3.70" height="30" fill="#1a6b06" fill-opacity="0.62"/>
+<rect class="vhn-outline" x="90.8" y="1040.0" width="3.70" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="9" data-purity="0.33" data-comp="animal×3 · artifact×3 · food×3" data-samples="44,140,188,525,581,694,875,891,919" cursor="pointer">
+<rect x="100.4" y="1040.0" width="5.55" height="30" fill="#1a6b06" fill-opacity="0.62"/>
+<rect class="vhn-outline" x="100.4" y="1040.0" width="5.55" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="11" data-purity="0.64" data-comp="artifact×7 · other×2 · animal×1 · food×1" data-samples="620,624,46,381,347,421,451,700,836,936,987" cursor="pointer">
+<rect x="111.9" y="1040.0" width="6.79" height="30" fill="#2f6175" fill-opacity="0.77"/>
+<rect class="vhn-outline" x="111.9" y="1040.0" width="6.79" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="3" data-purity="0.67" data-comp="animal×2 · artifact×1" data-samples="60,62,398" cursor="pointer">
+<rect x="124.7" y="1040.0" width="1.85" height="30" fill="#1a6b06" fill-opacity="0.78"/>
+<rect class="vhn-outline" x="124.7" y="1040.0" width="1.85" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="23" data-purity="0.39" data-comp="artifact×9 · food×7 · animal×4 · other×2" data-samples="890,1,157,19,282,357,408,179,507,586,651,791,803,814,838,465" cursor="pointer">
+<rect x="132.5" y="1040.0" width="14.19" height="30" fill="#2f6175" fill-opacity="0.65"/>
+<rect class="vhn-outline" x="132.5" y="1040.0" width="14.19" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="11" data-purity="0.45" data-comp="animal×5 · artifact×4 · food×1 · structure×1" data-samples="40,76,111,229,249,291,435,466,529,597,913" cursor="pointer">
+<rect x="152.6" y="1040.0" width="6.79" height="30" fill="#1a6b06" fill-opacity="0.68"/>
+<rect class="vhn-outline" x="152.6" y="1040.0" width="6.79" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="5" data-purity="0.40" data-comp="other×2 · animal×1 · artifact×1 · food×1" data-samples="217,580,918,921,999" cursor="pointer">
+<rect x="165.4" y="1040.0" width="3.09" height="30" fill="#7b8074" fill-opacity="0.65"/>
+<rect class="vhn-outline" x="165.4" y="1040.0" width="3.09" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="29" data-purity="0.38" data-comp="artifact×11 · animal×9 · structure×7 · food×2" data-samples="375,378,83,281,38,551,426,11,8,270,263,129,89,314,446,457" cursor="pointer">
+<rect x="174.4" y="1040.0" width="17.89" height="30" fill="#2f6175" fill-opacity="0.64"/>
+<rect class="vhn-outline" x="174.4" y="1040.0" width="17.89" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="12" data-purity="0.42" data-comp="animal×5 · artifact×5 · structure×2" data-samples="16,126,216,222,227,338,364,420,433,472,482,643" cursor="pointer">
+<rect x="198.2" y="1040.0" width="7.40" height="30" fill="#1a6b06" fill-opacity="0.66"/>
+<rect class="vhn-outline" x="198.2" y="1040.0" width="7.40" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="7" data-purity="0.57" data-comp="artifact×4 · animal×3" data-samples="153,177,243,608,720,728,826" cursor="pointer">
+<rect x="211.6" y="1040.0" width="4.32" height="30" fill="#2f6175" fill-opacity="0.74"/>
+<rect class="vhn-outline" x="211.6" y="1040.0" width="4.32" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="15" data-purity="0.40" data-comp="artifact×6 · structure×5 · animal×2 · other×2" data-samples="325,328,732,733,220,100,461,479,489,432,546,773,802,963,986" cursor="pointer">
+<rect x="221.9" y="1040.0" width="9.26" height="30" fill="#2f6175" fill-opacity="0.65"/>
+<rect class="vhn-outline" x="221.9" y="1040.0" width="9.26" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="5" data-purity="0.60" data-comp="animal×3 · artifact×1 · other×1" data-samples="66,107,172,336,951" cursor="pointer">
+<rect x="237.1" y="1040.0" width="3.09" height="30" fill="#1a6b06" fill-opacity="0.75"/>
+<rect class="vhn-outline" x="237.1" y="1040.0" width="3.09" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="10" data-purity="0.40" data-comp="animal×4 · artifact×2 · other×2 · food×1" data-samples="922,924,82,190,165,204,273,583,888,974" cursor="pointer">
+<rect x="246.1" y="1040.0" width="6.17" height="30" fill="#1a6b06" fill-opacity="0.65"/>
+<rect class="vhn-outline" x="246.1" y="1040.0" width="6.17" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="17" data-purity="0.41" data-comp="structure×7 · food×6 · artifact×2 · animal×1" data-samples="675,676,678,902,904,416,195,429,473,520,299,692,841,883,897,907" cursor="pointer">
+<rect x="258.2" y="1040.0" width="10.49" height="30" fill="#865ecf" fill-opacity="0.66"/>
+<rect class="vhn-outline" x="258.2" y="1040.0" width="10.49" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="15" data-purity="0.40" data-comp="food×6 · animal×4 · other×3 · artifact×1" data-samples="876,879,895,896,965,969,130,203,352,194,167,854,730,880,998" cursor="pointer">
+<rect x="274.7" y="1040.0" width="9.26" height="30" fill="#c3a322" fill-opacity="0.65"/>
+<rect class="vhn-outline" x="274.7" y="1040.0" width="9.26" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="24" data-purity="0.46" data-comp="animal×11 · artifact×5 · food×4 · structure×3" data-samples="872,26,37,31,141,151,159,114,184,202,238,303,356,363,393,163" cursor="pointer">
+<rect x="289.9" y="1040.0" width="14.81" height="30" fill="#1a6b06" fill-opacity="0.68"/>
+<rect class="vhn-outline" x="289.9" y="1040.0" width="14.81" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="11" data-purity="0.36" data-comp="artifact×4 · structure×4 · animal×2 · other×1" data-samples="103,241,329,440,477,502,536,566,575,716,941" cursor="pointer">
+<rect x="310.7" y="1040.0" width="6.79" height="30" fill="#2f6175" fill-opacity="0.63"/>
+<rect class="vhn-outline" x="310.7" y="1040.0" width="6.79" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="12" data-purity="0.50" data-comp="artifact×6 · animal×4 · structure×2" data-samples="34,115,125,150,310,331,359,415,468,471,484,816" cursor="pointer">
+<rect x="323.4" y="1040.0" width="7.40" height="30" fill="#2f6175" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="323.4" y="1040.0" width="7.40" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="14" data-purity="0.43" data-comp="artifact×6 · animal×4 · other×2 · plant×1" data-samples="17,64,78,80,368,443,539,647,688,764,811,955,964,973" cursor="pointer">
+<rect x="336.7" y="1040.0" width="8.64" height="30" fill="#2f6175" fill-opacity="0.66"/>
+<rect class="vhn-outline" x="336.7" y="1040.0" width="8.64" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="30" data-purity="0.43" data-comp="artifact×13 · food×8 · animal×4 · other×3" data-samples="840,843,316,355,212,845,976,95,169,483,496,614,641,652,370,380" cursor="pointer">
+<rect x="351.3" y="1040.0" width="18.51" height="30" fill="#2f6175" fill-opacity="0.67"/>
+<rect class="vhn-outline" x="351.3" y="1040.0" width="18.51" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="19" data-purity="0.47" data-comp="artifact×9 · animal×5 · structure×2 · other×2" data-samples="22,23,29,164,232,286,296,302,403,422,504,509,589,703,741,759" cursor="pointer">
+<rect x="375.8" y="1040.0" width="11.72" height="30" fill="#2f6175" fill-opacity="0.69"/>
+<rect class="vhn-outline" x="375.8" y="1040.0" width="11.72" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="26" data-purity="0.38" data-comp="animal×10 · artifact×9 · structure×4 · food×2" data-samples="815,817,65,601,24,47,193,196,5,228,266,382,369,417,599,623" cursor="pointer">
+<rect x="393.5" y="1040.0" width="16.04" height="30" fill="#1a6b06" fill-opacity="0.64"/>
+<rect class="vhn-outline" x="393.5" y="1040.0" width="16.04" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="30" data-purity="0.57" data-comp="artifact×17 · animal×6 · structure×4 · food×1" data-samples="147,718,218,143,268,304,307,224,445,459,487,528,542,590,606,406" cursor="pointer">
+<rect x="415.5" y="1040.0" width="18.51" height="30" fill="#2f6175" fill-opacity="0.73"/>
+<rect class="vhn-outline" x="415.5" y="1040.0" width="18.51" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="10" data-purity="0.50" data-comp="artifact×5 · other×3 · animal×1 · food×1" data-samples="462,464,109,330,545,767,885,933,944,981" cursor="pointer">
+<rect x="439.9" y="1040.0" width="6.17" height="30" fill="#2f6175" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="439.9" y="1040.0" width="6.17" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="6" data-purity="0.33" data-comp="animal×2 · artifact×2 · structure×1 · other×1" data-samples="73,77,439,463,579,962" cursor="pointer">
+<rect x="452.1" y="1040.0" width="3.70" height="30" fill="#1a6b06" fill-opacity="0.62"/>
+<rect class="vhn-outline" x="452.1" y="1040.0" width="3.70" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="8" data-purity="0.50" data-comp="artifact×4 · food×3 · animal×1" data-samples="112,289,333,405,524,867,870,905" cursor="pointer">
+<rect x="461.7" y="1040.0" width="4.94" height="30" fill="#2f6175" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="461.7" y="1040.0" width="4.94" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="12" data-purity="0.50" data-comp="artifact×6 · structure×4 · animal×1 · other×1" data-samples="326,327,240,323,437,460,474,500,670,717,765,947" cursor="pointer">
+<rect x="472.6" y="1040.0" width="7.40" height="30" fill="#2f6175" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="472.6" y="1040.0" width="7.40" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="21" data-purity="0.57" data-comp="artifact×12 · animal×6 · food×1 · structure×1" data-samples="660,662,21,127,108,244,254,353,200,386,407,430,423,438,543,671" cursor="pointer">
+<rect x="486.0" y="1040.0" width="12.96" height="30" fill="#2f6175" fill-opacity="0.74"/>
+<rect class="vhn-outline" x="486.0" y="1040.0" width="12.96" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="10" data-purity="0.50" data-comp="artifact×5 · animal×3 · structure×2" data-samples="186,236,246,301,305,582,627,713,779,798" cursor="pointer">
+<rect x="504.9" y="1040.0" width="6.17" height="30" fill="#2f6175" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="504.9" y="1040.0" width="6.17" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="11" data-purity="0.64" data-comp="animal×7 · artifact×4" data-samples="166,168,663,664,133,15,225,235,277,138,552" cursor="pointer">
+<rect x="517.0" y="1040.0" width="6.79" height="30" fill="#1a6b06" fill-opacity="0.77"/>
+<rect class="vhn-outline" x="517.0" y="1040.0" width="6.79" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="6" data-purity="0.33" data-comp="animal×2 · artifact×2 · food×1 · other×1" data-samples="467,469,94,265,850,923" cursor="pointer">
+<rect x="529.7" y="1040.0" width="3.70" height="30" fill="#1a6b06" fill-opacity="0.62"/>
+<rect class="vhn-outline" x="529.7" y="1040.0" width="3.70" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="13" data-purity="0.38" data-comp="artifact×5 · animal×4 · other×3 · structure×1" data-samples="63,185,199,205,306,362,392,591,689,705,950,960,988" cursor="pointer">
+<rect x="539.4" y="1040.0" width="8.02" height="30" fill="#2f6175" fill-opacity="0.64"/>
+<rect class="vhn-outline" x="539.4" y="1040.0" width="8.02" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="26" data-purity="0.50" data-comp="animal×13 · artifact×9 · structure×2 · other×2" data-samples="9,28,59,74,86,134,156,182,198,209,242,248,267,283,285,292" cursor="pointer">
+<rect x="553.4" y="1040.0" width="16.04" height="30" fill="#1a6b06" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="553.4" y="1040.0" width="16.04" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="27" data-purity="0.59" data-comp="artifact×16 · structure×5 · animal×4 · food×1" data-samples="490,492,295,510,124,223,278,191,137,374,351,515,530,578,613,632" cursor="pointer">
+<rect x="575.3" y="1040.0" width="16.66" height="30" fill="#2f6175" fill-opacity="0.75"/>
+<rect class="vhn-outline" x="575.3" y="1040.0" width="16.66" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="14" data-purity="0.79" data-comp="animal×11 · other×2 · food×1" data-samples="250,251,253,110,113,79,25,123,128,139,155,881,935,954" cursor="pointer">
+<rect x="598.0" y="1040.0" width="8.64" height="30" fill="#1a6b06" fill-opacity="0.84"/>
+<rect class="vhn-outline" x="598.0" y="1040.0" width="8.64" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="7" data-purity="0.43" data-comp="artifact×3 · other×2 · animal×1 · food×1" data-samples="117,567,712,812,869,948,961" cursor="pointer">
+<rect x="612.5" y="1040.0" width="4.32" height="30" fill="#2f6175" fill-opacity="0.66"/>
+<rect class="vhn-outline" x="612.5" y="1040.0" width="4.32" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="17" data-purity="0.59" data-comp="artifact×10 · animal×3 · structure×2 · other×2" data-samples="956,957,135,262,226,348,376,404,300,527,533,565,538,611,615,756" cursor="pointer">
+<rect x="622.8" y="1040.0" width="10.49" height="30" fill="#2f6175" fill-opacity="0.74"/>
+<rect class="vhn-outline" x="622.8" y="1040.0" width="10.49" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="17" data-purity="0.76" data-comp="artifact×13 · animal×2 · structure×1 · other×1" data-samples="400,401,99,288,132,312,321,442,516,541,569,595,635,748,777,787" cursor="pointer">
+<rect x="639.3" y="1040.0" width="10.49" height="30" fill="#2f6175" fill-opacity="0.83"/>
+<rect class="vhn-outline" x="639.3" y="1040.0" width="10.49" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="15" data-purity="0.40" data-comp="artifact×6 · structure×5 · animal×3 · other×1" data-samples="12,72,161,280,293,441,470,475,517,544,617,636,677,714,857" cursor="pointer">
+<rect x="655.7" y="1040.0" width="9.26" height="30" fill="#2f6175" fill-opacity="0.65"/>
+<rect class="vhn-outline" x="655.7" y="1040.0" width="9.26" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="28" data-purity="0.50" data-comp="artifact×14 · animal×8 · other×3 · structure×2" data-samples="85,87,556,68,6,181,207,340,160,354,411,488,480,550,602,612" cursor="pointer">
+<rect x="670.9" y="1040.0" width="17.28" height="30" fill="#2f6175" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="670.9" y="1040.0" width="17.28" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="10" data-purity="0.60" data-comp="animal×6 · artifact×4" data-samples="7,20,49,189,206,239,397,531,607,706" cursor="pointer">
+<rect x="694.1" y="1040.0" width="6.17" height="30" fill="#1a6b06" fill-opacity="0.75"/>
+<rect class="vhn-outline" x="694.1" y="1040.0" width="6.17" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="20" data-purity="0.50" data-comp="artifact×10 · animal×5 · other×3 · structure×2" data-samples="825,828,495,497,3,91,211,290,136,197,456,414,698,481,711,715" cursor="pointer">
+<rect x="706.3" y="1040.0" width="12.34" height="30" fill="#2f6175" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="706.3" y="1040.0" width="12.34" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="34" data-purity="0.65" data-comp="artifact×22 · structure×5 · animal×4 · other×2" data-samples="790,518,425,522,926,98,313,58,394,350,343,449,503,454,176,261" cursor="pointer">
+<rect x="724.6" y="1040.0" width="20.98" height="30" fill="#2f6175" fill-opacity="0.77"/>
+<rect class="vhn-outline" x="724.6" y="1040.0" width="20.98" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="24" data-purity="0.79" data-comp="artifact×19 · other×2 · animal×1 · food×1" data-samples="275,592,271,154,294,385,395,287,424,499,557,526,564,644,653,667" cursor="pointer">
+<rect x="751.5" y="1040.0" width="14.81" height="30" fill="#2f6175" fill-opacity="0.85"/>
+<rect class="vhn-outline" x="751.5" y="1040.0" width="14.81" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="10" data-purity="0.60" data-comp="animal×6 · artifact×4" data-samples="690,691,18,97,42,183,237,610,146,665" cursor="pointer">
+<rect x="772.2" y="1040.0" width="6.17" height="30" fill="#1a6b06" fill-opacity="0.75"/>
+<rect class="vhn-outline" x="772.2" y="1040.0" width="6.17" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="18" data-purity="0.72" data-comp="artifact×13 · structure×3 · other×2" data-samples="616,618,619,830,833,272,276,367,373,337,361,478,377,682,661,737" cursor="pointer">
+<rect x="784.4" y="1040.0" width="11.11" height="30" fill="#2f6175" fill-opacity="0.81"/>
+<rect class="vhn-outline" x="784.4" y="1040.0" width="11.11" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="48" data-purity="0.58" data-comp="animal×28 · artifact×9 · other×8 · food×3" data-samples="255,256,230,945,55,116,851,990,52,90,142,158,152,162,69,70" cursor="pointer">
+<rect x="801.4" y="1040.0" width="29.62" height="30" fill="#1a6b06" fill-opacity="0.74"/>
+<rect class="vhn-outline" x="801.4" y="1040.0" width="29.62" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="17" data-purity="0.47" data-comp="animal×8 · artifact×5 · structure×2 · food×1" data-samples="105,106,2,30,13,93,104,122,317,360,419,537,563,593,738,853" cursor="pointer">
+<rect x="837.0" y="1040.0" width="10.49" height="30" fill="#1a6b06" fill-opacity="0.69"/>
+<rect class="vhn-outline" x="837.0" y="1040.0" width="10.49" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="12" data-purity="0.58" data-comp="artifact×7 · animal×5" data-samples="10,33,43,50,71,309,318,324,452,534,657,768" cursor="pointer">
+<rect x="853.4" y="1040.0" width="7.40" height="30" fill="#2f6175" fill-opacity="0.74"/>
+<rect class="vhn-outline" x="853.4" y="1040.0" width="7.40" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="25" data-purity="0.48" data-comp="artifact×12 · animal×8 · food×3 · other×2" data-samples="673,645,35,54,174,192,92,96,264,221,554,549,596,655,701,743" cursor="pointer">
+<rect x="866.8" y="1040.0" width="15.43" height="30" fill="#2f6175" fill-opacity="0.69"/>
+<rect class="vhn-outline" x="866.8" y="1040.0" width="15.43" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="19" data-purity="0.47" data-comp="artifact×9 · other×5 · animal×4 · food×1" data-samples="940,943,121,180,144,366,491,498,210,724,729,751,762,805,859,862" cursor="pointer">
+<rect x="888.2" y="1040.0" width="11.72" height="30" fill="#2f6175" fill-opacity="0.69"/>
+<rect class="vhn-outline" x="888.2" y="1040.0" width="11.72" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="19" data-purity="0.84" data-comp="artifact×16 · food×2 · animal×1" data-samples="450,453,680,684,389,131,402,434,455,384,547,562,630,605,656,666" cursor="pointer">
+<rect x="905.8" y="1040.0" width="11.72" height="30" fill="#2f6175" fill-opacity="0.87"/>
+<rect class="vhn-outline" x="905.8" y="1040.0" width="11.72" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="6" data-purity="0.50" data-comp="animal×3 · artifact×3" data-samples="53,102,145,320,739,788" cursor="pointer">
+<rect x="923.5" y="1040.0" width="3.70" height="30" fill="#1a6b06" fill-opacity="0.70"/>
+<rect class="vhn-outline" x="923.5" y="1040.0" width="3.70" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="13" data-purity="0.38" data-comp="artifact×5 · structure×4 · animal×2 · other×2" data-samples="45,252,346,387,444,577,600,722,766,772,775,832,855" cursor="pointer">
+<rect x="933.2" y="1040.0" width="8.02" height="30" fill="#2f6175" fill-opacity="0.64"/>
+<rect class="vhn-outline" x="933.2" y="1040.0" width="8.02" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="16" data-purity="0.44" data-comp="artifact×7 · animal×3 · other×3 · structure×2" data-samples="27,101,148,391,431,436,576,598,650,659,793,797,858,942,958,971" cursor="pointer">
+<rect x="947.1" y="1040.0" width="9.87" height="30" fill="#2f6175" fill-opacity="0.67"/>
+<rect class="vhn-outline" x="947.1" y="1040.0" width="9.87" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="15" data-purity="0.60" data-comp="artifact×9 · animal×2 · food×2 · structure×1" data-samples="806,809,41,372,120,573,679,707,514,725,746,750,886,898,983" cursor="pointer">
+<rect x="963.0" y="1040.0" width="9.26" height="30" fill="#2f6175" fill-opacity="0.75"/>
+<rect class="vhn-outline" x="963.0" y="1040.0" width="9.26" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="15" data-purity="0.67" data-comp="artifact×10 · food×2 · animal×1 · structure×1" data-samples="341,344,260,334,345,448,486,493,532,559,754,796,848,877,931" cursor="pointer">
+<rect x="978.2" y="1040.0" width="9.26" height="30" fill="#2f6175" fill-opacity="0.78"/>
+<rect class="vhn-outline" x="978.2" y="1040.0" width="9.26" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="10" data-purity="0.70" data-comp="artifact×7 · animal×1 · food×1 · structure×1" data-samples="173,297,535,548,570,735,745,752,810,860" cursor="pointer">
+<rect x="993.4" y="1040.0" width="6.17" height="30" fill="#2f6175" fill-opacity="0.80"/>
+<rect class="vhn-outline" x="993.4" y="1040.0" width="6.17" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<g class="vhn" data-k="64" data-size="17" data-purity="0.59" data-comp="artifact×10 · other×3 · animal×2 · food×1" data-samples="505,508,668,669,447,81,458,561,574,171,584,685,820,831,911,972" cursor="pointer">
+<rect x="1005.5" y="1040.0" width="10.49" height="30" fill="#2f6175" fill-opacity="0.74"/>
+<rect class="vhn-outline" x="1005.5" y="1040.0" width="10.49" height="30" fill="none" stroke="#1f3318" stroke-width="0.6"/>
+</g>
+<text x="24" y="1035.0" font-size="12" fill="#7b8074">k = 64 · ARI(fine) 0.01</text>
+<rect x="24" y="12" width="11" height="11" fill="#1a6b06"/>
+<text x="39" y="21" font-size="10.5" fill="#1f3318">animal</text>
+<rect x="88" y="12" width="11" height="11" fill="#2f6175"/>
+<text x="103" y="21" font-size="10.5" fill="#1f3318">artifact</text>
+<rect x="166" y="12" width="11" height="11" fill="#c3a322"/>
+<text x="181" y="21" font-size="10.5" fill="#1f3318">food</text>
+<rect x="216" y="12" width="11" height="11" fill="#76a66a"/>
+<text x="231" y="21" font-size="10.5" fill="#1f3318">plant</text>
+<rect x="273" y="12" width="11" height="11" fill="#865ecf"/>
+<text x="288" y="21" font-size="10.5" fill="#1f3318">structure</text>
+<rect x="358" y="12" width="11" height="11" fill="#7b8074"/>
+<text x="373" y="21" font-size="10.5" fill="#1f3318">other</text>
+<text x="1016" y="21" text-anchor="end" font-size="10.5" fill="#7b8074">hover a node for images · click to pin</text>
+</svg>
+<!-- TVHIER_SVG_END -->
+          <figcaption><b>Fig. 4</b> · Giant vertical cluster hierarchy of the 200-class BIF,
+          k = 2…64 (ARI vs fine class under each level — chance throughout). Nodes coloured by WordNet
+          super-category. Green (animal) clusters coalesce at fine k without ever forming a clean
+          coarse split. Hover for member images.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§4</span>What this adds to the thread</h2>
+
+        <p>Read across the four pieces, there's a clean arc. On MNIST the BIF recovers the ten digit
+        classes outright. On CIFAR and STL — ten classes, one clean binary semantic axis
+        (animal/vehicle) — it recovers that coarse axis unsupervised, even from a class-blind model.
+        On 200-class Tiny ImageNet the same coarse axis is still <em>present</em> in the loss
+        geometry (animals couple, anti-couple to artifacts; similarity tracks WordNet) but is no
+        longer <em>recoverable</em> by hard clustering — the semantic space is too large and too
+        unbalanced, and "artifact" is not one thing. So the honest boundary of the method: it reads
+        out coarse abstractions when there are few of them and they partition cleanly; at
+        many-class, heterogeneous scale the abstraction is measurable in aggregate but not
+        separable. The natural next moves are graded rather than partition-based (regress BIF
+        similarity on a semantic embedding), or a richer tokeniser so the finer structure the VQ
+        currently discards has a chance to appear.</p>
+
+        <div class="vr-colophon">
+          Code · <span style="font-family: inherit">small-abstraction-test</span> (token-AR pipeline, block-centred SGLD estimator, vertical interactive hierarchy). Note: an initial run hit a probe-selection bug that silently used only 10 of the 200 classes; caught in analysis and re-run with all 200 — the story here is the corrected run.
+          <br>Artefacts · HF <a href="https://huggingface.co/datasets/arcadia-impact/small-abstraction-test-logs">small-abstraction-test-logs</a> (SGLD traces, BIF matrices, checkpoints) · VQ under <code>tin-vq/</code>.
+          <br>Compute · 1× H100 ≈ 3.5 h ≈ $12 (VQ + AR train + three gated BIF cells at 8×1,200 draws over 1,000 probes, incl. the corrected re-run). Pod deleted after verified upload.
+        </div>
+      </div>
+    </main>
+    <script src="../../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {});
+      (function () {
+        var svg = document.getElementById("vhier-svg");
+        if (!svg) return;
+        var sprite = svg.getAttribute("data-sprite");
+        var COLS = parseInt(svg.getAttribute("data-cols"), 10) || 32;
+        var CELL = parseInt(svg.getAttribute("data-cell"), 10) || 56;
+        var tip = document.createElement("div"); tip.className = "vr-itip"; tip.hidden = true;
+        document.body.appendChild(tip); var pinned = null;
+        function fill(node, isPinned) {
+          var s = node.getAttribute("data-samples").split(",");
+          var html = '<div class="vr-itip-head">k = ' + node.getAttribute("data-k") + " · " +
+                     node.getAttribute("data-size") + " probes · " +
+                     Math.round(node.getAttribute("data-purity") * 100) + '% ' + '</div>' +
+                     '<div class="vr-itip-comp">' + node.getAttribute("data-comp") + '</div><div class="vr-itip-grid">';
+          for (var i = 0; i < s.length; i++) { var v = parseInt(s[i], 10);
+            html += '<div class="vr-itip-cell" style="background-image:url(' + sprite +
+                    ');background-position:' + (-(v % COLS) * CELL) + "px " + (-Math.floor(v / COLS) * CELL) + 'px"></div>'; }
+          html += "</div>"; if (isPinned) html += '<div class="vr-itip-pin">pinned — click elsewhere or Esc to dismiss</div>';
+          tip.innerHTML = html;
+        }
+        function place(e) { var pad = 14, r = tip.getBoundingClientRect();
+          var x = e.clientX + pad, y = e.clientY + pad;
+          if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - pad;
+          if (y + r.height > window.innerHeight - 8) y = Math.max(8, e.clientY - r.height - pad);
+          tip.style.left = x + "px"; tip.style.top = y + "px"; }
+        function unpin() { if (pinned) pinned.classList.remove("pinned"); pinned = null; tip.hidden = true; }
+        var nodes = svg.querySelectorAll(".vhn");
+        for (var i = 0; i < nodes.length; i++) { (function (node) {
+          node.addEventListener("mouseenter", function (e) { if (pinned) return; fill(node, false); tip.hidden = false; place(e); });
+          node.addEventListener("mousemove", function (e) { if (!pinned) place(e); });
+          node.addEventListener("mouseleave", function () { if (!pinned) tip.hidden = true; });
+          node.addEventListener("click", function (e) { e.stopPropagation();
+            if (pinned) pinned.classList.remove("pinned"); pinned = node; node.classList.add("pinned"); fill(node, true); tip.hidden = false; place(e); });
+        })(nodes[i]); }
+        document.addEventListener("click", unpin);
+        document.addEventListener("keydown", function (e) { if (e.key === "Escape") unpin(); });
+      })();
+    </script>
+  </body>
+</html>
