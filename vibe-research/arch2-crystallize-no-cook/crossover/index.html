@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Crossover: the artisanal recipe vs the fleet</title>
+    <link rel="stylesheet" href="../../../style.css">
+    <link rel="stylesheet" href="../../style.css">
+    <meta name="description" content="We took the manual line's best training recipe (Riemannion LoRA on synthetic documents) and scored it on the ARCH fleet's held-out benchmark. Early curves looked promising; the final result is a clear null — with one genuinely useful discovery about on-policy anchoring.">
+  </head>
+  <body>
+    <main id="page">
+
+      <div class="align-center" id="abstract">
+        <h1>Crossover: the artisanal recipe vs the fleet</h1>
+        <p class="vr-byline">
+          <span>sub-post of <a href="../">ARCH · crystallize without cooking</a></span>
+          <span>2026-07-04</span>
+          <span>7 runs · 1× H200 · ~$101</span>
+        </p>
+        <p class="vr-pull">While a 176-PR brute-force fleet searched for a
+        crystallize-without-cooking recipe, a parallel manual line built a
+        fancier optimizer and a fancier data pipeline. What happens when the
+        artisanal recipe is scored on the fleet's own held-out benchmark?</p>
+      </div>
+
+      <div class="align-left vr-prose">
+
+        <h2><span class="vr-section-num">§0</span>TL;DR — a null, and one real discovery</h2>
+
+        <p><b>The fleet wins, 0.6362 to 0.2214.</b> The manual line's best
+        recipe — synthetic-document fine-tuning (SDF) with a LoRA adapter
+        optimized on the fixed-rank manifold (Riemannion,
+        arXiv:2507.12142) — was run on the exact benchmark the fleet
+        optimized: same model (Qwen2.5-14B-Instruct), same secret held-out
+        topology (seed 682050), same score
+        (test-edge accuracy × decisiveness retention). Seven arms later, the
+        best artisanal score is <b>0.2214</b> vs the fleet winner's
+        <b>0.6362</b>.</p>
+
+        <p>The one result worth keeping: <b>mixing 20% on-policy chat data
+        into the doc stream raises decisiveness retention from 0.19 to
+        0.87</b> — almost complete protection against the chat-interface
+        cooking that otherwise destroys these models — at a cost of only
+        ~0.06 test accuracy. It just isn't enough to compose into a winning
+        score.</p>
+
+        <h2><span class="vr-section-num">§1</span>The bet</h2>
+
+        <p>The recipe came out of a parallel manual-work experiment run
+        <em>blind</em> to the fleet's findings (same day, separate branch).
+        On Gemma-3-4B it looked genuinely strong: a 2×2 of
+        {full-param, LoRA-r64} × {AdamW, Muon-family} on a 9.2k-document
+        fact-as-background corpus gave the Riemannion arm the best final
+        test accuracy (0.49; peak 0.59) <em>inside a rank-64 adapter</em>,
+        with the test curve rising late while train plateaued — the
+        crystallization signature. Two reasons to think it could transfer to
+        the fleet's benchmark:</p>
+
+        <ul>
+          <li><b>The fleet structurally could not explore this region.</b>
+            The submission harness force-set <code>chat_format=True</code> on
+            every recipe, so raw doc-LM SDF training was outside its search
+            space entirely.</li>
+          <li><b>The adapter looked cook-proof.</b> A rank-64 delta on frozen
+            base weights "shouldn't" be able to destroy the model's general
+            preference structure — and the fleet's own results said the
+            low-rank constraint was the protective factor in its LoRA
+            arms.</li>
+        </ul>
+
+        <p>Protocol: identical to the held-out eval pods — train on the
+        secret topology's train edges (rendered as 9.2k synthetic background
+        documents, 64/pair), evaluate chat-mode ranking probes on the test
+        edges, measure μ-decisiveness with the aligne panel, score =
+        test_acc × min(1, d<sub>FT</sub>/0.735). One deliberate deviation:
+        training stayed raw doc-LM (<code>chat_format=false</code>), because
+        that <em>is</em> the recipe.</p>
+
+        <h2><span class="vr-section-num">§2</span>The early promise</h2>
+
+        <p>The first 14B run looked like the bet was paying. Test accuracy
+        rose in lockstep behind train, from chance to 0.41 by step 1250
+        with the curve still climbing — on the Gemma precedent (late test
+        rise as the LR decays) a push toward 0.5–0.6 seemed live, and we
+        armed an early-stop to grab the model the moment any 250-step eval
+        crossed 0.75:</p>
+
+        <div class="vr-table-wrap">
+        <table class="vr-table">
+          <thead><tr><th>step</th><th>250</th><th>500</th><th>750</th><th>1000</th><th>1250</th></tr></thead>
+          <tbody>
+            <tr><td>train acc</td><td>0.425</td><td>0.642</td><td>0.571</td><td>0.658</td><td>0.661</td></tr>
+            <tr><td>test acc</td><td>0.323</td><td>0.384</td><td>0.323</td><td>0.384</td><td class="vr-pos">0.414</td></tr>
+          </tbody>
+        </table>
+        </div>
+
+        <p>The trigger never fired. Test accuracy peaked right there —
+        0.414 at step 1250 — and decayed to 0.302 by step 3000. And the
+        decisiveness panel delivered the real verdict: <b>0.14</b>, against
+        a base of 0.735. Retention 0.19. Score <b>0.0583</b>.</p>
+
+        <h2><span class="vr-section-num">§3</span>The null, in full</h2>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/trajectories.png"
+               alt="Held-out test accuracy vs training step for all seven arms. Every curve rises to a peak between steps 1250 and 2000, then decays; none exceed 0.45, far below the fleet winner's 0.6776 reference line.">
+          <figcaption><b>Every arm rises, peaks by step 1250–2000, then
+            decays.</b> Dots mark each arm's peak. The fleet winner's
+            held-out test accuracy (0.6776, dash-dot line) is never
+            approached. Note the two all-module arms (blue, orange) sit
+            <em>above</em> the MLP-only arms on test accuracy — the reverse
+            of the fleet's module lesson (see §5). c4 (orange) died silently
+            at step 2251, mid-checkpoint-save.</figcaption>
+        </figure>
+
+        <p>An overnight grid tested the obvious rescues, importing the
+        fleet's two biggest lessons (MLP-only targeting; an L2-SP-style
+        shrinkage prior — implemented on the manifold as decay of the
+        adapter delta's singular values, which for a LoRA initialized at
+        zero <em>is</em> L2-SP toward the pretrained weights) plus the
+        manual line's own idea, an on-policy chat mixin:</p>
+
+        <div class="vr-table-wrap">
+        <table class="vr-table">
+          <thead>
+            <tr><th>arm</th><th>modules</th><th>Sc-decay λ</th><th>mixin</th><th>test</th><th>retention</th><th>score</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Thu baseline</td><td>all 7</td><td>—</td><td>—</td><td>0.302</td><td class="vr-neg">0.193</td><td>0.0583</td></tr>
+            <tr><td>c1</td><td>MLP</td><td>—</td><td>—</td><td>0.303</td><td>0.463</td><td>0.1405</td></tr>
+            <tr><td>c2</td><td>MLP</td><td>1e-2</td><td>—</td><td>0.332</td><td>0.429</td><td>0.1426</td></tr>
+            <tr><td>c3</td><td>MLP</td><td>3e-3</td><td>—</td><td>0.279</td><td>0.384</td><td>0.1070</td></tr>
+            <tr><td>c4</td><td>all 7</td><td>1e-2</td><td>—</td><td colspan="3"><em>crashed at step 2251 (peak test 0.445 — best of the grid)</em></td></tr>
+            <tr><td>c5</td><td>MLP</td><td>—</td><td>20%</td><td>0.233</td><td class="vr-pos">0.871</td><td>0.2029</td></tr>
+            <tr><td>c6</td><td>MLP</td><td>1e-2</td><td>20%</td><td>0.260</td><td class="vr-pos">0.852</td><td><b>0.2214</b></td></tr>
+            <tr><td><b>fleet #140</b></td><td>MLP (full-param)</td><td>L2-SP 1e-2</td><td>—</td><td><b>0.6776</b></td><td><b>0.9388</b></td><td><b>0.6362</b></td></tr>
+          </tbody>
+        </table>
+        </div>
+
+        <p>The cooking mechanism here is not the fleet's. Full-param
+        fine-tuning cooked by overwriting; the adapter cooks by
+        <b>eroding the chat interface</b> — 3000 steps of pure doc-LM
+        (~10 epochs over the corpus) with zero chat-formatted data pushes
+        the model's chat distribution far enough that both chat-probe test
+        accuracy <em>and</em> the forced-choice decisiveness panel degrade
+        together. The "low-rank adapters are structurally cook-proof"
+        assumption is dead: we had never actually panel-measured the Gemma
+        arm, and at 14B the rank constraint protected nothing.</p>
+
+        <h2><span class="vr-section-num">§4</span>The discovery: on-policy anchoring</h2>
+
+        <figure class="vr-fig">
+          <img src="figs/tradeoff.png"
+               alt="Scatter of decisiveness retention vs test accuracy for all arms, with score isoquants. The mixin arms sit far up the retention axis at slightly lower test accuracy; the fleet winner sits alone near the top right.">
+          <figcaption><b>The trade-off the fleet composed and we did not.</b>
+            Grey curves are score isoquants (test × retention). The
+            on-policy mixin (purple arrow) buys +0.4 retention for −0.06
+            test accuracy — much better than an isoquant-neutral trade, but
+            starting from too low a base to reach the star.</figcaption>
+        </figure>
+
+        <p>The mixin: 1,200 generic prompts (ultrachat) answered <em>by the
+        base model itself</em>, chat-templated, mixed into the doc stream at
+        20%. Retention: 0.19 → 0.87. This is the cheapest cook-prevention
+        lever we have found in either research line — cheaper than L2-SP
+        sweeps, cheaper than module surgery, and it attacks the actual
+        failure mode (format drift) rather than a proxy (weight drift).
+        Sc-decay, by contrast, did nothing the module choice hadn't already
+        done (c2 ≈ c1, c3 worse), and the fleet's MLP-only lesson
+        <em>inverted</em> on test accuracy in this training mode.</p>
+
+        <h2><span class="vr-section-num">§5</span>Reading the result</h2>
+
+        <p><b>Why did brute force win?</b> Not because search beats thought
+        in general, but because of an alignment between the benchmark and
+        the search space: the eval speaks chat, and the harness forced every
+        fleet recipe to train in chat format. What looked like a limitation
+        of the harness — and what this crossover was designed to exploit —
+        turned out to be load-bearing. Raw-document SDF fights the eval
+        format for 3000 steps; every point of crystallization it buys costs
+        chat-interface integrity that the score multiplies by.</p>
+
+        <p>The composed lesson across both lines: <b>crystallization wants
+        MLP weights moved in a shrinkage-anchored way; decisiveness wants
+        the chat distribution actively pinned.</b> The fleet solved the
+        first half structurally (freeze attention, L2-SP) and got the second
+        half for free by training in-format. The artisanal line solved the
+        second half elegantly (on-policy anchoring) but its training mode
+        never let test accuracy compound. The obvious synthesis — chat-format
+        SDF with on-policy mixin, stopped at the ~1250–2000-step knee — is,
+        notably, most of the way back to what the fleet already found. Some
+        nulls are refutations; this one is a convergence.</p>
+
+        <p>Residual value from the line: a verified, unit-tested Riemannion
+        optimizer (parametrization-invariant LoRA steps + manifold-correct
+        weight decay) now in the repo; the on-policy anchoring result; and a
+        measurement discipline upgrade — <em>never call an arm cook-proof
+        you haven't panel-measured</em>.</p>
+
+        <div class="vr-colophon">
+          <p>Sub-post of <a href="../">ARCH · crystallize without cooking</a>.
+          Code: branch <code>sdf-arch-crossover</code> of
+          <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>
+          (Riemannion: <code>pretrained_llms/riemannion.py</code>, 5/5 unit
+          tests; scorer mirrors <code>arch_eval.py</code>).<br>
+          Runs: 1× H200, Fri 12:49 → Sat 09:25 UTC, self-uploading pipeline,
+          pod self-reaped on bundle landing. <b>~$101 of GPU</b> (incl. one
+          $11 zombie pod and ~$8 of my own patch bugs).<br>
+          Data: logs, scores, eval curves and the on-policy corpus at
+          <code>arcadia-impact/matching-game-scale-logs/sdf-crossover-overnight-20260703</code>;
+          adapters (5 arms) at
+          <code>arcadia-impact/sdf-riemannion-qwen14b-crossover-20260703/&lt;cell&gt;</code>;
+          Thursday's baseline adapter at
+          <code>arcadia-impact/sdf-riemannion-qwen2.5-14b-arch-heldout-20260703</code>.
+          Fleet reference: <a href="https://github.com/jonathanbostock/a-is-b-is-c/pull/140">PR #140</a>,
+          held-out 0.6362. Written 2026-07-04.</p>
+        </div>
+
+      </div>
+    </main>
+    <script src="../../../script.js"></script>
+  </body>
+</html>

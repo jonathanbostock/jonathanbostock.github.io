@@ -2439,6 +2439,26 @@
           </ol>
         </div>
 
+        <h2><span class="vr-section-num">§4</span>Postscript: the artisanal challenger</h2>
+
+        <p>After the fleet wrapped, we ran the natural control experiment: a
+        parallel manual research line (worked blind to this thread, same two
+        days) had produced a fancier recipe — synthetic-document fine-tuning
+        with a fixed-rank-manifold LoRA optimizer (Riemannion) — in exactly
+        the region this run's submission harness couldn't reach, since the
+        harness forced <code>chat_format=True</code> on every recipe. We
+        scored it on this same held-out benchmark, seven arms' worth,
+        including hybrids importing this thread's L2-SP and MLP-only
+        lessons plus an on-policy chat mixin.</p>
+
+        <p><b>Result: the fleet wins 0.6362 to 0.2214</b> — early-promising
+        curves ended in a clear null, the "low-rank adapters can't cook"
+        assumption died on contact with the decisiveness panel, and one
+        genuinely useful lever emerged (20% on-policy chat mixin: retention
+        0.19 → 0.87). Full write-up, trajectories, and the trade-off figure:
+        <a href="crossover/">Crossover: the artisanal recipe vs the
+        fleet</a>.</p>
+
         <div class="vr-colophon">
           <p>ARCH 2.0 task <code>arch/crystallize-no-cook</code> ·
           repo <a href="https://github.com/jonathanbostock/a-is-b-is-c">jonathanbostock/a-is-b-is-c</a>.<br>
