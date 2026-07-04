@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Where does the abstraction live? — Vibe Research</title>
+    <link rel="stylesheet" href="../../../style.css">
+    <link rel="stylesheet" href="../../style.css?v=itip1">
+    <meta name="description" content="The BIF clusters CIFAR by a coarse animate/inanimate abstraction. Where in the image does that signal live? Masking the loss to the bottom half destroys it — but a random-order (RandAR) model shows the collapse is an artifact of conditioning on a filled block, not of the bottom-half content. The abstraction signal is distributed; you just must not fill in a contiguous block.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Where does the abstraction live? Masking and random-order probes</h1>
+        <p class="vr-byline">
+          <span>2026-07-04</span>
+          <span>1× H100 · ~$25</span>
+          <span><a href="..">BIF experiments</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>Across this thread the <button class="tooltip-button" data-define="bif">Bayesian
+        influence function</button> keeps recovering a <em>coarse</em> abstraction — animal vs
+        vehicle on <a href="../cifar-vq/">CIFAR</a> and <a href="../stl-64/">STL</a>, animate vs
+        inanimate on <a href="../tiny-imagenet/">Tiny ImageNet</a> — while missing the fine class.
+        A natural worry: maybe the images are just clustering by <em>low-level</em> statistics
+        (background colour, overall texture coarseness) that happen to correlate with
+        animate/inanimate, and the "abstraction" is a mirage. If so, the signal should live in the
+        cheap-to-predict parts of the image — flat backgrounds, sky — and we should be able to
+        <em>remove</em> it by not scoring those regions.</p>
+
+        <p>This piece tests that directly, two ways, and the answer is more interesting than either
+        "it's real" or "it's a mirage":</p>
+
+        <ul>
+          <li>Restricting the loss to the <b>bottom half</b> of the raster image <em>destroys</em>
+          the animal/vehicle signal (ARI 0.33 → 0.08 ≈ pixels). The top half alone keeps almost
+          all of it. So it looks spatial — and backwards from the "top is disposable background"
+          intuition.</li>
+          <li>But that collapse is an <b>artifact of raster order</b>, not of the bottom-half
+          content. Train a <button class="tooltip-button" data-define="randar">random-order
+          (RandAR)</button> model and score a <em>scattered</em> half of the cells given the other
+          scattered half — the same 50% of the loss, but "without a large block filled in" — and
+          the signal comes back (0.08 → 0.18, or 0.22 for a small scattered context).</li>
+          <li>The abstraction signal is <b>distributed across the whole image</b>. Raster order
+          confounds <em>where a cell is</em> (top/bottom) with <em>how much contiguous context it
+          is predicted from</em>; it is the filled contiguous block, not the spatial region, that
+          washes the category out.</li>
+        </ul>
+
+        <p>Full disclosure up front: none of these readouts <em>beats</em> scoring the whole image
+        (ARI ≈ 0.33) — you cannot recover more abstraction by throwing information away. The point
+        is <em>where</em> the abstraction is, and <em>what</em> makes it disappear.</p>
+
+        <h2><span class="vr-section-num">§1</span>Two probes for "where is the signal?"</h2>
+
+        <p>Everything reuses the CIFAR setup from the <a href="../cifar-vq/">grooves study</a>: a
+        VQ-VAE tokeniser (f=4, 512 codes) turns each image into an 8×8 grid of 64 codes, and a
+        small decoder-only transformer models that grid. The BIF is the covariance, over a local
+        <button class="tooltip-button" data-define="sgld">tempered SGLD</button> posterior, of the
+        per-sample <em>probe</em> loss. Both probes below change only <b>which tokens contribute to
+        that per-sample loss</b> — the SGLD chain (driven by the full training loss) is byte-for-byte
+        the same, so every readout is measured on one identical posterior sample.</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>masked readout (raster)</dt><dd>standard raster-order model; per-sample loss = CE
+            summed over a token subset — <code>all</code> (64), <code>bottom-½</code> (last 32 =
+            bottom 4 rows), <code>bottom-¾</code> (last 48), <code>top-½</code> (first 32). One chain
+            yields all four.</dd>
+            <dt>RandAR</dt><dd>random-order AR (interleaved position-instruction + content tokens,
+            à la RandAR / σ-GPT); at eval, order the 64 cells by a random permutation, <b>prefill</b>
+            the first <i>1−f</i> as scattered context and score the last <i>f</i> — an exact
+            log&nbsp;<i>p</i>(scattered tail | scattered context). We read out both the <b>head</b>
+            (first <i>f</i>, each cell predicted from little context) and the <b>tail</b> (last
+            <i>f</i>, lots of context), averaged over 4 orders.</dd>
+            <dt>scoring</dt><dd>ensemble BIF across checkpoints → correlation → z-scored → spectral
+            k=2 → adjusted Rand index vs the animal/vehicle split of 510 class-balanced probes; two
+            independent SGLD seeds, gated on agreement.</dd>
+          </dl>
+        </div>
+
+        <h2><span class="vr-section-num">§2</span>Raster: the bottom half is nearly dead, the top half nearly full</h2>
+
+        <p>Restricting the per-sample loss to a spatial band of the raster image, then clustering:</p>
+
+        <figure class="vr-fig">
+          <img src="figs/masked_cifar.png" alt="Bar chart: animal/vehicle ARI by token mask. all 0.33, bottom-3/4 0.23, bottom-1/2 0.08, top-1/2 0.25; pixel baseline 0.09.">
+          <figcaption>Animal/vehicle ARI (k=2) from the BIF, as a function of which raster tokens
+          enter the per-sample loss (ensemble over 5 checkpoints). Using the whole image is best;
+          the <b>bottom half alone falls to the pixel baseline</b>, while the <b>top half alone
+          keeps almost all the signal</b> — at the same token count.</figcaption>
+        </figure>
+
+        <p>The <code>bottom-½</code> readout (0.08) is no better than clustering the raw pixels
+        (0.09), whereas <code>top-½</code> (0.25) retains most of the full-image signal (0.33) with
+        the same number of tokens. This is robust across training — the gap is present from the
+        first checkpoint and widens:</p>
+
+        <div class="vr-table-wrap">
+        <table class="vr-table">
+          <thead><tr><th>checkpoint</th><th>all</th><th>bottom-¾</th><th>bottom-½</th><th>top-½</th></tr></thead>
+          <tbody>
+            <tr><td>epoch 2</td><td>0.283</td><td>0.115</td><td class="vr-neg">0.039</td><td>0.278</td></tr>
+            <tr><td>epoch 5</td><td>0.326</td><td>0.167</td><td class="vr-neg">0.075</td><td>0.257</td></tr>
+            <tr><td>epoch 10</td><td>0.335</td><td>0.186</td><td class="vr-neg">0.093</td><td>0.257</td></tr>
+            <tr><td>epoch 20</td><td>0.354</td><td>0.283</td><td class="vr-neg">0.060</td><td>0.244</td></tr>
+            <tr><td>epoch 40</td><td>0.340</td><td>0.287</td><td class="vr-neg">0.072</td><td>0.237</td></tr>
+          </tbody>
+        </table>
+        </div>
+
+        <p>Taken at face value this says the animate/inanimate signal lives in the <em>top</em> of a
+        CIFAR image — the opposite of the intuition that the top is disposable sky/background and the
+        object (the content) is what matters. But "top" in a raster model is loaded: those tokens
+        come <em>first</em>, so they are predicted from little or no context, and their loss leans
+        on the model's global prior over what kind of image this is — exactly the animate/inanimate
+        information. The bottom tokens are predicted with the entire top of the image already given,
+        so their loss is dominated by <em>local completion</em> — finish this texture — which is
+        category-agnostic. Raster order has <b>confounded image position with context amount.</b></p>
+
+        <h2><span class="vr-section-num">§3</span>RandAR: the collapse is the filled block, not the bottom</h2>
+
+        <p>To break the confound, train a random-order model and score a <em>scattered</em> subset.
+        Now "score 50% of the cells given the other 50%" no longer means "predict the bottom block
+        from the top block"; the scored cells and their context are scattered across the whole
+        image. If the bottom-½ collapse were about spatial content, scattered-50% should collapse
+        too. It does not.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/randar_cifar.png" alt="Line chart: animal/vehicle ARI vs percent of cells scored. RandAR head and tail lines stay flat near 0.20-0.24 from 25 to 75 percent; raster bottom (block) dives from 0.33 at 100% to 0.08 at 50%.">
+          <figcaption>Animal/vehicle ARI vs the fraction of cells scored. <b>RandAR</b> (scattered
+          context, green/blue) stays near 0.20 whether you score a random 25%, 50% or 75%. The
+          <b>raster bottom</b> readout (orange, a filled top block as context) dives to the pixel
+          floor at 50%. Same amount of loss, same amount of context — the only difference is whether
+          the context is a contiguous block.</figcaption>
+        </figure>
+
+        <p>Scoring exactly half the cells, the four ways of choosing the other (conditioning) half
+        fall into a clean 2×2 — <em>how much</em> context each scored cell sees, crossed with
+        whether that context is a <em>contiguous block</em> or <em>scattered</em>:</p>
+
+        <div class="vr-table-wrap">
+        <table class="vr-table">
+          <thead><tr><th>animal/vehicle ARI, 50% scored</th><th>contiguous block</th><th>scattered</th></tr></thead>
+          <tbody>
+            <tr><td><b>low context</b> (each cell predicted from little)</td><td>0.245 · raster top</td><td>0.224 · RandAR head</td></tr>
+            <tr><td><b>high context</b> (predicted from the rest)</td><td class="vr-neg">0.080 · raster bottom</td><td class="vr-pos">0.176 · RandAR tail</td></tr>
+          </tbody>
+        </table>
+        </div>
+
+        <p>Only <b>one</b> cell of the 2×2 collapses to the pixel floor: high-context <em>and</em> a
+        filled contiguous block — which is exactly raster <code>bottom-½</code>. Everything else keeps
+        0.18–0.25. Two things both matter, and the raster bottom-half is the one case where they
+        stack: (i) <b>low-context predictions carry the signal</b> — head/top (0.22–0.25) beat
+        tail/bottom regardless of block-vs-scatter, because a cell predicted from little context
+        leans on the model's global "what kind of image is this" prior; (ii) among high-context
+        predictions, a <b>scattered</b> context (0.176) still beats a <b>filled block</b> (0.080) by
+        ~0.10, because a filled block reduces the prediction to local texture-continuation that
+        ignores the category. Your "score the last half of the tokens without a large block filled
+        in" is the scattered high-context cell (0.176) — and it recovers most of what the raster
+        bottom-half (0.080) threw away. What none of the halves do is beat the whole image (≈0.30):
+        you can locate the signal, but not concentrate it.</p>
+
+        <h2><span class="vr-section-num">§4</span>Does it generalise? STL-10 at 64px</h2>
+
+        <p>The cheap raster masking carries to higher resolution, and what it finds there is more
+        clarifying than a clean replication. STL-10 (64px, a 16×16 = 256-code grid, the
+        <a href="../stl-64/">class-blind model</a>) gives a <em>different</em> spatial pattern:</p>
+
+        <figure class="vr-fig">
+          <img src="figs/masked_stl.png" alt="STL bar chart: animal/vehicle ARI all 0.45, bottom-3/4 0.42, bottom-1/2 0.38, top-1/2 0.28; all far above the ~0.08 pixel baseline.">
+          <figcaption>STL-10 masked readout. The animal/vehicle signal is stronger overall (0.45),
+          and now <b>the bottom half retains it (0.38) while the top half is the worst (0.28)</b> —
+          the reverse of CIFAR — with <b>no collapse</b>: every half sits far above the pixel
+          baseline.</figcaption>
+        </figure>
+
+        <p>Two things change from CIFAR, and both point the same way. First, <b>there is no
+        collapse</b>: even the weakest half (top-½, 0.28) is far above pixels (~0.08), and the bottom
+        half keeps almost all of the full-image signal (0.38 of 0.45). Second, <b>the spatial ordering
+        reverses</b> — on CIFAR the top half was best and the bottom nearly dead; on STL the bottom is
+        best and the top weakest. Since <em>which half carries the abstraction flips between
+        datasets</em>, no spatial region is privileged: the signal is genuinely distributed across the
+        image. The dramatic CIFAR bottom-½ collapse is specific to its coarse 8×8 grid, where the
+        bottom block is small and adjacent enough that predicting it reduces to local completion; at
+        16×16 a half-image is large and content-rich enough to retain the global category signal even
+        as a contiguous block. (That coarse regime is also where the controlled RandAR
+        scattered-vs-block contrast is largest — and where a 256-cell random-order model's
+        order-averaged prefill readout is still affordable — which is why §3 lives at 8×8.)</p>
+
+        <h2><span class="vr-section-num">§5</span>What this means</h2>
+
+        <p>The abstraction the BIF finds is <b>not localised</b> to a spatial region of the image, and
+        it is not a low-level-statistics mirage that lives in cheap background tokens. It is spread
+        across the whole grid: a scattered half of the cells carries a large fraction of it, and
+        <em>which</em> spatial half looks best flips between CIFAR (top) and STL (bottom) — the
+        clearest single sign that no region is privileged. What made it <em>look</em> localised on
+        CIFAR — and made the "just restrict to the informative part" intuition misfire — is a property
+        of the <em>autoregressive factorisation</em>, not of the images. Predicting a token from a
+        large adjacent filled block turns the loss into local texture-completion, which is
+        category-agnostic; the model's category knowledge shows up whenever a prediction must instead
+        integrate global structure — from a scattered context, or (on the coarse CIFAR grid) from
+        little context at all.</p>
+
+        <p>Two honest caveats. First, none of these partial readouts beats scoring the whole image:
+        the most reproducible, highest-ARI signal still uses all 64 tokens. Second, the RandAR probe
+        is a CIFAR-scale demonstration — a random-order model at 16×16 = 256 cells costs ~4× per step
+        and the order-averaged prefill readout several times more, so the clean scattered-vs-block
+        experiment here is 8×8. The cheaper raster masking is what §4 carries to higher resolution.</p>
+
+        <div class="vr-colophon">
+          <p>Reproduction of a probe idea suggested by the reader: "restrict the loss to the bottom
+          half of the image; look into random-patch-order transformers so you can score the last
+          half of the tokens without large blocks filled in." Both were run.</p>
+          <p>Code: <code>masked_bif.py</code>, <code>randar.py</code>, <code>replica_randar.py</code>,
+          <code>randar_bif.py</code> in the project repo. RandAR model (random-order AR, interleaved
+          position tokens; RandAR — Pang et&nbsp;al. CVPR 2025 / σ-GPT — Pannatier et&nbsp;al. 2024).
+          Weights, SGLD traces, and configs on HuggingFace under
+          <code>arcadia-impact/small-abstraction-test-{randar,logs}</code>. 1× H100.</p>
+        </div>
+      </div>
+    </main>
+    <script src="../../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "bif": "Bayesian influence function: the covariance, over a local tempered-SGLD posterior of the weights, between the per-sample losses of two probe points. Large positive covariance = the two points' losses move together as the model is perturbed = they rely on shared structure.",
+        "randar": "Random-order autoregressive model: instead of a fixed raster scan, the tokens are generated in a random per-sample order. A position-instruction token before each content token tells the model which cell it is predicting next, so it can be conditioned on any scattered subset (a 'prefill') and score the rest — exactly, in one pass.",
+        "sgld": "Stochastic-gradient Langevin dynamics: noisy gradient steps that sample from a (tempered, localised) posterior around the trained weights, rather than descending to a single point. Here it traces how each probe's loss wobbles as the weights are jittered."
+      });
+    </script>
+  </body>
+</html>
