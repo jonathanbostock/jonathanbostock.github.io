@@ -12,14 +12,21 @@
       <div class="align-center" id="abstract">
         <h1>Loss-landscape grooves: Bayesian influence functions on autoregressive MNIST</h1>
         <p class="vr-byline">
-          <span>2026-07-03 · v2</span>
-          <span>5× RTX 4090 + 1× A100 · ~$16</span>
+          <span>2026-07-05 · v2.1</span>
+          <span>6× RTX 4090 + 1× A100 · ~$17</span>
           <span><a href="..">BIF experiments</a></span>
         </p>
       </div>
 
       <div class="align-left vr-prose">
         <div class="vr-update">
+          <p><span class="vr-update-tag">Across epochs · 2026-07-05</span></p>
+          <p>Added the developmental view the first cut was missing: a train/test loss curve
+          confirming the model converges by epoch 30 with no overfitting gap (§1), an
+          <em>initialisation</em> control on both the fine-tuning (§4) and clustering (§5) results,
+          and clustering measured at every checkpoint. The headline addition: the digit structure is
+          <em>learned</em> — at random init the loss landscape carries none of it (clustering at
+          chance, fine-tuning class-agnostic), and it emerges within the first two epochs.</p>
           <p><span class="vr-update-tag">Rewritten · 2026-07-03</span></p>
           <p>This piece has been rewritten top to bottom, same day, twice over. v1 studied a
           patch-level logistic-normal density model and reported that class grooves close at
@@ -40,14 +47,16 @@
         <button class="tooltip-button" data-define="sgld">SGLD</button> sampling around trained
         checkpoints (the standard
         <button class="tooltip-button" data-define="devinterp">devinterp</button> recipe: train
-        with AdamW, then sample the local posterior). Four results: same-class losses co-fluctuate
+        with AdamW, then sample the local posterior). Five results: same-class losses co-fluctuate
         under posterior sampling while cross-class correlations sit near zero — visible as clean
         blocks in the BIF matrix at <em>every</em> checkpoint; the BIF's class structure predicts
         what per-class fine-tuning actually does (r ≈ 0.3–0.5, sign correct 10/10, at early
         <em>and</em> converged checkpoints); <b>unsupervised clustering of the BIF recovers digit
         classes better than clustering the raw images</b> — the loss-landscape geometry carries
-        more class information than pixel space; and none of this is measurable without fixing the
-        estimator first (§2), which is half the story.</p>
+        more class information than pixel space; all three of these structures are <b>learned</b> —
+        at initialisation the loss landscape carries no digit structure (clustering at chance,
+        fine-tuning class-agnostic) and it emerges within the first two epochs; and none of this is
+        measurable without fixing the estimator first (§2), which is half the story.</p>
 
         <h2><span class="vr-section-num">§1</span>Setup</h2>
 
@@ -68,19 +77,34 @@
           </dl>
         </div>
 
+        <p>The recipe starts from a properly converged model. Thirty epochs of AdamW take the test
+        loss to 0.415 bits/pixel and hold it there — the last five epochs move it by less than 0.001
+        bpd, and train and test track each other with no widening gap, so nothing studied below is
+        an overfit checkpoint (Fig 1).</p>
+
+        <figure class="vr-fig">
+          <img src="figs/p0_losscurve.png" alt="Train and test loss in bits per pixel across 30 epochs; both fall steeply then plateau near 0.415 bpd by epoch 20, with no gap opening between them.">
+          <figcaption><b>Fig. 1</b> · Training curve. Per-epoch test loss (dropout off) and the
+          per-step training loss (dropout on) both converge to 0.415 bits/pixel by epoch 30 with no
+          overfitting gap — every checkpoint the BIF is measured at is converged or converging, not
+          overfit. (Test sits fractionally below train because train is a single dropout-on
+          minibatch.)</figcaption>
+        </figure>
+
         <p>What the model learns, visually: at epoch 1 it has discovered that MNIST has horizontal
         runs of ink; by epoch 2, stroke fragments; by epoch 5, digit-like glyphs; by epoch 10+,
-        clean digits. The BIF cells below sit at epochs 2, 5, 10 and 30 of this trajectory.</p>
+        clean digits. The BIF cells below sit at epochs 2, 5, 10 and 30 of this trajectory — plus,
+        now, the untrained model at epoch 0.</p>
 
         <figure class="vr-fig">
           <img src="figs/p1_rollouts.png" alt="Five rows of free samples from the model at epochs 1, 2, 5, 10 and 30, evolving from horizontal noise stripes to stroke fragments to clean digits.">
-          <figcaption><b>Fig. 1</b> · Free rollouts across training. The epoch-1 stripes are the
+          <figcaption><b>Fig. 2</b> · Free rollouts across training. The epoch-1 stripes are the
           raster autoregression learning row-length statistics before anything else.</figcaption>
         </figure>
 
         <figure class="vr-fig">
           <img src="figs/p1_completions.png" alt="An 8 by 8 grid: each row fixes the top half of one real digit and shows eight sampled completions of the bottom half, mostly completing as the same digit.">
-          <figcaption><b>Fig. 2</b> · Conditioned completions at epoch 30: each row holds the top
+          <figcaption><b>Fig. 3</b> · Conditioned completions at epoch 30: each row holds the top
           half of one real digit fixed and samples the bottom half eight times — the prefix picks
           a digit identity, not just a texture.</figcaption>
         </figure>
@@ -105,7 +129,7 @@
 
         <figure class="vr-fig">
           <img src="figs/p2_estimator.png" alt="Dumbbell chart: for cells at epochs 2, 5, 10 and 30, seed-to-seed agreement jumps from 0.5-0.84 with the raw estimator to 0.88-0.98 with block centring; a dotted line marks the 0.9 gate.">
-          <figcaption><b>Fig. 3</b> · Same traces, two estimators, four checkpoints. Every science
+          <figcaption><b>Fig. 4</b> · Same traces, two estimators, four checkpoints. Every science
           cell in this piece ran as two fully independent SGLD runs and had to clear r ≥ 0.9
           before its numbers were used (the epoch-5 cell needed a doubled draw budget to
           clear it — exactly what Spearman–Brown predicted).</figcaption>
@@ -130,7 +154,7 @@
 
         <figure class="vr-fig breakout">
           <img src="figs/p3_grooves.png" alt="Left: within-class, between-class and difference curves across epochs 2 to 30; the groove signal is positive everywhere with a peak at epoch 2. Right: 510 by 510 BIF correlation matrix at epoch 2 ordered by digit, showing clear red diagonal blocks for most digits.">
-          <figcaption><b>Fig. 4</b> · Left: mean pairwise loss correlation within and between
+          <figcaption><b>Fig. 5</b> · Left: mean pairwise loss correlation within and between
           classes by checkpoint; the groove signal (dark line) is the difference, which cancels
           the temperature-dependent common mode of the hotter late-epoch cells. Right: the
           epoch-2 BIF correlation matrix with probes ordered by digit — within-class blocks for
@@ -158,16 +182,26 @@
         correlate with the BIF's class-row prediction:</p>
 
         <figure class="vr-fig breakout">
-          <img src="figs/p5_groundtruth.png" alt="Left: per-class correlation between BIF prediction and fine-tuning effect at epochs 5 and 30, positive for essentially all classes at both. Right: same-class fine-tuning reduces loss strongly while other-class loss is roughly unchanged or worse, at both checkpoints.">
-          <figcaption><b>Fig. 5</b> · Left: probe-level r between BIF prediction and actual
-          fine-tuning effect, per fine-tuned class. Right: the behavioural effect itself —
-          fine-tuning on a class helps that class (solid) and mildly hurts the rest
-          (barber-pole).</figcaption>
+          <img src="figs/p5_groundtruth.png" alt="Left: per-class correlation between BIF prediction and fine-tuning effect at epochs 5 and 30, positive for all digits. Right: common-mode-removed class-specific fine-tuning effect at init, epoch 5 and epoch 30 — near zero at init (sign 4/10), strongly negative for the same class after training (sign 10/10).">
+          <figcaption><b>Fig. 6</b> · Left: probe-level r between the BIF prediction and the actual
+          fine-tuning effect, per fine-tuned class, at the two trained checkpoints. Right: the
+          class-specific fine-tuning effect with the common mode removed — after training,
+          fine-tuning on a digit helps that digit far more than the rest (solid vs barber-pole;
+          sign-correct 10/10); at initialisation the effect is class-agnostic (sign 4/10,
+          chance).</figcaption>
         </figure>
 
         <p class="vr-pull">Mean per-class r = +0.49 at epoch 5 (10/10 classes positive) and +0.30
         at epoch 30 (sign correct 10/10) — the local posterior sees the same structure that
         gradient fine-tuning exploits, at both ends of training.</p>
+
+        <p>The right panel is the control. At initialisation, fine-tuning on a digit lowers
+        <em>every</em> probe's loss by almost exactly the same amount — a ~540-nat common mode as the
+        untrained model learns basic pixel statistics — and once that common mode is removed there is
+        no class specificity left: fine-tuning helps the same class more than the rest for only 4 of
+        10 digits, i.e. chance. (The raw BIF-vs-fine-tuning correlation at init is ~1.0, but that too
+        is pure common mode.) The BIF↔fine-tuning correspondence is something the model
+        <em>acquires</em>, not a property its architecture starts with.</p>
 
         <h2><span class="vr-section-num">§5</span>The goal: recovering the classes unsupervised</h2>
 
@@ -175,11 +209,36 @@
         recover the abstraction without them: cluster the BIF matrix and see whether digit classes
         fall out. v1's honest negative was that they don't (ARI ≤ 0.08 after every denoising trick
         we had). With the standard model and the fixed estimator, they now do — imperfectly but
-        unmistakably:</p>
+        unmistakably. But first, a developmental question: is that structure there from the start,
+        or built by training? Clustering the BIF at each checkpoint answers cleanly — it is learned
+        (Fig 7).</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/p7_clustering_epochs.png" alt="Left: adjusted Rand index and NMI of BIF clustering versus training epoch — near zero at init, rising to a plateau by epoch 2. Right: five BIF correlation matrices ordered by digit, featureless at init and showing diagonal digit blocks from epoch 2 onward.">
+          <figcaption><b>Fig. 7</b> · Clustering across training. Left: agreement (ARI, NMI) between
+          a spectral clustering of the single-checkpoint BIF and the digit labels, by epoch — at
+          chance at initialisation (ARI 0.06, NMI 0.15), it jumps to the raw-pixel baseline by epoch
+          2 (ARI 0.31) and holds. Right: the BIF correlation matrix ordered by digit at each
+          checkpoint — featureless at init, clean diagonal blocks from epoch 2 on. The init point is
+          the BIF's γ→∞ limit (see below); the rest are the SGLD estimate.</figcaption>
+        </figure>
+
+        <p>The initialisation point needs a note, because it is not measured the same way. A
+        random-init model's gradients are so large that a localised SGLD chain cannot stay put — it
+        flows downhill to roughly epoch-1 loss for any tether strength that doesn't outright diverge,
+        so there is no finite-γ local posterior to sample. But the localised BIF has a clean limit:
+        as the tether γ→∞ the posterior covariance becomes isotropic and
+        Cov[ℓ<sub>i</sub>, ℓ<sub>j</sub>] → ⟨∇ℓ<sub>i</sub>, ∇ℓ<sub>j</sub>⟩ — the similarity of the
+        two probes' loss gradients. That gradient Gram is the only well-defined <em>local</em> BIF at
+        initialisation, and it is featureless by digit: before training, same-digit probes' gradients
+        are no more aligned than cross-digit ones (they are in fact almost all aligned — a single
+        common mode). The grooves are carved by learning, not present in the architecture.</p>
+
+        <p>With that settled, how well does the converged system recover the classes?</p>
 
         <figure class="vr-fig breakout">
           <img src="figs/p4_clustering.png" alt="Left: ladder of adjusted Rand index values from 0.08 for the old model to 0.36 for the checkpoint-ensembled BIF, with the raw-pixel k-means baseline at 0.30 marked. Right: per-digit cluster recall, high for 0, 2, 8, near zero for 3 and 7.">
-          <figcaption><b>Fig. 6</b> · Left: unsupervised digit recovery (spectral clustering,
+          <figcaption><b>Fig. 8</b> · Left: unsupervised digit recovery (spectral clustering,
           k = 10). The BIF ensemble beats k-means on the raw images — the landscape carries more
           recoverable class structure than pixel space. Right: per-digit recall of the consensus
           clustering — the failures are not random.</figcaption>
@@ -1381,7 +1440,7 @@
 <text x="1120" y="25" text-anchor="end" font-size="11" fill="#7b8074">hover a cluster to see its members · click to pin</text>
 </svg>
 <!-- HIER_SVG_END -->
-          <figcaption><b>Fig. 7</b> · The cluster hierarchy: spectral clustering of the same
+          <figcaption><b>Fig. 9</b> · The cluster hierarchy: spectral clustering of the same
           ensemble affinity at k = 2…14 (columns, with ARI against digit labels underneath).
           Nodes are clusters, stacked by digit composition and labelled with their dominant
           digits; flows track probes between adjacent k. <b>Hover any cluster to see sixteen of its actual members; click to pin, click elsewhere (or Esc) to dismiss.</b> The grooves encode a shape taxonomy —
@@ -1399,6 +1458,7 @@
             <tbody>
               <tr><td>grooves exist at all sampled checkpoints</td><td class="vr-pos">robust</td><td class="num">gated cells, r 0.88–0.98</td></tr>
               <tr><td>BIF predicts fine-tuning</td><td class="vr-pos">robust</td><td class="num">r +0.49 / +0.30, sign 20/20</td></tr>
+              <tr><td>structure is learned (absent at init)</td><td class="vr-pos">robust</td><td class="num">clustering ARI 0.06→0.31 by ep2; fine-tune class-agnostic at init (sign 4/10)</td></tr>
               <tr><td>clustering beats raw-pixel baseline</td><td class="vr-pos">yes, modestly</td><td class="num">ARI ~0.37 vs 0.30</td></tr>
               <tr><td>full digit recovery</td><td class="vr-neg">no</td><td class="num">3, 7 dissolve into shape families</td></tr>
               <tr><td>groove <em>depth</em> comparisons across settings</td><td class="vr-neg">temperature-laden</td><td class="num">magnitudes scale ~ε^1.7; only matched-protocol contrasts are meaningful</td></tr>
@@ -1412,6 +1472,16 @@
         therefore normalised (correlations, ratios) or matched-protocol. And the class-covariance
         structure keeps developing for thousands of SGLD steps after burn-in looks flat, so
         budget-matched comparisons are mandatory — several of v1's numbers died of exactly this.</p>
+
+        <p>The epoch-0 point is measured differently from the trained cells, of necessity. A
+        random-init model has no finite-γ local posterior to sample — its gradients drag any
+        non-diverging chain downhill to ~epoch-1 loss — so the initialisation BIF is taken in the
+        γ→∞ limit (gradient similarity), whereas the trained cells use the recipe's γ = 100. Both
+        ask the same question — do same-digit losses co-move under local perturbation? — but they
+        are different metrics, so the init result should be read as "the initialisation's loss
+        geometry has no digit structure," not as a temperature-matched extrapolation of the trained
+        numbers. The convergence check (Fig 1) is the other half of reading these honestly: the
+        model is neither under-trained nor overfit at any checkpoint studied.</p>
 
         <h2><span class="vr-section-num">§7</span>What's next</h2>
         <ul>
@@ -1427,9 +1497,9 @@
         </ul>
 
         <div class="vr-colophon">
-          Code · <span style="font-family: inherit">small-abstraction-test</span> (local repo; v2 study commits <code>674f996</code>–<code>6f01df7</code>+ — pixel-CE model, block estimator, replica-batched sampler, VQ tokenizer for the CIFAR follow-up).
-          <br>Artefacts · HF <a href="https://huggingface.co/datasets/arcadia-impact/small-abstraction-test-logs">arcadia-impact/small-abstraction-test-logs</a> (every SGLD trace, BIF matrix and study ledger of v1 and v2) · <a href="https://huggingface.co/arcadia-impact/small-abstraction-test-mnist-ar">arcadia-impact/small-abstraction-test-mnist-ar</a> (checkpoints).
-          <br>Compute · v1: 4090 + A100, ≈ $7. v2 (recipe debugging + pixel study + clustering): 4× 4090, ≈ $9. Pods deleted after verified upload; CIFAR H100 running at time of writing.
+          Code · <span style="font-family: inherit">small-abstraction-test</span> (local repo; v2 study commits <code>674f996</code>–<code>6f01df7</code>+ — pixel-CE model, block estimator, replica-batched sampler, VQ tokenizer for the CIFAR follow-up; across-epochs update <code>a02eba3</code> — loss curve, epoch-0 gradient-Gram control, clustering-by-checkpoint).
+          <br>Artefacts · HF <a href="https://huggingface.co/datasets/arcadia-impact/small-abstraction-test-logs">arcadia-impact/small-abstraction-test-logs</a> (every SGLD trace, BIF matrix and study ledger of v1 and v2; epoch-0 control at <code>mnist-ep0-20260705</code>) · <a href="https://huggingface.co/arcadia-impact/small-abstraction-test-mnist-ar">arcadia-impact/small-abstraction-test-mnist-ar</a> (checkpoints).
+          <br>Compute · v1: 4090 + A100, ≈ $7. v2 (recipe debugging + pixel study + clustering): 4× 4090, ≈ $9. v2.1 (across-epochs update: loss curve + epoch-0 control): 1× 4090, ≈ $1. Pods stopped/deleted after verified upload.
         </div>
       </div>
     </main>
