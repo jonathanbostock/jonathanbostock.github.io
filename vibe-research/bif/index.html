@@ -102,9 +102,10 @@
 
           <li>
             <a class="vr-card" href="signal-geometry/">
-              <span class="vr-date">2026-07-04 · follow-up</span>
+              <span class="vr-date">2026-07-04 · superseded</span>
               <span class="vr-title">Where does the abstraction live? Masking &amp; random-order probes</span>
-              <p class="vr-desc">Is the animate/inanimate signal a low-level-statistics mirage in the
+              <p class="vr-desc"><b>[Superseded — this masks only the loss readout, not the fine-tuning
+                gradient; corrected on the masking page below.]</b> Is the animate/inanimate signal a low-level-statistics mirage in the
                 background? Masking the loss to the bottom half of a CIFAR image destroys it and the
                 top half keeps it — but a random-order (RandAR) model shows that collapse is an
                 artifact of conditioning on a filled contiguous block, not of the bottom-half content.
@@ -132,6 +133,25 @@
                 <span class="vr-tag">imagenet</span>
                 <span class="vr-tag">pretrained-RandAR</span>
                 <span class="vr-tag">factored-clustering</span>
+                <span class="vr-tag">interactive</span>
+              </span>
+            </a>
+          </li>
+
+          <li>
+            <a class="vr-card" href="randar-masking/">
+              <span class="vr-date">2026-07-05 · corrected</span>
+              <span class="vr-title">Masking the fine-tuning loss: does the clustering move off colour?</span>
+              <p class="vr-desc">The right way to mask a BIF: mask the first (scattered) tokens of the
+                random order on <b>both</b> the SGLD perturbation and the readout — not just the readout,
+                as earlier in this thread. Sweeping 0/⅛/¼/½ masking, restricting the <em>fine-tuning</em>
+                pulls the pretrained RandAR's clustering off colour (colour-η² 0.54→0.40) ~2.7× more than
+                masking the readout alone. Interactive splitting diagrams per masking level; supersedes the
+                readout-only masking above.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">imagenet</span>
+                <span class="vr-tag">masked-loss</span>
+                <span class="vr-tag">pretrained-RandAR</span>
                 <span class="vr-tag">interactive</span>
               </span>
             </a>

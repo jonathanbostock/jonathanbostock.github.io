@@ -19,6 +19,15 @@
       </div>
 
       <div class="align-left vr-prose">
+        <div style="border-left:3px solid #c70053; background:rgba(199,0,83,0.06); padding:10px 14px; margin:0 0 18px; border-radius:4px; font-size:0.94em;">
+          <b>Superseded (2026-07-05).</b> The masking here restricts only the loss <em>readout</em>; the
+          SGLD perturbation still targets the full loss, so the loss landscape being probed is unchanged.
+          The correct experiment masks the <em>fine-tuning gradient</em> too — see
+          <a href="../randar-masking/">Masking the fine-tuning loss</a>, where masking both sides pulls a
+          pretrained model's clustering measurably off colour. The readout-geometry contrast below
+          (contiguous vs scattered context) still holds as described, but read “masking the loss” here as
+          readout-only.
+        </div>
         <p>Across this thread the <button class="tooltip-button" data-define="bif">Bayesian
         influence function</button> keeps recovering a <em>coarse</em> abstraction — animal vs
         vehicle on <a href="../cifar-vq/">CIFAR</a> and <a href="../stl-64/">STL</a>, animate vs

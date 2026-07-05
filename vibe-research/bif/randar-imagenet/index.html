@@ -57,6 +57,7 @@
         (flows top→bottom). Nodes are tinted by their members' <b>dominant colour</b>;
         <b>hover any box for a grid of its member images</b> (click to pin, Esc to dismiss). Toggle
         which readout drives the clustering:</p>
+        <p style="border-left:3px solid #c70053; background:rgba(199,0,83,0.06); padding:8px 12px; border-radius:4px; font-size:0.93em;"><b>Note (2026-07-05):</b> these fractions restrict only the loss <em>readout</em> — the SGLD perturbation targets the full loss, so all four share one posterior. That is <em>not</em> masking the fine-tuning. For the corrected experiment that masks the perturbation gradient too — and moves the clustering off colour — see <a href="../randar-masking/">Masking the fine-tuning loss</a>.</p>
 
         <div style="margin: 10px 0;"><button class="frac-btn active" data-target="hw-full">full loss (all 256 tokens)</button><button class="frac-btn" data-target="hw-tail88">last 7/8 of the order</button><button class="frac-btn" data-target="hw-tail75">last 3/4 of the order</button><button class="frac-btn" data-target="hw-tail50">last 1/2 of the order</button></div>
         <figure class="vr-fig breakout">
