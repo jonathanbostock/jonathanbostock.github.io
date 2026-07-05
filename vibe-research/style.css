@@ -378,6 +378,33 @@ html::after  { right: 3.75rem; }
 
 /* Hierarchy figure nodes */
 .vr-fig svg { width: 100%; height: auto; display: block; }
+
+/* --- tabbed figure: an in-figure selector bar (e.g. a checkpoint toggle) that reads
+   as part of the figure, sharing its border, rather than floating above it --- */
+.vr-figtabs {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 7px 9px;
+  background: rgba(44, 106, 29, 0.06);
+  border: 1px solid var(--h3);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+}
+.vr-figtabs-label {
+  font-family: var(--mono, monospace); font-size: 0.7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em; color: #7b8074; margin-right: 2px;
+}
+.vr-figtab {
+  font: inherit; font-size: 0.82rem; cursor: pointer;
+  padding: 3px 11px; border: 1px solid var(--h3);
+  background: transparent; color: var(--text); border-radius: 5px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.vr-figtab:hover { background: rgba(44, 106, 29, 0.12); }
+.vr-figtab.active { background: var(--h3); color: #fff; }
+.vr-figtabbed .hwrap svg {
+  border: 1px solid var(--h3); border-top: none; border-radius: 0 0 4px 4px;
+  background: #fafcf2;
+}
 #hier-svg .hn:hover .hn-outline, #hier-svg .hn.pinned .hn-outline {
   stroke-width: 2.4;
 }
