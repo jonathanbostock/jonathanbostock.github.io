@@ -485,6 +485,14 @@
           topic families; it never opens a valence split.</figcaption>
         </figure>
 
+        <p>(A note on normalisation, since §3 turns on it: this clustering runs on the
+        correlation-normalised kernel — but it is <em>not</em> a normalisation artifact. Redo the same
+        embedding on the raw covariance and the picture holds: the three families separate at ~2–3×
+        while the valence gaps stay at 0.05–0.41, always far below the family scale. The raw view is a
+        touch noisier — high-variance probes stretch it — and it nudges one valence gap up
+        (misalignment-up's aligned↔misaligned, 0.11 → 0.41), but nothing crosses into "valence splits."
+        Normalisation flatters the margin <em>magnitude</em> (§3); it doesn't invent this clustering.)</p>
+
         <h2><span class="vr-section-num">§3</span>The margin kernel: an empty pattern over a loud scale</h2>
 
         <p>The preference margin is built to fix exactly this. Scoring logπ(chosen) − logπ(rejected)
