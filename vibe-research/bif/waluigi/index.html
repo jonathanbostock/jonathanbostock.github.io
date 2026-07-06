@@ -5,7 +5,7 @@
     <title>Waluigi and the loss kernel — Vibe Research</title>
     <link rel="stylesheet" href="../../../style.css">
     <link rel="stylesheet" href="../../style.css?v=itip1">
-    <meta name="description" content="Does the loss kernel (Bayesian influence function) recover an alignment axis in real pretrained models the way it recovers digit classes on MNIST? On Geodesic's alignment-pretraining models it does not: the CE kernel sees topic/format families, not valence; the DPO preference-margin kernel has no coherent alignment factor. The alignment signal is first-order — a shift in the mean preference margin — and there is no Waluigi reversal.">
+    <meta name="description" content="Does the loss kernel (Bayesian influence function) recover an alignment axis in real pretrained models the way it recovers digit classes on MNIST? On Geodesic's alignment-pretraining models the normalised kernel pattern sees topic/format families, not valence — but the RAW kernel scale does carry the axis: the margin-gradient magnitude spans ~40x, reproduces to a few percent, collapses with training and re-inflates with upsampling, and the mean preference margin shifts toward aligned. The signal is in the kernel's scale and mean, not its correlation pattern, and there is no Waluigi reversal.">
   </head>
   <body>
     <main id="page">
@@ -37,13 +37,15 @@
         five of them, spanning the axis from an <b>untrained</b> control through
         <b>alignment-upsampled</b> (9% misaligned), <b>filtered</b> (31%), the <b>unfiltered
         baseline</b> (45%), to <b>misalignment-upsampled</b> (51%). The answer is a clean negative
-        with a twist: the kernel geometry carries no alignment axis at all — but a much simpler
-        first-order readout does, and it shows the opposite of a Waluigi effect.</p>
+        with a twist: the kernel's normalised <em>pattern</em> carries no alignment axis — but its raw
+        <em>scale</em> does, reproducibly, as does a simple first-order readout, and both show the
+        opposite of a Waluigi effect.</p>
 
-        <p class="vr-pull">Alignment pretraining shifts the <em>mean</em> preference margin (+4.5 nats,
-        60% of pairs, for the most-aligned model) — but leaves <em>no</em> coherent alignment factor
-        in the loss-kernel covariance, and shows no Waluigi reversal. The axis is in the first moment,
-        not the geometry.</p>
+        <p class="vr-pull">Correlation-normalising the loss kernel hid the signal. The raw
+        margin-gradient magnitude spans <em>~40×</em> along the axis and reproduces to a few percent —
+        training collapses it, upsampling re-inflates it — and the mean margin shifts +4.5 nats toward
+        aligned for the most-aligned model. The alignment axis is in the kernel's <em>scale</em> and
+        <em>mean</em>, not its normalised correlation pattern — and there is no Waluigi reversal.</p>
 
         <h2><span class="vr-section-num">§1</span>Two readouts on one set of chains</h2>
 
@@ -483,27 +485,40 @@
           topic families; it never opens a valence split.</figcaption>
         </figure>
 
-        <h2><span class="vr-section-num">§3</span>The margin kernel kills the confound — and finds nothing</h2>
+        <h2><span class="vr-section-num">§3</span>The margin kernel: an empty pattern over a loud scale</h2>
 
         <p>The preference margin is built to fix exactly this. Scoring logπ(chosen) − logπ(rejected)
         on the completion tokens cancels the shared prompt, so topic is held fixed by construction:
         the giant common mode that dominates the CE kernel (correlation ≈ 0.91 across documents) drops
         to ≈ 0.003 in the margin kernel. The confound is gone.</p>
 
-        <p>But nothing coherent is left in its place. The margin kernel's <em>coherence</em> — the mean
-        off-diagonal correlation, i.e. "is there one alignment factor the margins load on?" — is below
-        0.013 for every model, and its cross-seed reproducibility is low (gate 0.04–0.16, versus 0.55–0.77
-        for the CE kernel). The heatmaps are visually structureless (Fig 3). What little reproducible
-        structure exists is topic-clustering — and it sits at NMI ≈ 0.57 for <em>every</em> model,
-        including the untrained one, so it is an input-statistics artifact, not a learned alignment
-        factor. There is no "alignment direction" in the covariance of the preference margins to find.</p>
+        <p>Look at the <em>normalised</em> kernel and nothing coherent is left in its place. The
+        coherence — the mean off-diagonal correlation, "is there one factor the margins load on?" — is
+        below 0.013 for every model; its cross-seed reproducibility is poor (gate 0.04–0.16, versus
+        0.55–0.77 for CE); and what little reproducible pattern exists is topic-clustering that sits at
+        NMI ≈ 0.57 for <em>every</em> model, including the untrained one — an input-statistics artifact,
+        not a learned direction. As a shared-factor detector, the margin kernel is empty.</p>
+
+        <p>But correlation-normalisation divides out the one thing that carries the axis: the
+        <em>scale</em>. The raw kernel's diagonal is Var<sub>w</sub>[margin] — how much each preference
+        swings under posterior weight perturbation, i.e. the margin's gradient magnitude
+        ‖∇<sub>w</sub>m‖. That magnitude spans <b>~40×</b> across the five models and is <em>far</em>
+        more reproducible than the correlation pattern: the two seeds agree on it to within <b>1–4%</b>
+        (Fig 3, left), and even the per-pair magnitudes reproduce at r ≈ 0.64–0.82 (Fig 3, right),
+        against the pattern's 0.04–0.16. And it tracks the axis — training <b>collapses</b> the margin
+        gradient (untrained ≈ 27 → the well-fit baselines ≈ 0.6 nats²), and upsampling, in
+        <em>either</em> direction, <b>re-inflates</b> it (alignment-up ≈ 3.5, misalignment-up ≈ 2.6).
+        The baselines' preferences are the most robust to weight perturbation; upsampling of any kind
+        makes them more fragile. A real, reproducible axis lives in the kernel — in its magnitude, not
+        its normalised shape.</p>
 
         <figure class="vr-fig breakout">
-          <img src="figs/dpo_margin_null.png" alt="Left: margin coherence (near zero, 0.004–0.013) and cross-seed gate (0.04–0.16) across the five models — both flat and low. Right: a representative margin×margin correlation heatmap for the unfiltered model, showing no block structure, just speckle.">
-          <figcaption><b>Fig 3</b> · The margin kernel is (almost) empty. Coherence and cross-seed
-          reproducibility are both low and flat across the axis; even the best case (unfiltered)
-          is a structureless speckle. The topic common-mode is removed, but no alignment factor
-          survives.</figcaption>
+          <img src="figs/dpo_raw_scale.png" alt="Left: mean Var[margin] per model on a log axis — untrained about 27, collapsing to the baselines about 0.6, re-inflating to the upsampled models about 2.6-3.5, with both seeds overlapping. Right: per-pair Var[m] seed-0 vs seed-1 on log-log axes, points falling along the identity line, coloured by model.">
+          <figcaption><b>Fig 3</b> · The <em>raw</em> margin kernel. <b>Left:</b> mean
+          Var<sub>w</sub>[margin] (the loss-gradient magnitude) per model — a ~40× range that
+          correlation-normalisation discards, with both seeds overlapping (ratio ≤ 1.04). <b>Right:</b>
+          per-pair magnitudes reproduce across seeds (points on the identity line, r ≈ 0.64–0.82) — the
+          scale reproduces even though the correlation pattern (gate 0.04–0.16) does not.</figcaption>
         </figure>
 
         <h2><span class="vr-section-num">§4</span>The alignment axis is in the mean</h2>
@@ -524,12 +539,15 @@
           misaligned end.</figcaption>
         </figure>
 
-        <p>And this is why the kernel is empty. The <em>pattern</em> of which pairs get a positive
-        margin is nearly identical across the trained models (per-pair margin correlations r &gt; 0.93,
-        and even the untrained model matches at r ≈ 0.65) — it is set by properties of the pairs, not
-        of the model. Alignment pretraining shifts the whole distribution up by a near-constant
-        offset; it does not reshape which pairs co-vary. A constant offset is a change in the first
-        moment and invisible to a covariance. The signal is real, but it is not geometric.</p>
+        <p>And this is why the kernel's <em>pattern</em> is empty even though its scale is not. Which
+        pairs get a positive margin is nearly identical across the trained models (per-pair margin
+        correlations r &gt; 0.93, and even the untrained model matches at r ≈ 0.65) — set by properties
+        of the pairs, not of the model. Alignment pretraining shifts the whole distribution up by a
+        near-constant offset and rescales its spread, but it does not <em>reshape which pairs co-vary</em>.
+        The mean (first moment) and the variance magnitude (the kernel's diagonal, §3) both move with
+        the axis; only the off-diagonal correlation pattern — the shared-factor structure a
+        spectroscopy would need — stays flat. The signal is real; it just isn't in the normalised
+        geometry.</p>
 
         <p>Two things worth saying plainly. First: <b>no Waluigi effect.</b> If aligning the model
         made misalignment more salient, the aligned-upsampled model would show a stronger misaligned
@@ -544,11 +562,12 @@
         <p>On MNIST, class identity <em>is</em> a groove: the model's loss on two fours genuinely
         co-fluctuates under posterior sampling, because "four-ness" is a factor the network computes
         and shares across fours. Clustering the kernel recovers the classes because the classes live
-        in the second moment. Alignment, in these models, does not. Valence is not a factor the loss
-        landscape organises around — the CE kernel organises around topic and format, and the
-        preference margin, once topic is removed, has no coherent factor left. The part of alignment
-        that these models <em>do</em> carry is a scalar level — a mean preference — which the right
-        first-order probe reads off directly and the kernel, by design, cannot.</p>
+        in the second-moment <em>pattern</em>. Alignment, in these models, does not organise the pattern
+        that way — the CE kernel clusters by topic and format, and the preference margin, once topic is
+        removed, has no coherent shared factor. What alignment <em>does</em> move are two scale-like
+        quantities: the mean preference (first moment) and the margin's gradient magnitude (the kernel's
+        diagonal). A correlation-normalised spectroscopy is blind to both by construction; the raw scale
+        and a first-order probe read them off directly.</p>
 
         <p>The honest reading is that the loss-kernel spectroscopy is the wrong instrument for this
         question here. It was built to find shared factors, and there isn't one to find; a mean-margin
@@ -556,11 +575,13 @@
         apparatus adds nothing on top. That is a genuine result about where alignment lives in these
         models, not just a null.</p>
 
-        <p><b>Limits, and what would change the verdict.</b> The margin kernel's low reproducibility
-        (gate 0.04–0.16) means it is under-sampled — more draws or chains might surface a weak factor
-        the current run buries in noise, so "no coherent factor" is really "no factor above this noise
-        floor." Only 60 pairs, from the evals split rather than the full DPO training set; γ=100
-        throughout, unswept. The margins here conditioned chosen and rejected on prompt windows that
+        <p><b>Limits, and what would change the verdict.</b> The distinction that matters: the raw
+        magnitude (the diagonal) is highly reproducible — seeds agree to 1–4% — so the scale result is
+        solid, but the off-diagonal <em>pattern</em> is under-sampled (gate 0.04–0.16), so "no shared
+        factor" is really "no factor above this noise floor." A deeper margin-only run (8 chains × 200
+        draws, in flight) is firming up the pattern; the scale story above is already seed-stable. Only
+        60 pairs, from the evals split rather than the full DPO training set; γ=100 throughout, unswept.
+        The margins here conditioned chosen and rejected on prompt windows that
         differed by their completion-length delta (a small topic leak at the passage prefix; fixed in
         the code after this run, and second-order per an independent review). And the frozen-embedding
         control is not perfectly clean: freezing removes the unembedding-noise artifact, but a
