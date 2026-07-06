@@ -2,15 +2,15 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Waluigi and the loss kernel — Vibe Research</title>
+    <title>The loss kernel on aligned LLMs — Vibe Research</title>
     <link rel="stylesheet" href="../../../style.css">
     <link rel="stylesheet" href="../../style.css?v=itip1">
-    <meta name="description" content="Does the loss kernel (Bayesian influence function) recover an alignment axis in real pretrained models the way it recovers digit classes on MNIST? On Geodesic's alignment-pretraining models the normalised kernel pattern sees topic/format families, not valence — but the RAW kernel scale does carry the axis: the margin-gradient magnitude spans ~40x, reproduces to a few percent, collapses with training and re-inflates with upsampling, and the mean preference margin shifts toward aligned. The signal is in the kernel's scale and mean, not its correlation pattern, and there is no Waluigi reversal.">
+    <meta name="description" content="Does the loss kernel (Bayesian influence function) recover an alignment axis in real pretrained models the way it recovers digit classes on MNIST? On Geodesic's alignment-pretraining models the normalised kernel pattern sees topic/format families, not valence — but the RAW kernel scale does carry the axis: the margin-gradient magnitude spans ~40x, reproduces to a few percent, collapses with training and re-inflates with upsampling, and the mean preference margin shifts toward aligned. The signal is in the kernel's scale and mean, not its correlation pattern, and no misalignment factor strengthens along the training axis.">
   </head>
   <body>
     <main id="page">
       <div class="align-center" id="abstract">
-        <h1>Waluigi on real models: the loss kernel sees topic, not alignment</h1>
+        <h1>On real models, the loss kernel sees topic, not alignment</h1>
         <p class="vr-byline">
           <span>2026-07-06 · v1</span>
           <span>1× H200 · ~$25</span>
@@ -26,10 +26,10 @@
         recovers the digit classes unsupervised</a>. The obvious next question for an alignment team:
         does the same instrument recover an <em>alignment</em> axis in a real pretrained model? If
         aligned and misaligned behaviour are natural latents, documents that share a valence should
-        share a groove. And there's a sharper hypothesis to test — the
-        <button class="tooltip-button" data-define="waluigi">Waluigi effect</button>: that training
-        toward aligned behaviour makes misaligned behaviour <em>more</em> salient, which should show
-        up as a strengthening misalignment factor as you move along the training axis.</p>
+        share a groove. And there's a sharper hypothesis to test: that training
+        toward aligned behaviour makes misaligned behaviour <em>more</em> salient — a
+        <button class="tooltip-button" data-define="latent-misalignment">latent-misalignment factor</button>
+        that should strengthen as you move along the training axis.</p>
 
         <p>Geodesic's <a href="https://alignmentpretraining.ai/">alignment-pretraining</a> models are
         a clean testbed: a family of 6.9B models pretrained on the same corpus with different
@@ -38,14 +38,14 @@
         <b>alignment-upsampled</b> (9% misaligned), <b>filtered</b> (31%), the <b>unfiltered
         baseline</b> (45%), to <b>misalignment-upsampled</b> (51%). The answer is a clean negative
         with a twist: the kernel's normalised <em>pattern</em> carries no alignment axis — but its raw
-        <em>scale</em> does, reproducibly, as does a simple first-order readout, and both show the
-        opposite of a Waluigi effect.</p>
+        <em>scale</em> does, reproducibly, as does a simple first-order readout, and both point the
+        opposite way — alignment training makes misalignment <em>less</em> salient, not more.</p>
 
         <p class="vr-pull">Correlation-normalising the loss kernel hid the signal. The raw
         margin-gradient magnitude spans <em>~40×</em> along the axis and reproduces to a few percent —
         training collapses it, upsampling re-inflates it — and the mean margin shifts +4.5 nats toward
         aligned for the most-aligned model. The alignment axis is in the kernel's <em>scale</em> and
-        <em>mean</em>, not its normalised correlation pattern — and there is no Waluigi reversal.</p>
+        <em>mean</em>, not its normalised correlation pattern — and no misalignment factor strengthens with alignment training.</p>
 
         <h2><span class="vr-section-num">§1</span>Two readouts on one set of chains</h2>
 
@@ -76,7 +76,7 @@
             <dt>kernel</dt><dd>localised SGLD (γ=100, nβ=m/ln m), bf16, 2 seeds × 4 chains × 100 draws, block-centred covariance (block 5), <b>embeddings frozen</b> (412M params); gated on 2-seed agreement</dd>
             <dt>probes</dt><dd>5 classes × 60 docs (CE, 300×300 kernel) · 60 preference pairs (margin, 60×60 kernel), from the discourse-grounded-misalignment evals (article-questions split)</dd>
             <dt>readouts</dt><dd>CE = length-normalised per-doc cross-entropy · margin = summed completion-only logπ(chosen)−logπ(rejected)</dd>
-            <dt>code &amp; artefacts</dt><dd>latent-learning/experiments/waluigi_dpo.py · HF arcadia-impact/small-abstraction-test-logs at <code>waluigi-dpo-20260706</code></dd>
+            <dt>code &amp; artefacts</dt><dd>latent-learning/experiments/dpo_bif.py · HF arcadia-impact/small-abstraction-test-logs (DPO loss-kernel run)</dd>
           </dl>
         </div>
 
@@ -570,7 +570,7 @@
         spectroscopy would need — stays flat. The signal is real; it just isn't in the normalised
         geometry.</p>
 
-        <p>Two things worth saying plainly. First: <b>no Waluigi effect.</b> If aligning the model
+        <p>Two things worth saying plainly. First: <b>no latent-misalignment effect.</b> If aligning the model
         made misalignment more salient, the aligned-upsampled model would show a stronger misaligned
         pull or a sharpened misalignment factor. It shows neither — it is simply the most aligned, and
         the misalignment-upsampled model is no more decisively misaligned than the baseline. Second:
@@ -592,7 +592,7 @@
 
         <p>The honest reading is that the loss-kernel spectroscopy is the wrong instrument for this
         question here. It was built to find shared factors, and there isn't one to find; a mean-margin
-        reward probe answers the alignment and Waluigi questions in one line and the whole SGLD
+        reward probe answers the alignment and latent-misalignment questions in one line and the whole SGLD
         apparatus adds nothing on top. That is a genuine result about where alignment lives in these
         models, not just a null.</p>
 
@@ -609,11 +609,11 @@
         random-init model still shows topic clustering (CE class-NMI 0.47, margin topic-NMI 0.57) from
         input statistics propagating through random weights — so "structure at initialisation"
         persists, in a milder form. None of these change the headline: the axis is a mean, not a
-        kernel, and there is no Waluigi reversal.</p>
+        kernel, and no misalignment factor strengthens with alignment training.</p>
 
         <div class="vr-colophon">
-          Code · <span style="font-family: inherit">latent-learning</span> — <code>experiments/waluigi_dpo.py</code> (dual-readout runner, frozen embeddings), <code>analyze_waluigi_dpo.py</code>, <code>make_spectroscopy_dpo.py</code>. Loss kernel = our BIF = Timaeus' Loss Kernel (arXiv:2509.26537).
-          <br>Artefacts · HF <a href="https://huggingface.co/datasets/arcadia-impact/small-abstraction-test-logs">arcadia-impact/small-abstraction-test-logs</a> at <code>waluigi-dpo-20260706</code> — every SGLD trace, both kernels per model, ledgers and analysis.
+          Code · <span style="font-family: inherit">latent-learning</span> — <code>experiments/dpo_bif.py</code> (dual-readout runner, frozen embeddings), <code>analyze_dpo_bif.py</code>, <code>make_spectroscopy_dpo.py</code>. Loss kernel = our BIF = Timaeus' Loss Kernel (arXiv:2509.26537).
+          <br>Artefacts · HF <a href="https://huggingface.co/datasets/arcadia-impact/small-abstraction-test-logs">arcadia-impact/small-abstraction-test-logs</a> (DPO loss-kernel run) — every SGLD trace, both kernels per model, ledgers and analysis.
           <br>Models · Geodesic <a href="https://alignmentpretraining.ai/">alignment-pretraining</a> 6.9B family. Compute · 1× H200, ≈ $25, pod deleted after verified upload.
         </div>
       </div>
@@ -626,7 +626,7 @@
         "sgld": "Stochastic Gradient Langevin Dynamics: SGD plus injected Gaussian noise, scaled so the iterates sample a tempered posterior instead of converging. The devinterp variant adds a localisation term γ(w* − w) tethering the chain to the trained weights, so it samples the *local* posterior around this specific model.",
         "block-centred": "The covariance estimator subtracts a local (block-wise) mean before accumulating, high-passing the slow drift of the SGLD chain at a sharp minimum. Without it the raw covariance never converges and seed-to-seed agreement collapses; with it the kernel is reproducible.",
         "spurious": "Timaeus' Loss-Kernel fix: SGLD noise injected into the (un)embedding weights makes same-class losses spuriously co-move — you can 'recover the labels' from a few SGLD steps on an untrained model. Freezing the input/output embeddings during sampling removes that artifact.",
-        "waluigi": "The Waluigi effect: the conjecture that training a model to satisfy a property (e.g. alignment) makes it easier to elicit the opposite, because representing 'aligned' requires representing 'misaligned' as its negation. Here it would predict a strengthening misalignment factor as alignment training increases.",
+        "latent-misalignment": "The hypothesis that training a model toward a property (e.g. alignment) makes its opposite more salient — because representing 'aligned' entails representing 'misaligned' as its negation. Here it would predict a misalignment factor that strengthens as alignment training increases.",
         "dpo-margin": "The reference-free DPO / implicit-reward quantity: logπ(chosen) − logπ(rejected) evaluated on the completion tokens only (prompt masked). It is the model's implicit preference between two answers to the same prompt, with the shared prompt cancelled — a valence readout with topic held fixed.",
       });
     </script>
