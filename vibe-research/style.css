@@ -160,6 +160,17 @@ html::after  { right: 3.75rem; }
 }
 .vr-byline span + span::before { content: " · "; opacity: 0.55; }
 
+/* ARCH autoresearch pages — the animated ARCH logo pasted inline at the
+   top of the abstract block (see the vibe-research SKILL, "ARCH
+   autoresearch threads"). Height only; width follows the SVG's cropped
+   viewBox (~0.9:1). */
+.vr-arch-logo {
+  display: block;
+  height: 150px;
+  width: auto;
+  margin: 0 auto 0.9rem;
+}
+
 /* Lab block — the run's hyperparameters / metadata, set tight and
    monospaced so it reads as data, not prose. */
 .vr-lab {
