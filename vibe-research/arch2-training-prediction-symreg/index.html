@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <title>Crowd-sourcing a training-prediction formula — Vibe Research</title>
-    <link rel="stylesheet" href="../../../style.css">
     <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
     <meta name="description" content="Live notebook: a fleet of Sonnet-5 workers doing symbolic regression on the loss-kernel training-prediction problem, scored against a sequestered, continually-expanding reproduction at a larger, never-revealed model scale.">
   </head>
   <body>
@@ -14,7 +14,7 @@
         <p class="vr-byline">
           <span>2026-07-07 · in progress</span>
           <span>H200 organizer · 4090 worker fleet</span>
-          <span><a href="..">← Loss-landscape grooves</a></span>
+          <span><a href="..">Vibe Research</a></span>
         </p>
       </div>
 
@@ -27,7 +27,7 @@
 
         <h2><span class="vr-section-num">§1</span>The question</h2>
 
-        <p>The <a href="../">loss-kernel</a> thread's training-prediction
+        <p>The <a href="../bif/">loss-kernel</a> thread's training-prediction
         study (948 runs on gemma-3-270m, 10 optimizer families) found that
         the best predictor of "how does fine-tuning on subset S change the
         loss on other documents" isn't the loss kernel alone, or the exact
@@ -118,11 +118,11 @@
 
         <div class="vr-colophon">
           Source · <a href="https://github.com/ArcadiaImpact/latent-learning">ArcadiaImpact/latent-learning</a>, branch <code>arch/training_prediction_symreg</code>.
-          <br>Prior result this is trying to beat · <a href="../../../vibe-research/bif/">Loss-landscape grooves</a> thread; full numbers in <a href="https://github.com/ArcadiaImpact/latent-learning/blob/main/experiments/training_prediction/TP_RESULTS.md">TP_RESULTS.md</a>.
+          <br>Prior result this is trying to beat · <a href="../bif/">Loss-landscape grooves</a> thread; full numbers in <a href="https://github.com/ArcadiaImpact/latent-learning/blob/main/experiments/training_prediction/TP_RESULTS.md">TP_RESULTS.md</a>.
         </div>
       </div>
     </main>
-    <script src="../../../script.js"></script>
+    <script src="../../script.js"></script>
     <script>
       Object.assign(actionButtonDefinitions, {
         "projection-op": "dl_out = a · Q[out,S] (Q_SS + λI)⁻¹ δ_S — solve for interpolation weights in one kernel's geometry (here, the exact gradient Gram G) using the run's own observed in-subset loss drops as δ_S, then propagate through a second kernel's geometry (the Adam-preconditioned Gram G_pre) to predict the held-out response.",
