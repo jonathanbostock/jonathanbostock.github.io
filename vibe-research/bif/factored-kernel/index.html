@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Factoring the loss kernel — Vibe Research</title>
+    <link rel="stylesheet" href="../../../style.css">
+    <link rel="stylesheet" href="../../style.css?v=itip1">
+    <meta name="description" content="A compositional search for factored (sum / Hadamard-product) cluster structure in loss kernels, with independence gates that separate a genuine product of traits from a relabeled flat clustering. Validated on planted synthetic kernels; on a grokked multitask-arithmetic transformer the machinery correctly REFUSES the planted (operation × argument-order) factorization and surfaces the network's own decomposition — linear ops share circuitry within an argument order, division is its own order-spanning module — replicated at r ≈ 0.97 across chains and a 4× γ range. On a real Pythia/Pile kernel, per-seed structure passes every within-seed gate and then fails seed-to-seed replication: the estimation-noise null earns its place.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Factoring the loss kernel: the network decomposes the task — just not along your axes</h1>
+        <p class="vr-byline">
+          <span>2026-07-07 · v1</span>
+          <span>1× RTX 4090 · ≈ $2</span>
+          <span><a href="..">BIF experiments</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>Timaeus' <button class="tooltip-button" data-define="loss-kernel">loss kernel</button>
+        (our <button class="tooltip-button" data-define="bif">BIF</button>) gets clustered and
+        UMAPed in the original paper — flat structure. But the motivating picture of the kernel is
+        <em>additive</em>: if a network implements non-interacting mechanisms in (approximately)
+        disjoint parameter modules, the probe posterior factorises across modules and the kernel
+        literally decomposes as a <em>sum</em> of per-mechanism kernels (their Appendix A.4). When
+        each datum engages several mechanisms at once — every image has an object <em>and</em> a
+        lighting mode; every equation has an operation <em>and</em> an argument convention — the
+        kernel should be a sum of block-constant kernels over <em>crossed</em> factors, not one
+        flat partition. This piece builds the machinery to find that structure from
+        <i>K</i> alone: a compositional
+        <button class="tooltip-button" data-define="grammar">kernel-grammar</button> search over
+        sums and <button class="tooltip-button" data-define="hadamard">Hadamard products</button>
+        of block kernels, scored by <button class="tooltip-button" data-define="bic">BIC</button>,
+        and — the part that makes "factored" mean something — hard
+        <b>independence gates</b> that a relabeled flat clustering cannot pass.</p>
+
+        <p class="vr-pull">On planted kernels the search recovers sums, products, and flat
+        structure and refuses a non-separable fake product. On a grokked multitask-arithmetic
+        transformer it refuses the factorization <em>I</em> planted — (operation) × (argument
+        order) — and the refusal is correct: the kernel's own block structure says the two linear
+        operations share circuitry <em>within</em> an argument order while division spans both,
+        replicated at r ≈ 0.97 across chains and a 4× γ range. And on a real Pythia/Pile kernel,
+        rich per-seed structure passes every within-seed gate — then dies on seed-to-seed
+        replication.</p>
+
+        <h2><span class="vr-section-num">§1</span>Why "factored", and why gates</h2>
+
+        <p>A flat clustering of <i>K</i> with <i>k</i> = 6 blocks and a two-factor structure
+        3 × 2 induce <em>exactly the same partition</em> of the data — fit alone cannot tell them
+        apart. The claim "these are two independent factors" is extra structure, and it needs its
+        own tests. Following the project spec, every accepted factorization must pass:</p>
+
+        <ul>
+          <li><b>Assignment independence</b> — normalized MI between factor labelings ≈ 0, plus a
+          G-test on the contingency table (the factors must be <em>crossed</em> in the data, not a
+          partition split in half).</li>
+          <li><b>Separability</b>
+          (<button class="tooltip-button" data-define="separability">the identifiability-critical
+          test</button>) — the joint block-mean tensor over the factor refinement must be
+          additively (or, on the ⊙ branch, multiplicatively) separable:
+          <i>M</i><sub>(a,b),(a′,b′)</sub> ≈ <i>D</i><sub>1</sub>[a,a′] + <i>D</i><sub>2</sub>[b,b′].
+          Without this, "factored" is a relabeling exercise.</li>
+          <li><b>Per-factor informativeness</b> — each factor alone must explain a nontrivial share
+          of the kernel's off-diagonal variance (guards the MI-degeneracy where a random split of
+          one true clustering looks "independent").</li>
+          <li><b>Trace-level additivity</b> — when the SGMCMC draws are retained, the per-sample
+          loss traces themselves should decompose as μ(z) + Σ<sub>f</sub> f<sub>f</sub>(a_f(z), t)
+          with mutually uncorrelated factor time-courses. A much sharper test than anything
+          available from <i>K</i> alone; keep your draws.</li>
+        </ul>
+
+        <p>The model class is a two-operator grammar over block-constant kernels
+        <i>C_k</i> = <i>Z D Z</i><sup>⊤</sup> (hard assignments <i>Z</i>, free symmetric block-value
+        matrix <i>D</i>): sums <i>C</i>+<i>C</i>+… for additively-composed mechanisms, Hadamard
+        products <i>C</i>⊙<i>C</i> for multiplicatively-composed similarities. Everything is fitted
+        on off-diagonal entries only (the diagonal of a loss kernel is variance-inflated), negative
+        entries are kept — they are signal under the additive model, and the reason the ⊙ branch
+        is <em>secondary</em>: log <i>K</i> is undefined entrywise for the covariances competing
+        mechanisms produce. Search is greedy-stagewise (fit a flat block kernel, subtract, recurse
+        until a within-block permutation null says the residual is unstructured) followed by
+        beam-4 refinement over moves INC/DEC/FACTOR/MERGE/ADD/DROP/SWAP-OP, scored by
+        BIC = n<sub>pairs</sub>·log(RSS/n<sub>pairs</sub>) + p·log(n<sub>pairs</sub>) with
+        p = Σ<sub>f</sub> [n·(k<sub>f</sub>−1) + k<sub>f</sub>(k<sub>f</sub>+1)/2]. The FACTOR move
+        is where factoring actually happens: split a flat <i>C</i><sub>6</sub> into 3 × 2 by
+        biclustering its 6 × 6 block-value matrix into the best separable grid — and it is
+        hard-gated on the tests above.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig1_concept.png" alt="An additive two-factor kernel: K = Z1 D1 Z1' + Z2 D2 Z2' + noise, shown as four heatmaps">
+          <figcaption><b>Fig 1 — what factored structure looks like.</b> A planted additive
+          two-factor kernel (n = 180, rows sorted by factor 1 then factor 2). The observed
+          <i>K</i> is the sum of a coarse 3-block kernel and a crossed 2-block checkerboard;
+          neither factor is a refinement of the other. A flat clustering needs k = 6 blocks and
+          21 block values to say what two factors say with 9 — and only the factored reading
+          supports counterfactuals like "same operation, different order".</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§2</span>Stage A — planted truth</h2>
+
+        <p>Six synthetic generators with exact planted structure: (a) flat k-block; (b) additive
+        3+2; (c) additive 3+2+2; (d) Hadamard 3×2 on a positive kernel; (e) an
+        <em>adversarial</em> flat k = 6 whose label marginals mimic a crossed product (MI ≈ 0) but
+        whose block means are non-separable — the case every fit-based method calls "factored"
+        and the separability gate must refuse; (f) pure noise. Acceptance battery at reference
+        noise (n = 300, five seeds each): <b>(a), (b), (d) recovered exactly (every factor
+        ARI = 1.0), (e) refused — the search keeps flat C<sub>6</sub> and every attempted FACTOR
+        move is logged gate-rejected — and (f) returns null</b>; the 3-factor (c) recovers 4/5
+        (one seed over-splits a weak factor). Deterministic given seed; 28 unit tests gate the
+        build.</p>
+
+        <p>One design decision turned out to matter more than any other: <b>how much a cluster
+        assignment costs</b>. The spec's BIC counts every datum's label as a free parameter —
+        n·(k−1) parameters charged log(n<sub>pairs</sub>) each — which at n = 1,800 makes one
+        extra cluster cost ≈ 25,700 BIC, i.e. it must explain ~1.6% of entry-level residual
+        variance. But block <em>means</em> are estimated ~n/k times more precisely than entries;
+        the first version of this pipeline kept selecting structures that tracked kernel
+        signal-to-noise rather than network structure (the same kernel gave null at n = 900 and
+        a 2×2 product at n = 1,800). The fix is the spec's own "equivalent Bayesian reading"
+        taken seriously: charge assignments their <em>code length</em>, 2n·log k nats — an
+        ICL-style prior ~17× lighter — and let the §4 gates plus replication carry the
+        anti-overfitting load. Under the lighter prior the battery holds ((e) still refused at
+        every interaction strength, noise still null) and the noise envelope transforms:
+        Hadamard structure is recovered at <em>every</em> tested σ up to 2.4 (previously dead at
+        1.2), flat to σ = 1.6, additive to σ = 0.8–1.2 — essentially closing the gap to the flat
+        spectral-clustering reference in fig 2.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig2_stage_a.png" alt="Stage A curves: structure recovery vs noise; factor ARI vs the flat-refinement reference; adversarial rejection vs interaction strength">
+          <figcaption><b>Fig 2 — Stage A behaviour.</b> <em>Left:</em> fraction of seeds
+          recovering the exact planted structure vs noise σ. <em>Middle:</em> the honest gap —
+          median per-factor ARI (solid) against the ARI of flat spectral clustering of the joint
+          refinement (dashed): flat clustering survives to higher noise than structure
+          <em>selection</em>, because BIC's n·(k−1) assignment-parameter cost makes fine structure
+          genuinely not worth it at high noise. <em>Right:</em> the separability gate on the
+          adversarial family: at interaction 0 the "fake" product is a true product and the search
+          factors it (correctly!); at any real interaction strength it refuses, 5/5 seeds.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§3</span>Stage B — a transformer that grokked two tasks</h2>
+
+        <p>The paper's validation experiment (their Appendix C), reproduced: a 2-layer
+        Power-et-al-style transformer trained to 100% on modular addition and modular division
+        mod 97 with <em>disjoint vocabularies</em>, then probed with
+        <button class="tooltip-button" data-define="sgld">localised SGLD</button> at their exact
+        hyperparameters (C = 30 chains × 800 draws, ε = 2·10⁻⁷, nβ = 500, γ = 30,000, batch 512,
+        full probe forward pass at every retained draw). Two estimator lessons, both already
+        familiar from this thread. First, <button class="tooltip-button" data-define="spurious">
+        embeddings and unembedding are frozen during sampling</button> — the paper's own Appendix-B
+        artifact (noise in embedding rows makes shared-token inputs co-fluctuate) matters doubly
+        here and completely dominates the factored variant below if left in. Second, the pooled
+        global-mean estimator inherits each chain's slow drift as common-mode covariance; the
+        thread's <button class="tooltip-button" data-define="block-centred">block-centred</button>
+        estimator high-passes it, and everything downstream uses it.</p>
+
+        <p>The model groks (train and validation both 100% by step 3,750), and the paper's own
+        validation statistic reproduces: the principal component of per-sample expected loss shift
+        separates the two tasks at ROC-AUC 0.89 (they report 0.931), and their a = 0 satellite is
+        here too — the ten division probes with a trivial answer (0/b ≡ 0) couple to each other at
+        mean R = 0.46 against 0.02 for other within-division pairs, the single strongest block in
+        the kernel. But the honest headline for what follows: at these settings task structure in
+        the kernel is <em>tail-heavy and mean-weak</em>. Same-task correlations exceed cross-task
+        ones mostly in the extreme tail (99.9th percentile 0.36 vs 0.15, block-centred), the top
+        eigenvector tracks task at r = 0.58, and yet the task partition explains only ~1.5% of the
+        kernel's off-diagonal variance. UMAP's neighbour graph — what the paper visualises — runs
+        on exactly those tails; a block-mean model has to work with the 1.5%. Freezing the
+        embeddings quadruples that share (0.0034 → 0.015): the embedding-noise channel wasn't
+        creating task structure here, it was burying it under idiosyncratic per-probe
+        variance.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/fig3_flat_reproduction.png" alt="Flat reproduction kernels">
+          <figcaption><b>Fig 3 — the flat reproduction</b> (block-centred R, probes sorted by
+          task then operand). Within-task quadrants carry a dense positive speckle — the
+          heavy-tailed pair couplings the paper's UMAP separates on — while cross-task quadrants
+          stay near zero; the frozen-embedding kernel (right) shows the same pattern at ~3×
+          the contrast of the full-SGLD one (left). The faint diagonal streaks inside the add
+          quadrant are shared-operand/shared-answer pair families: structure <em>finer</em> than
+          the task partition, and the reason a 2-block model explains so little entry-level
+          variance.</figcaption>
+        </figure>
+
+        <p>Then the factored variant — the experiment the spec calls the headline. Shared operand
+        vocabulary, explicit operation and order tokens, sequences
+        <code>[op, ord, a, b] → c</code>: three operations {sub: x−y, div: x·y⁻¹, lin: x+2y}
+        crossed with two argument orders {fwd: (x,y) = (a,b), rev: (x,y) = (b,a)}, mod 97. The
+        design intent: op circuits shared across orders, order-routing shared across ops — a
+        planted 3 × 2. The model groks all six cells (train 100%, val 99.7%). 1,800 probes,
+        300 per cell.</p>
+
+        <p class="vr-pull">The pipeline refuses the planted 3 × 2 — separability
+        F ≈ 10³, interaction share 18% — and the refusal is the result: the kernel's 6 × 6
+        cell-mean matrix shows sub and lin (the two <em>linear</em> maps αa+βb) coupling strongly
+        <em>within the same argument order</em>, while div couples mostly with itself
+        <em>across</em> orders. The network built a linear-combination module keyed by argument
+        role, and a separate division module — not (operation) ⊕ (order).</p>
+
+        <p>Concretely, in the 6 × 6 matrix of cell-pair mean correlations (fig 5): div·fwd ↔
+        div·rev couple at 10.3×10⁻³ — division shares one circuit across argument orders — while
+        sub·fwd ↔ lin·fwd couple at 9.1 and sub·rev ↔ lin·rev at 12.4, <em>the two strongest
+        cross-op bonds in the kernel, both order-diagonal</em>; sub↔div and lin↔div bonds are
+        2–5. A (op) + (order) model must write every cross-op bond as the same order term; these
+        bonds are op-pair-specific, so the additive fit leaves 18% of the cell-mean variance as
+        interaction and the F-test rejects at F ≈ 10³. The same verdict arrives independently
+        from the retained SGMCMC draws (§4.4): joint-cell time courses explain 2.4% of the
+        block-centred trace variance, and the best additive (op, order) decomposition captures
+        only ~80% of that — the missing fifth is the interaction, seen by a completely different
+        test. And none of it is fragile: the full 6 × 6 bond pattern replicates at r = 0.99
+        across disjoint chain halves and r = 0.97 under halving or doubling γ (fig 5b).
+        __SEARCH_VERDICT__</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig4_factored_kernels.png" alt="Factored-variant kernels sorted three ways">
+          <figcaption><b>Fig 4 — the factored-variant kernel three ways</b> (block-centred R).
+          __FIG4_CAPTION__</figcaption>
+        </figure>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig5_separability.png" alt="Joint cell means, best separable fit, and interaction residual">
+          <figcaption><b>Fig 5 — why the gate refuses.</b> The 6 × 6 joint block-mean matrix of
+          R over (op × order) cells; the best additively-separable fit
+          D<sub>op</sub> ⊕ D<sub>ord</sub>; and the interaction residual, which carries the story:
+          the sub↔lin same-order bonds and the div fwd↔rev bond are exactly what a
+          (op) + (order) model cannot express. __FIG5_EXTRA__</figcaption>
+        </figure>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig5b_replication.png" alt="Cell-mean matrices across split-half chains and gamma arms">
+          <figcaption><b>Fig 5b — the pattern is not estimation noise.</b> The same 6 × 6
+          cell-mean matrix estimated from disjoint chain halves (left two) and from independent
+          8-chain runs at γ × 0.5 and γ × 2 (right two): the off-diagonal bond pattern —
+          sub·f↔lin·f, sub·r↔lin·r, div·f↔div·r — reproduces at r ≥ 0.97 against the main
+          estimate in every case, sharpening at higher γ.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§4</span>Stage C-lite — a real language-model kernel,
+        and the gate that matters most</h2>
+
+        <p>The spec's Stage C is Inception-v1/ImageNet, but Timaeus released neither the 10k × 10k
+        kernel nor the estimation code (re-estimating it is a ~$10, 4–6 GPU-hour job — deferred).
+        Instead, the pipeline ran on a real LM kernel this repo already had: Pythia-160m over 400
+        Pile documents (8 domains × 50), re-estimated with frozen embeddings, twice with
+        independent SGLD seeds. This kernel is <em>hard mode</em>: at the validation-run budget
+        (4 chains × 120 draws, autocorrelation time τ ≈ 40 → ≈ 3 effective samples per chain) the
+        two seeds' kernels agree at only r = 0.62 off-diagonal, and the domain partition explains
+        3–4% of off-diagonal variance. The search behaves accordingly, and instructively:
+        <b>each seed finds rich structure that passes every within-seed gate — seed 0 a
+        C<sub>3</sub> ⊙ C<sub>3</sub> product, seed 1 a C<sub>4</sub> + C<sub>2</sub> sum — and
+        the two structures then fail to replicate onto each other</b> (per-factor assignment ARI
+        0.06/0.11, component-kernel correlation ≈ 0.5, shapes disagree). The pre-freeze kernel
+        pair tells the same story with three additive factors each. MI ≈ 0, separable block means,
+        informative factors: all satisfiable by structured estimation noise <em>within</em> one
+        kernel estimate. Only the estimation-noise null — refit on an independent estimate and
+        demand the same answer — catches it, which is exactly why the spec makes it a hard gate
+        for anything fine-grained. (The strongest partially-replicating axis in the pre-freeze
+        pair tracked document <em>length</em>, η² = 0.14 — this thread's oldest artifact,
+        making its third appearance.)</p>
+
+        <figure class="vr-fig">
+          <img src="figs/fig6_pile.png" alt="Pile kernel sorted by domain and by found factors">
+          <figcaption><b>Fig 6 — the Pythia/Pile kernel</b> (frozen-embedding re-estimate),
+          sorted by Pile domain (left) and by the seed-0 search's C<sub>3</sub> ⊙ C<sub>3</sub>
+          factors (right). Fine striations dominate the domain sorting; the found sorting looks
+          <em>far</em> more block-structured — and none of it survives the seed-1 refit. A
+          within-seed eye test is not evidence of structure at this estimation
+          budget.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§5</span>What I take from this</h2>
+
+        <p><b>The gates are the product.</b> Twice in one afternoon, the machinery's job turned
+        out to be saying <em>no</em>: the separability gate refused a factorization that fit the
+        arithmetic kernel perfectly (and was mechanistically wrong), and the replication gate
+        refused three factors that passed every within-seed test on the Pile kernel. A fit-only
+        factorizer — any of the multiple-clustering methods this borrows from — would have
+        reported both. If you take one implementation detail from the spec, take §4.2 + the
+        split-half null.</p>
+
+        <p><b>The kernel sees the network's decomposition, not the designer's.</b> I planted
+        (operation) × (argument order) expecting op-circuits × order-routing. The network instead
+        built a linear-combination module (sub and lin are both αa+βb) specialised per argument
+        role, and a division module that spans roles. In hindsight this is the more economical
+        circuit — and the kernel's cell-mean matrix says it directly, replicated across chains
+        and a 4× γ range. This is what the loss kernel is for: the traits that factor are the
+        traits the <em>network</em> uses.</p>
+
+        <p><b>Kernel SNR is the binding constraint on structure search.</b> Cell-level block means
+        are precise (split-half r = 0.99 on 6 × 6 means) while entry-level correlations are noisy
+        — so partition structure explains only a few percent of off-diagonal variance, and a BIC
+        that charges n·(k−1) assignment parameters against entry-level RSS sits right at its
+        decision boundary (the same kernel gives null at n = 900 and structure at n = 1,800).
+        More retained draws is the cheap lever; a block-mean-level scoring rule is the
+        methodological one. Freezing embeddings during SGLD is free signal: it quadrupled the
+        task-structure share on the flat kernel.</p>
+
+        <p><b>What's next.</b> The spec's Stage C proper — re-estimating the Inception/ImageNet
+        kernel (~$10 of GPU) and asking whether a WordNet-independent photometric factor passes
+        these gates; longer SGLD runs to move the search off the BIC boundary; and the RJ-MCMC
+        version of the search, whose jump moves are exactly the FACTOR/MERGE/ADD/DROP set built
+        here.</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>models</dt><dd>2-layer transformer (d=128, 4 heads, ReLU, ~571k params), Power-et-al grokking recipe: AdamW lr 1e-3, wd 1.0, 50% train fraction; flat: add+div mod 97 disjoint vocabs; factored: {sub, div, lin} × {fwd, rev} shared vocab</dd>
+            <dt>kernel</dt><dd>localised SGLD at the paper's App-C settings: 30 chains × 800 draws (burn-in 200), ε 2e-7, nβ 500, γ 30k (arms at 15k / 60k, 8 chains); embeddings+positional+unembedding frozen; full probe forward each draw; block-centred covariance (window 50) → correlation</dd>
+            <dt>search</dt><dd>stagewise + beam-4 refinement; k ≤ 8; gates: NMI ≤ 0.15, separability F ≤ 3 or rel ≤ 0.05, informativeness ≥ 0.01; permutation null n=30, α=0.05</dd>
+            <dt>probes</dt><dd>flat: 2,000 (1,000/task); factored: 1,800 (300/cell); Pile: 400 (50/domain)</dd>
+            <dt>repro</dt><dd>everything deterministic given seed; commit __COMMIT__; pod eonrmn4psbxdwh</dd>
+          </dl>
+        </div>
+
+        <div class="vr-colophon">
+          Code · <code>latent-learning</code> branch <code>hadamard</code> —
+          <code>utils/factored_kernel/</code> (generators, fitting, gates, search; 28 tests) +
+          <code>experiments/factored_kernel/</code> (Stage A/B/C runners, analyses, this page's
+          figures). Spec: <code>HADAMARD_SPEC.md</code>. Loss kernel = our BIF = Timaeus' Loss
+          Kernel (<a href="https://arxiv.org/abs/2509.26537">arXiv:2509.26537</a>); SGLD settings
+          from their Appendix B/C; grammar-search pattern after Duvenaud et al.'s compositional
+          kernel search and Grosse et al.'s matrix-decomposition grammar; independence gates are
+          kernel-level natural-latent conditions.
+          <br>Artefacts · HF <a href="https://huggingface.co/datasets/arcadia-impact/factored-loss-kernel-20260707">arcadia-impact/factored-loss-kernel-20260707</a>
+          — SGLD traces (all arms, both experiments), kernels, w*, probe metadata, Stage A/B/C
+          reports, git SHA.
+          <br>Compute · 1× RTX 4090 ≈ 1.5 h ≈ $2 (both experiments incl. γ arms + the Pythia
+          re-estimate) + local CPU for search/analysis.
+        </div>
+      </div>
+    </main>
+    <script src="../../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "bif": "Bayesian influence function: K(i, j) = Cov[ℓ(x_i, w), ℓ(x_j, w)] over weights w drawn from the tempered local posterior around the trained solution. Large positive values mean the two datapoints' losses move together under weight perturbations — they share a groove.",
+        "loss-kernel": "The loss kernel (Timaeus, arXiv:2509.26537) is the same object as the BIF: the covariance of per-datapoint losses over a localised tempered posterior sampled around a trained model, normalised to a correlation. Here the per-datapoint loss is the cross-entropy of the answer token of one arithmetic equation (or of one Pile document).",
+        "sgld": "Stochastic Gradient Langevin Dynamics: SGD plus injected Gaussian noise, scaled so the iterates sample a tempered posterior instead of converging. The devinterp variant adds a localisation term γ(w* − w) tethering the chain to the trained weights, so it samples the *local* posterior around this specific model.",
+        "block-centred": "The covariance estimator subtracts a local (block-wise) mean before accumulating, high-passing the slow drift of the SGLD chain at a sharp minimum. Without it the raw covariance inherits each chain's equilibration drift as common-mode correlation between ALL probes; with it the kernel is reproducible (split-half r here: 0.97 at the cell level).",
+        "spurious": "Timaeus' Appendix-B artifact: SGLD noise injected into the (un)embedding weights makes inputs that share tokens co-fluctuate — you can 'recover the labels' from a few SGLD steps on an untrained model. Critical here because the planted traits ARE tokens (op and order tokens, shared answer tokens), so an unfrozen kernel would manufacture the block structure under test. Freezing input/positional/output embeddings during sampling removes the channel; the probe then sees only the computation weights.",
+        "grammar": "Structure search over expressions K → C_k | K + K | K ⊙ K, where C_k is a block-constant kernel Z D Z^T. The Automatic-Statistician pattern (Duvenaud et al. 2013; Grosse et al. 2012), transplanted from GP covariance functions to cluster-structured empirical kernels.",
+        "hadamard": "Entrywise product of kernels: (K1 ⊙ K2)(z, z') = K1(z, z')·K2(z, z'). The right composition when similarities multiply across factors (as for product RBF kernels); requires a positive-entry regime, so it is the secondary hypothesis for loss kernels, which legitimately carry negative covariances.",
+        "bic": "Penalized fit over the upper triangle: n_pairs·log(RSS/n_pairs) + p·log(n_pairs), with p counting n·(k−1) assignment parameters plus k(k+1)/2 block values per factor. A factored 3+2 structure costs 3n+9 parameters where the equivalent flat C_6 costs 5n+21 — factoring pays for itself exactly when the separable model fits.",
+        "separability": "Fit the joint block-mean tensor with the best additive (or log-additive) model over the factor grid and F-test the interaction residual against pooled within-cell noise. A genuine product of independent factors has ~zero interaction; a relabeled flat clustering fails at any n. The gate: F ≤ 3 or interaction share ≤ 5%.",
+        "ari": "Adjusted Rand Index between a recovered and a planted labeling: 1 = identical partitions, 0 = chance. Factor recovery is scored per factor after Hungarian matching between recovered and planted factors.",
+      });
+    </script>
+  </body>
+</html>
