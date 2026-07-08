@@ -3,7 +3,7 @@
    viewBox="0 0 100 100"
    version="1.1"
    id="svg1"
-   sodipodi:docname="favicon.svg"
+   sodipodi:docname="favicon_dark.svg"
    inkscape:version="1.4.4 (1:1.4.4+202605061435+dcaf3e7d9e)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
@@ -20,53 +20,41 @@
      inkscape:pageopacity="0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#505050"
-     inkscape:zoom="4"
-     inkscape:cx="82.75"
-     inkscape:cy="35.625"
+     inkscape:zoom="5.6568542"
+     inkscape:cx="11.313709"
+     inkscape:cy="54.712387"
      inkscape:window-width="2237"
      inkscape:window-height="1227"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
      inkscape:current-layer="svg1" />
-  <!-- JB tab icon. Light fills live on the paths below; the style block
-       swaps them for the dark-mode palette when the browser UI is dark.
-       Those dark colors are mirrored from favicon_dark.svg (the editable
-       dark source, not served directly): if you recolor or re-id shapes
-       in either file, update the block to match. The !important is needed
-       to beat Inkscape's inline style attributes.
+  <!-- JB tab icon. Edit freely: fill is the site's dark heading green
+       (the h2 color variable in style.css); bump font-size / y to taste.
+       No background rect on purpose, transparent behind the letters.
        NB: never put a double hyphen inside this comment, it is illegal
        in XML and Chrome will reject the whole file. -->
-  <style>
-    @media (prefers-color-scheme: dark) {
-      #path1       { fill: #c0d4a8 !important; }
-      #path2       { fill: #79bd5e !important; }
-      #path2-5     { fill: #a6e58a !important; }
-      #path2-6-2   { fill: #a6e58a !important; }
-      #rect2-5-7-6 { fill: #e8924f !important; }
-    }
-  </style>
   <path
-     style="fill:#123608;stroke:none;stroke-width:0.313061"
+     style="fill:#c0d4a8;stroke:none;stroke-width:0.313061;fill-opacity:1"
      d="M 20.832054,92.191424 C 17.844755,91.719086 15.229704,90.730959 12.966038,89.219158 11.541243,88.267601 9.5117279,86.327148 8.7005089,85.140814 7.8456652,83.890685 6.9350681,81.829537 6.4754601,80.104389 6.0523028,78.51606 6.0311589,78.234387 5.9624977,73.270859 l -0.071612,-5.176917 h 6.1254153 6.125413 l 0.08311,4.182949 c 0.09049,4.554293 0.230911,5.448327 1.099338,6.999192 1.175166,2.098648 4.34036,3.16541 7.439598,2.50736 2.13642,-0.453618 3.485531,-1.413654 4.339854,-3.08827 0.833912,-1.634599 0.821791,-1.254259 0.824874,-25.88349 l 0.0029,-22.985511 h 6.212306 6.212301 l -1.4e-4,22.654189 c -8.5e-5,14.00702 -0.06414,23.329061 -0.167801,24.422246 -0.453748,4.784877 -2.370315,8.80948 -5.370304,11.277112 -2.693514,2.215543 -6.109554,3.594391 -10.116753,4.083519 -1.985798,0.242391 -6.120372,0.204656 -7.868913,-0.07181 z"
      id="path1" />
   <path
      id="path2"
-     style="fill:#29631b;fill-opacity:1;stroke:none;stroke-width:0.314431"
+     style="fill:#79bd5e;fill-opacity:1;stroke:none;stroke-width:0.314431"
      d="m 67.009766,14.525391 v 10.294921 l 3.189453,0.02539 c 6.986175,0.0562 8.384147,0.107993 9.273437,0.341797 3.885554,1.021546 5.704449,3.643161 5.201172,7.685547 -0.097,0.779134 -0.420369,1.710167 -1.11914,2.910156 3.620036,0.964768 5.745906,1.746344 8.623046,4.294922 0.330887,-0.300787 0.604241,-0.550211 0.792969,-0.771484 1.330553,-1.559999 1.790972,-1.869422 2.46875,-3.234375 0.43003,-0.866023 0.891203,-2.096254 1.025391,-2.734375 0.287201,-1.365855 0.321743,-3.761675 0.07422,-5.148438 -1.14368,-6.4079 -6.502428,-11.713769 -13.1875,-13.058594 -2.538213,-0.510614 -4.255918,-0.596223 -16.341796,-0.605468 z"
      sodipodi:nodetypes="cccssccssscsc" />
   <path
      id="path2-5"
-     style="fill:#1d5512;fill-opacity:1;stroke:none;stroke-width:0.314431"
+     style="fill:#a6e58a;fill-opacity:1;stroke:none;stroke-width:0.314431"
      d="M 44.408203,14.53711 5.611328,14.62305 v 10.253906 l 38.796875,-0.06641 z"
      sodipodi:nodetypes="ccccc" />
   <path
      id="path2-6-2"
-     style="fill:#1d5512;stroke:none;stroke-width:0.314431;fill-opacity:1"
+     style="fill:#a6e58a;stroke:none;stroke-width:0.314431;fill-opacity:1"
      d="m 67.060554,38.68164 v 10.291015 l 3.63867,0.0293 c 9.56681,0.0773 9.98848,0.11744 11.9375,1.09375 1.33396,0.66821 1.98481,1.234852 2.73632,2.388672 1.45212,2.22947 1.54528,6.317324 0.19922,8.771484 -0.86544,1.57789 -2.453,2.662216 -4.86718,3.322266 -1.20761,0.33015 -1.76227,0.351836 -10.00586,0.416016 l -8.72657,0.06836 h -12.52734 v 10.248052 h 14.23828 c 8.05655,-2.2e-4 15.20561,-0.0728 16.46289,-0.16797 5.36723,-0.40629 8.93239,-1.61628 12.04297,-4.08594 2.07308,-1.645951 3.81713,-4.285733 5.02734,-6.732423 2.34288,-4.7366 1.65682,-12.265781 -2.17382,-16.769531 -4.906,-5.76806 -7.55121,-6.436706 -9.61719,-7.447266 -1.9976,-0.97711 -5.50055,-1.350026 -8.16602,-1.416016 -1.06474,-0.0264 -0.95106,-0.0098 -7.42968,-0.0098 z"
      sodipodi:nodetypes="cccsssscccccsssssccc" />
   <rect
-     style="fill:#b44e24;stroke:none;stroke-width:4.00748"
+     style="fill:#e8924f;stroke:none;stroke-width:4.00748"
      id="rect2-5-7-6"
      width="45.621059"
      height="12.527342"
