@@ -12,8 +12,8 @@
       <div class="align-center" id="abstract">
         <h1>Factoring the loss kernel: the network decomposes the task — just not along your axes</h1>
         <p class="vr-byline">
-          <span>2026-07-07 · v1</span>
-          <span>1× RTX 4090 · ≈ $2</span>
+          <span>2026-07-08 · v1</span>
+          <span>1× RTX 4090 + 1× H100 · ≈ $60</span>
           <span><a href="..">BIF experiments</a></span>
         </p>
       </div>
@@ -126,6 +126,34 @@
         1.2), flat to σ = 1.6, additive to σ = 0.8–1.2 — essentially closing the gap to the flat
         spectral-clustering reference in fig 2.</p>
 
+        <p>Since the prior strength is a choice, it deserves a picture rather than a default:
+        sweep a multiplier λ on the label-coding cost and plot each selected structure's fit
+        against its description length — a <b>fit–complexity Pareto frontier</b>, with the spec
+        prior and the natural reference structures overlaid, and each selected point marked by
+        whether it <em>replicates</em> on an independent kernel estimate. On the planted
+        synthetic (fig 7, left) the choice barely matters: every λ from 0.5 to 32 — and the
+        spec prior — selects the planted C₂ + C₃ and replicates at ARI 1.0; only λ ≤ 0.25
+        over-splits, and replication flags it (ARI 0.44 and below). On the Pythia/Pile kernel
+        (right) the frontier is a smooth ladder — flat C₅ at λ = 32 (R² = 0.63), flat C₇–C₁₉
+        through λ = 8–16, two-factor sums like C₈ + C₁₆ at λ = 4, four- and five-factor sums at
+        λ ≤ 2 (R² ≈ 0.75) — every relaxation buys real fit, and <em>no point on the ladder
+        replicates across SGLD seeds</em> (best cross-seed ARI 0.17, at the simplest end).
+        The prior picks a point on the frontier; replication tells you where the frontier stops
+        being real.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig7_pareto.png" alt="Pareto frontier of fit vs description length across prior strengths, for three kernels">
+          <figcaption><b>Fig 7 — what the complexity prior actually chooses.</b> Off-diagonal
+          R² against description length (block values + label coding, nats) for the structure
+          selected at each prior strength λ, on a planted synthetic kernel (left), the
+          arithmetic kernel (middle, n = 600 subsample), and a Pythia/Pile kernel (right,
+          small-budget estimate). Filled points replicate on an independent kernel estimate
+          (factor ARI ≥ 0.7 against split chains, a second SGLD seed, or a fresh noise draw);
+          hollow points do not (structures with Σk &gt; 20 were not re-tested and are shown
+          hollow). Stars are reference structures fitted with known labels; the square is the
+          spec prior's selection.</figcaption>
+        </figure>
+
         <figure class="vr-fig breakout">
           <img src="figs/fig2_stage_a.png" alt="Stage A curves: structure recovery vs noise; factor ARI vs the flat-refinement reference; adversarial rejection vs interaction strength">
           <figcaption><b>Fig 2 — Stage A behaviour.</b> <em>Left:</em> fraction of seeds
@@ -208,12 +236,26 @@
         only ~80% of that — the missing fifth is the interaction, seen by a completely different
         test. And none of it is fragile: the full 6 × 6 bond pattern replicates at r = 0.99
         across disjoint chain halves and r = 0.97 under halving or doubling γ (fig 5b).
-        __SEARCH_VERDICT__</p>
+        The search's own verdict then depends on the prior exactly the way §2 predicts. Under
+        the spec prior it returns C<sub>2</sub> ⊙ C<sub>2</sub>, and its strong factor is the
+        <b>division-vs-linear-family split at ARI 0.996</b> — the network's real module boundary,
+        found blind from <i>K</i>; that factor replicates across disjoint chain halves at
+        ARI 0.95 (pred-corr 0.95). Its second binary axis matches no designed trait, no token
+        statistic, and no loss covariate, and replicates only partially (ARI ≈ 0.47) — a
+        real-but-weak axis this budget cannot pin down. Under the lighter label-coding prior the
+        search instead selects a finer flat C<sub>12</sub> (subdividing the six cells, NMI 0.31
+        against them) whose split-half ARI is 0.24 — fine structure the kernel cannot support,
+        caught by the replication gate; a 5× longer SGLD run returns the same shape. Every
+        verdict, under every prior, refuses (op × order).</p>
 
         <figure class="vr-fig breakout">
           <img src="figs/fig4_factored_kernels.png" alt="Factored-variant kernels sorted three ways">
           <figcaption><b>Fig 4 — the factored-variant kernel three ways</b> (block-centred R).
-          __FIG4_CAPTION__</figcaption>
+          Sorted by planted op × order (left) and order × op (middle), the six cells show
+          strong diagonal blocks with the off-diagonal bond pattern of fig 5; sorted by the
+          spec-prior search's C<sub>2</sub> ⊙ C<sub>2</sub> (right), the strong factor's
+          boundary is the division/linear-family split. No sorting makes it look like a clean
+          crossed product — because it isn't one.</figcaption>
         </figure>
 
         <figure class="vr-fig breakout">
@@ -222,7 +264,8 @@
           R over (op × order) cells; the best additively-separable fit
           D<sub>op</sub> ⊕ D<sub>ord</sub>; and the interaction residual, which carries the story:
           the sub↔lin same-order bonds and the div fwd↔rev bond are exactly what a
-          (op) + (order) model cannot express. __FIG5_EXTRA__</figcaption>
+          (op) + (order) model cannot express. Interaction share: 18% of cell-mean variance,
+          F ≈ 10³ against within-cell noise.</figcaption>
         </figure>
 
         <figure class="vr-fig breakout">
@@ -239,32 +282,35 @@
 
         <p>The spec's Stage C is Inception-v1/ImageNet, but Timaeus released neither the 10k × 10k
         kernel nor the estimation code (re-estimating it is a ~$10, 4–6 GPU-hour job — deferred).
-        Instead, the pipeline ran on a real LM kernel this repo already had: Pythia-160m over 400
-        Pile documents (8 domains × 50), re-estimated with frozen embeddings, twice with
-        independent SGLD seeds. This kernel is <em>hard mode</em>: at the validation-run budget
-        (4 chains × 120 draws, autocorrelation time τ ≈ 40 → ≈ 3 effective samples per chain) the
-        two seeds' kernels agree at only r = 0.62 off-diagonal, and the domain partition explains
-        3–4% of off-diagonal variance. The search behaves accordingly, and instructively:
-        <b>each seed finds rich structure that passes every within-seed gate — seed 0 a
-        C<sub>3</sub> ⊙ C<sub>3</sub> product, seed 1 a C<sub>4</sub> + C<sub>2</sub> sum — and
-        the two structures then fail to replicate onto each other</b> (per-factor assignment ARI
-        0.06/0.11, component-kernel correlation ≈ 0.5, shapes disagree). The pre-freeze kernel
-        pair tells the same story with three additive factors each. MI ≈ 0, separable block means,
-        informative factors: all satisfiable by structured estimation noise <em>within</em> one
-        kernel estimate. Only the estimation-noise null — refit on an independent estimate and
-        demand the same answer — catches it, which is exactly why the spec makes it a hard gate
-        for anything fine-grained. (The strongest partially-replicating axis in the pre-freeze
-        pair tracked document <em>length</em>, η² = 0.14 — this thread's oldest artifact,
-        making its third appearance.)</p>
+        Instead, the pipeline ran on a real LM kernel: Pythia-160m over Pile documents with
+        frozen embeddings, twice with independent SGLD seeds — first at the repo's
+        validation-run budget, then re-estimated overnight at 40× the effective sample count
+        (8 chains × 2,550 steps per seed, γ = 1,000, n = 1,200 probes over 8 domains). The
+        budget matters enormously to the kernel: seed-to-seed agreement rises from r = 0.62 to
+        0.79, and the domain partition's share of off-diagonal variance jumps <em>ten-fold</em>,
+        from 3–4% to 20–31%. And yet the search's behaviour barely changes, which is the
+        instructive part. At the small budget each seed finds structure that passes every
+        within-seed gate (a C<sub>3</sub> ⊙ C<sub>3</sub>, a C<sub>4</sub> + C<sub>2</sub>) and
+        none of it replicates across seeds (ARI ≈ 0.1, component correlation ≈ 0.5). At the big
+        budget each seed finds a <em>four-factor additive</em> structure passing every
+        within-seed gate (C<sub>10</sub>+C<sub>10</sub>+C<sub>10</sub>+C<sub>4</sub> on seed 0)
+        — and across seeds, exactly <b>one</b> component kernel replicates (pred-corr 0.79): a
+        coarse axis mixing domain identity (NMI 0.15) with document length (η² = 0.15 — this
+        thread's oldest artifact, making another appearance). Every finer partition stays
+        seed-specific (assignment ARI ≤ 0.1). MI ≈ 0, separable block means, informative
+        factors: all satisfiable by structured estimation noise <em>within</em> one estimate,
+        at both budgets. Only the estimation-noise null — refit on an independent estimate and
+        demand the same answer — separates the one real axis from the rest, which is exactly why
+        the spec makes it a hard gate.</p>
 
         <figure class="vr-fig">
           <img src="figs/fig6_pile.png" alt="Pile kernel sorted by domain and by found factors">
-          <figcaption><b>Fig 6 — the Pythia/Pile kernel</b> (frozen-embedding re-estimate),
-          sorted by Pile domain (left) and by the seed-0 search's C<sub>3</sub> ⊙ C<sub>3</sub>
-          factors (right). Fine striations dominate the domain sorting; the found sorting looks
-          <em>far</em> more block-structured — and none of it survives the seed-1 refit. A
-          within-seed eye test is not evidence of structure at this estimation
-          budget.</figcaption>
+          <figcaption><b>Fig 6 — the overnight Pythia/Pile kernel</b> (γ = 1,000, 40× ESS,
+          n = 1,200), sorted by Pile domain (left) and by the seed-0 search's four factors
+          (right). The found sorting produces dramatic plaid — far more block-structured to the
+          eye than the domain sorting — and of everything in it, exactly one component axis
+          survives the seed-1 refit. A within-seed eye test is not evidence of structure, even
+          on a good kernel.</figcaption>
         </figure>
 
         <h2><span class="vr-section-num">§5</span>What I take from this</h2>
@@ -305,8 +351,10 @@
             <dt>models</dt><dd>2-layer transformer (d=128, 4 heads, ReLU, ~571k params), Power-et-al grokking recipe: AdamW lr 1e-3, wd 1.0, 50% train fraction; flat: add+div mod 97 disjoint vocabs; factored: {sub, div, lin} × {fwd, rev} shared vocab</dd>
             <dt>kernel</dt><dd>localised SGLD at the paper's App-C settings: 30 chains × 800 draws (burn-in 200), ε 2e-7, nβ 500, γ 30k (arms at 15k / 60k, 8 chains); embeddings+positional+unembedding frozen; full probe forward each draw; block-centred covariance (window 50) → correlation</dd>
             <dt>search</dt><dd>stagewise + beam-4 refinement; k ≤ 8; gates: NMI ≤ 0.15, separability F ≤ 3 or rel ≤ 0.05, informativeness ≥ 0.01; permutation null n=30, α=0.05</dd>
-            <dt>probes</dt><dd>flat: 2,000 (1,000/task); factored: 1,800 (300/cell); Pile: 400 (50/domain)</dd>
-            <dt>repro</dt><dd>everything deterministic given seed; commit __COMMIT__; pod eonrmn4psbxdwh</dd>
+            <dt>probes</dt><dd>flat: 2,000 (1,000/task); factored: 1,800 (300/cell); Pile: 400 (50/domain) small-budget, 1,200 (150/domain) overnight</dd>
+            <dt>pile overnight</dt><dd>pythia-160m, frozen embeddings, γ 1000, 8 chains × (150 burn + 600 draws @ thin 4) per seed, 2 independent seeds, bf16 probe evals; seed gate 0.79</dd>
+            <dt>priors</dt><dd>"spec": n·(k−1) assignment params × log n<sub>pairs</sub>; "entropy": ICL label-coding 2n·log k (default); λ-scaled sweep for the frontier</dd>
+            <dt>repro</dt><dd>everything deterministic given seed; commit a5d56cf (branch hadamard); pods eonrmn4psbxdwh (4090), 0zxlboo24nbe9s (H100)</dd>
           </dl>
         </div>
 
@@ -322,8 +370,9 @@
           <br>Artefacts · HF <a href="https://huggingface.co/datasets/arcadia-impact/factored-loss-kernel-20260707">arcadia-impact/factored-loss-kernel-20260707</a>
           — SGLD traces (all arms, both experiments), kernels, w*, probe metadata, Stage A/B/C
           reports, git SHA.
-          <br>Compute · 1× RTX 4090 ≈ 1.5 h ≈ $2 (both experiments incl. γ arms + the Pythia
-          re-estimate) + local CPU for search/analysis.
+          <br>Compute · 1× RTX 4090 ≈ 4 h ≈ $3 (arithmetic experiments incl. γ arms, 5× rerun,
+          first Pythia re-estimate) + 1× H100 ≈ 18 h ≈ $55 (overnight Pythia kernel at 40× ESS;
+          all searches, analyses and the prior sweep on its idle CPUs). Total ≈ $60.
         </div>
       </div>
     </main>
