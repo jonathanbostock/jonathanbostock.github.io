@@ -2,6 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title>Factoring the loss kernel — Vibe Research</title>
     <link rel="stylesheet" href="../../../style.css">
     <link rel="stylesheet" href="../../style.css?v=itip1">
@@ -484,12 +485,12 @@
             <dt>pile overnight</dt><dd>pythia-160m, frozen embeddings, γ 1000, 8 chains × (150 burn + 600 draws @ thin 4) per seed, 2 independent seeds, bf16 probe evals; seed gate 0.79</dd>
             <dt>priors</dt><dd>"spec": n·(k−1) assignment params × log n<sub>pairs</sub>; "entropy": ICL label-coding 2n·log k (default); λ-scaled sweep for the frontier</dd>
             <dt>addendum</dt><dd>double-centring: LS c + a<sub>i</sub> + a<sub>j</sub> on off-diagonals; length: 3-param scalar on standardized log-length; prediction sweep: k ≤ 16, ≤ 5 factors, λ ∈ {0…8}, transfer = frozen-z D-refit (convex) on the other seed, random-shape control; cluster contents: top TF-IDF terms + domain mix + kernel-central doc per cluster</dd>
-            <dt>repro</dt><dd>everything deterministic given seed; commit 3751d34 (branch hadamard-public, ArcadiaImpact/latent-learning); pods eonrmn4psbxdwh (4090), 0zxlboo24nbe9s (H100)</dd>
+            <dt>repro</dt><dd>everything deterministic given seed; merged to ArcadiaImpact/latent-learning main at 8668126 (PR #185); pods eonrmn4psbxdwh (4090), 0zxlboo24nbe9s (H100)</dd>
           </dl>
         </div>
 
         <div class="vr-colophon">
-          Code · <code>latent-learning</code> branch <code>hadamard</code> —
+          Code · <code>latent-learning</code> main (PR #185) —
           <code>utils/factored_kernel/</code> (generators, fitting, gates, search; 28 tests) +
           <code>experiments/factored_kernel/</code> (Stage A/B/C runners, analyses, this page's
           figures). Spec: <code>HADAMARD_SPEC.md</code>. Loss kernel = our BIF = Timaeus' Loss

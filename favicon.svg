@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- JB tab icon. Edit freely: fill is the site's dark heading green
+       (--h2 in style.css); bump font-size / y to taste. No background
+       rect on purpose - transparent behind the letters. -->
+  <text x="50" y="74" text-anchor="middle"
+        font-family="'IBM Plex Sans', Helvetica, Arial, sans-serif"
+        font-weight="700" font-size="70"
+        fill="#1d5512">JB</text>
+</svg>
