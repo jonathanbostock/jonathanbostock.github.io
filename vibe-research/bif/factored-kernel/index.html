@@ -12,8 +12,8 @@
       <div class="align-center" id="abstract">
         <h1>Factoring the loss kernel: the network decomposes the task — just not along your axes</h1>
         <p class="vr-byline">
-          <span>2026-07-08 · v1</span>
-          <span>1× RTX 4090 + 1× H100 · ≈ $60</span>
+          <span>2026-07-08 · v1.1</span>
+          <span>1× RTX 4090 + 2× H100 · ≈ $65</span>
           <span><a href="..">BIF experiments</a></span>
         </p>
       </div>
@@ -313,6 +313,62 @@
           on a good kernel.</figcaption>
         </figure>
 
+        <h2><span class="vr-section-num">§4b</span>Addendum — prediction transfer: what the
+        seed gate is actually rejecting</h2>
+
+        <p>The seed-replication verdict above is harsh currency: it demands that the two seeds'
+        searches find the <em>same labels</em> (Hungarian-matched ARI). But two estimates can
+        carve the same predictive structure along non-matching boundaries. The fairer metric is
+        <b>partition transfer</b>: freeze the assignments found on seed A, refit only the block
+        values on seed B (a convex least-squares), and ask how much of seed B's kernel the
+        partition explains — against three references: the domain partition scored the same way,
+        random partitions of identical shape, and the seeds' raw agreement.</p>
+
+        <p>Asking this question exposed two confounders that deserve their own paragraph.
+        First, the kernel is ~95% rank-one: a single common mode — how strongly each document
+        co-fluctuates with <em>everything</em> — carries 0.946/0.954 of the off-diagonal
+        variance (per seed), and it is <em>not</em> length (top eigenvector ↔ log-length
+        r = 0.18–0.28). Any coarse partition aligned with this mode "transfers" spectacularly,
+        and the raw-kernel numbers in fig 8 are mostly it. Second, document length — this
+        thread's oldest artifact — wants three parameters, not a clustering: a scalar model
+        β₀ + β₁(sᵢ+sⱼ) + β₂sᵢsⱼ on standardized log-length matches the length-quartile
+        clustering (R² 0.071 vs 0.082 on seed 0, 0.031 vs 0.033 on seed 1) — and either way
+        length is a minor 3–7% player that merely <em>correlates</em> with the big mode
+        (r ≈ 0.2–0.3). The honest playing field is therefore the
+        <button class="tooltip-button" data-define="double-centring">double-centred</button>
+        kernel — per-document additive offsets removed, 87–91% of variance and the additive
+        length channel with them — on which the two seeds still agree at r = 0.63: real
+        transferable signal beyond the common mode.</p>
+
+        <p class="vr-pull">On the deflated kernel the found partitions transfer at
+        R² 0.46–0.56 — two to seven times the domain partition (0.08–0.21), with random
+        same-shape partitions at 0.000 — while their labels never Hungarian-match. Half of
+        what the search fits in-seed (0.83–0.90) is seed noise; the other half is real
+        structure that the domain labels do not describe.</p>
+
+        <p>The λ-frontier of §2 also closes cleanly at this budget: searched natively on the
+        overnight kernels (raw, double-centred, and dc + scalar-length-partialled; k ≤ 16, up
+        to five factors), <em>every prior strength from λ = 0 to 8 selects the identical
+        structure</em> in 34 of 36 cells (dc/seed 1 adds a C₄ at λ ≤ 0.5). Prior sensitivity
+        was a symptom of kernel noise, not a property of the problem — at 40× the effective
+        sample count the likelihood picks the structure by itself, and fig 7's ladder is what
+        estimation noise looks like. The selected structures are also bigger — C₁₆ + C₆ + C₆
+        scale, first factor pinned at the k = 16 cap, consistent with a 160M-parameter model
+        supporting far more than 2 × 2. (One grammar footnote: §4's C₅₃ factor is a MERGE
+        product — the occupied-cell join of two factors, legal in the move set and uncapped by
+        k<sub>max</sub>; the random-shape baseline is what keeps such large factors honest.)</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig8_prediction.png" alt="Grouped bars: partition-transfer R2 for raw, double-centred, and dc+scalar-length kernels, against in-seed fit and domain references">
+          <figcaption><b>Fig 8 — what transfers.</b> Bars: partition-transfer R² — assignments
+          frozen from one seed's search, block values refit on the other seed's kernel (solid:
+          seed 0 → seed 1; striped: seed 1 → seed 0; the found structure is named inside each
+          bar). Ticks above: the same partition's in-seed fit — the gap is seed-specific
+          overfit. Dash-dot: the domain partition evaluated identically on the eval kernel.
+          Random partitions of identical shape score ≤ 0.02 on raw and 0.000 deflated (not
+          drawn). Every number shown is λ-invariant from 0 to 8.</figcaption>
+        </figure>
+
         <h2><span class="vr-section-num">§5</span>What I take from this</h2>
 
         <p><b>The gates are the product.</b> Twice in one afternoon, the machinery's job turned
@@ -338,7 +394,17 @@
         decision boundary (the same kernel gives null at n = 900 and structure at n = 1,800).
         More retained draws is the cheap lever; a block-mean-level scoring rule is the
         methodological one. Freezing embeddings during SGLD is free signal: it quadrupled the
-        task-structure share on the flat kernel.</p>
+        task-structure share on the flat kernel. And enough draws dissolves the prior question
+        entirely: on the 40× ESS kernels, every λ from 0 to 8 selects the same structure
+        (§4b) — fig 7's frontier is a property of the noisy kernel, not of the network.</p>
+
+        <p><b>Label-replication is the floor; prediction transfer is the fair test.</b> The
+        seed gate rejects label identity, and on this kernel the rejection stands — but the
+        addendum shows what it leaves alive: partitions that predict R² ≈ 0.5 of an independent
+        estimate's deflated kernel, several times the domain labels, with random shapes at
+        zero. The right reading of "fails replication" is "these labels are not canonical" —
+        not "there is nothing here". A rank-one common mode (95% of variance, not length) and a
+        3-parameter scalar length term are the deflations that make that statement measurable.</p>
 
         <p><b>What's next.</b> The spec's Stage C proper — re-estimating the Inception/ImageNet
         kernel (~$10 of GPU) and asking whether a WordNet-independent photometric factor passes
@@ -354,7 +420,8 @@
             <dt>probes</dt><dd>flat: 2,000 (1,000/task); factored: 1,800 (300/cell); Pile: 400 (50/domain) small-budget, 1,200 (150/domain) overnight</dd>
             <dt>pile overnight</dt><dd>pythia-160m, frozen embeddings, γ 1000, 8 chains × (150 burn + 600 draws @ thin 4) per seed, 2 independent seeds, bf16 probe evals; seed gate 0.79</dd>
             <dt>priors</dt><dd>"spec": n·(k−1) assignment params × log n<sub>pairs</sub>; "entropy": ICL label-coding 2n·log k (default); λ-scaled sweep for the frontier</dd>
-            <dt>repro</dt><dd>everything deterministic given seed; commit b5a5b93 (branch hadamard-public, ArcadiaImpact/latent-learning); pods eonrmn4psbxdwh (4090), 0zxlboo24nbe9s (H100)</dd>
+            <dt>addendum</dt><dd>double-centring: LS c + a<sub>i</sub> + a<sub>j</sub> on off-diagonals; length: 3-param scalar on standardized log-length; prediction sweep: k ≤ 16, ≤ 5 factors, λ ∈ {0…8}, transfer = frozen-z D-refit (convex) on the other seed, random-shape control</dd>
+            <dt>repro</dt><dd>everything deterministic given seed; commit d33d686 (branch hadamard-public, ArcadiaImpact/latent-learning); pods eonrmn4psbxdwh (4090), 0zxlboo24nbe9s (H100)</dd>
           </dl>
         </div>
 
@@ -372,7 +439,9 @@
           reports, git SHA.
           <br>Compute · 1× RTX 4090 ≈ 4 h ≈ $3 (arithmetic experiments incl. γ arms, 5× rerun,
           first Pythia re-estimate) + 1× H100 ≈ 18 h ≈ $55 (overnight Pythia kernel at 40× ESS;
-          all searches, analyses and the prior sweep on its idle CPUs). Total ≈ $60.
+          all searches, analyses and the prior sweep on its idle CPUs) + 1× H100 ≈ 2 h ≈ $6
+          (§4b addendum: common-mode deflations + prediction-transfer sweep, CPU-only).
+          Total ≈ $65.
         </div>
       </div>
     </main>
@@ -388,6 +457,7 @@
         "hadamard": "Entrywise product of kernels: (K1 ⊙ K2)(z, z') = K1(z, z')·K2(z, z'). The right composition when similarities multiply across factors (as for product RBF kernels); requires a positive-entry regime, so it is the secondary hypothesis for loss kernels, which legitimately carry negative covariances.",
         "bic": "Penalized fit over the upper triangle: n_pairs·log(RSS/n_pairs) + p·log(n_pairs), with p counting n·(k−1) assignment parameters plus k(k+1)/2 block values per factor. A factored 3+2 structure costs 3n+9 parameters where the equivalent flat C_6 costs 5n+21 — factoring pays for itself exactly when the separable model fits.",
         "separability": "Fit the joint block-mean tensor with the best additive (or log-additive) model over the factor grid and F-test the interaction residual against pooled within-cell noise. A genuine product of independent factors has ~zero interaction; a relabeled flat clustering fails at any n. The gate: F ≤ 3 or interaction share ≤ 5%.",
+        "double-centring": "Cross-sectional deflation of the finished kernel: subtract the least-squares c + a_i + a_j from the off-diagonal entries, so each document's additive coupling-to-everything offset a_i is removed. Distinct from the temporal block-centring inside the covariance estimator (which high-passes SGLD chain drift): that one operates on the loss traces, this one on the kernel.",
         "ari": "Adjusted Rand Index between a recovered and a planted labeling: 1 = identical partitions, 0 = chance. Factor recovery is scored per factor after Hungarian matching between recovered and planted factors.",
       });
     </script>
