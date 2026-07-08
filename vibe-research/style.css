@@ -428,3 +428,10 @@ html::after  { right: 3.75rem; }
 
 /* Vertical (Tiny ImageNet) hierarchy nodes */
 #vhier-svg .vhn:hover .vhn-outline, #vhier-svg .vhn.pinned .vhn-outline { stroke-width: 2.2; }
+
+/* factored-kernel: inline quoted document snippets (register examples) */
+.vr-quote {
+  font-style: italic;
+  color: var(--h3);
+  font-size: 0.94em;
+}

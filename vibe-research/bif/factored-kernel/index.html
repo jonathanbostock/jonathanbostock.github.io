@@ -12,7 +12,7 @@
       <div class="align-center" id="abstract">
         <h1>Factoring the loss kernel: the network decomposes the task — just not along your axes</h1>
         <p class="vr-byline">
-          <span>2026-07-08 · v1.1</span>
+          <span>2026-07-08 · v1.2</span>
           <span>1× RTX 4090 + 2× H100 · ≈ $65</span>
           <span><a href="..">BIF experiments</a></span>
         </p>
@@ -369,6 +369,69 @@
           drawn). Every number shown is λ-invariant from 0 to 8.</figcaption>
         </figure>
 
+        <p>So <em>what is in the clusters</em>? Reading the dominant C₁₆ factor of the
+        double-centred seed-0 kernel — top TF-IDF terms, domain composition, and the
+        kernel-central document per cluster — the answer is that the network's loss-covariance
+        carves the corpus into <b>register and topic</b>, cross-cutting Pile's provenance
+        labels. There is a source-code-and-licenses cluster, a patent-disclosure cluster whose
+        central document opens "<span class="vr-quote">A variety of different techniques have
+        been developed to increase the amount of processing resources…</span>", a
+        clinical-abstracts cluster ("<span class="vr-quote">Patterns of Candida esophagitis in
+        cancer and AIDS patients…</span>"), a journal-article-scaffolding cluster that groups
+        on section-header markup (<code>introduction</code>, <code>sec1</code>,
+        <code>b1</code>), and a biographical/encyclopedic cluster (<code>born</code>,
+        <code>university</code>, <code>york</code>). A representative sample:</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>cluster</th><th class="num">n</th><th>top domains</th>
+                <th>top terms</th><th>reads as</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>c1</td><td class="num">103</td><td>Github 42%, StackExchange 28%</td>
+                <td><code>license copyright file import class</code></td>
+                <td>source code &amp; licenses</td></tr>
+              <tr><td>c8</td><td class="num">90</td><td>USPTO 48%, PubMed Abs 27%</td>
+                <td><code>invention relates devices present electronic</code></td>
+                <td>patent disclosures</td></tr>
+              <tr><td>c10</td><td class="num">112</td><td>PubMed Abs 47%, Github 17%</td>
+                <td><code>patients study cancer references species</code></td>
+                <td>clinical abstracts</td></tr>
+              <tr><td>c9</td><td class="num">109</td><td>PubMed Central 45%, StackEx 17%</td>
+                <td><code>introduction s1 sec1 b1 data</code></td>
+                <td>journal-article scaffolding</td></tr>
+              <tr><td>c5</td><td class="num">40</td><td>Github 57%, OpenWebText2 22%</td>
+                <td><code>version xml http dtd www</code></td>
+                <td>markup &amp; config</td></tr>
+              <tr><td>c0</td><td class="num">112</td><td>Pile-CC 33%, OpenWebText2 24%</td>
+                <td><code>new years born york university</code></td>
+                <td>biographical / encyclopedic</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="vr-pull">The clusters are recognizable registers — code, patents, clinical
+        text, encyclopedic prose — but no cluster <em>is</em> a Pile domain: mean cluster
+        domain-purity is 0.43, and every domain is spread across three to four clusters. This is
+        exactly why label-replication fails while prediction transfers: the two seeds recover
+        the <em>same kinds</em> of clusters (mean best cross-seed overlap 0.44, versus 0.06 for
+        chance — a 7× alignment) but draw the boundaries in non-matching places, so a
+        Hungarian ARI reads near zero while a frozen-partition refit predicts half the other
+        seed's kernel.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig9_clusters.png" alt="Two heatmaps: cross-seed cluster overlap (dominant diagonal but not identity), and cluster-by-domain contingency (clusters cross-cut provenance)">
+          <figcaption><b>Fig 9 — the clusters are register, aligned across seeds, not
+          provenance.</b> <em>Left:</em> overlap between seed-0's and seed-1's C₁₆ factors, with
+          seed-1 columns Hungarian-matched to the diagonal and rows labelled by dominant domain;
+          the diagonal band (12–100%, mean 44%) is far above the 6% chance rate but nowhere near
+          an identity — the seeds agree on cluster <em>kinds</em>, not labels. <em>Right:</em>
+          each seed-0 cluster (row) against Pile domain (column), row-normalised: clusters
+          concentrate on a domain but every domain smears across several clusters — the loss
+          kernel's partition is orthogonal to provenance.</figcaption>
+        </figure>
+
         <h2><span class="vr-section-num">§5</span>What I take from this</h2>
 
         <p><b>The gates are the product.</b> Twice in one afternoon, the machinery's job turned
@@ -420,8 +483,8 @@
             <dt>probes</dt><dd>flat: 2,000 (1,000/task); factored: 1,800 (300/cell); Pile: 400 (50/domain) small-budget, 1,200 (150/domain) overnight</dd>
             <dt>pile overnight</dt><dd>pythia-160m, frozen embeddings, γ 1000, 8 chains × (150 burn + 600 draws @ thin 4) per seed, 2 independent seeds, bf16 probe evals; seed gate 0.79</dd>
             <dt>priors</dt><dd>"spec": n·(k−1) assignment params × log n<sub>pairs</sub>; "entropy": ICL label-coding 2n·log k (default); λ-scaled sweep for the frontier</dd>
-            <dt>addendum</dt><dd>double-centring: LS c + a<sub>i</sub> + a<sub>j</sub> on off-diagonals; length: 3-param scalar on standardized log-length; prediction sweep: k ≤ 16, ≤ 5 factors, λ ∈ {0…8}, transfer = frozen-z D-refit (convex) on the other seed, random-shape control</dd>
-            <dt>repro</dt><dd>everything deterministic given seed; commit d33d686 (branch hadamard-public, ArcadiaImpact/latent-learning); pods eonrmn4psbxdwh (4090), 0zxlboo24nbe9s (H100)</dd>
+            <dt>addendum</dt><dd>double-centring: LS c + a<sub>i</sub> + a<sub>j</sub> on off-diagonals; length: 3-param scalar on standardized log-length; prediction sweep: k ≤ 16, ≤ 5 factors, λ ∈ {0…8}, transfer = frozen-z D-refit (convex) on the other seed, random-shape control; cluster contents: top TF-IDF terms + domain mix + kernel-central doc per cluster</dd>
+            <dt>repro</dt><dd>everything deterministic given seed; commit 3751d34 (branch hadamard-public, ArcadiaImpact/latent-learning); pods eonrmn4psbxdwh (4090), 0zxlboo24nbe9s (H100)</dd>
           </dl>
         </div>
 
