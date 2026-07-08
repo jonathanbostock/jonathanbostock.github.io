@@ -308,6 +308,35 @@
         <code>findings/training_prediction_symreg/blogpost.md</code> on the
         task branch.</p>
 
+        <h2><span class="vr-section-num">§0</span>TL;DR — conclusion</h2>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>winner</dt><dd><a href="https://github.com/ArcadiaImpact/latent-learning/pull/176">PR #176</a> — the prior projection
+              operator's <b>pattern term</b> (ridge solve in the
+              Adam-preconditioned Gram G<sub>pre</sub>, one global
+              λ=40) <b>plus a pairwise interaction term built from a rank-1
+              truncation of the <i>exact</i> gradient Gram G</b>, with the
+              interaction's blend weight derived at score time from G's own
+              spectral concentration (λ₁/tr G) instead of a constant tuned on
+              the public grid — and a graceful K<sub>corr</sub> fallback when
+              the Gram matrices are absent</dd>
+            <dt>held-out score</dt><dd><b>LDS 0.6414</b> vs the prior
+              operator's 0.3455 on the same frozen grid (1.86×; wins all 4
+              optimizer families) · magnitude calibration R² 0.1045 vs
+              −0.0457 — ranking transfers across a 4× scale jump far better
+              than magnitudes do</dd>
+            <dt>runners-up</dt><dd><a href="https://github.com/ArcadiaImpact/latent-learning/pull/174">#174</a> 0.6414 (identical formula, minus
+              a crash fix) · <a href="https://github.com/ArcadiaImpact/latent-learning/pull/184">#184</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/168">#168</a> 0.6412 (same term,
+              ablation/portability bases) · <a href="https://github.com/ArcadiaImpact/latent-learning/pull/163">#163</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/160">#160</a> 0.6403</dd>
+            <dt>takeaway</dt><dd><b>the pairwise-interaction information
+              lives in the exact Gram's top eigenmode; preconditioning
+              belongs only in the pattern solve.</b> And: constants tuned on
+              one grid don't transfer — derive them from the matrices you're
+              handed at score time.</dd>
+          </dl>
+        </div>
+
         <h2><span class="vr-section-num">§1</span>The question</h2>
 
         <p>The <a href="../bif/">loss-kernel</a> thread's training-prediction
@@ -349,8 +378,157 @@
             <dt>code</dt><dd><a href="https://github.com/ArcadiaImpact/latent-learning/tree/arch/training_prediction_symreg">arch/training_prediction_symreg</a></dd>
           </dl>
         </div>
+        <p>Mechanically, "sequestered" means: every submission is scored by an
+        ephemeral pod that checks out the PR head, <b>restores the scoring
+        code and eval harness from the trusted base branch</b> (a PR cannot
+        alter its own scorer), runs <code>predict()</code> as an unprivileged
+        sandbox user against a chmod-700 data snapshot synced from the
+        organizer, and posts back exactly four numbers — the score plus a
+        whitelisted metric triple (r2_mean, baseline, n_families). Everything
+        else about the held-out grid — the model, the family composition, the
+        run count — stayed invisible to the fleet. Full-wave re-scores after
+        each grid increment ran (after some hard lessons, §9) as a single
+        batch pod looping every open head against one atomic snapshot.</p>
 
-        <h2><span class="vr-section-num">§3</span>Final result</h2>
+
+        <h2><span class="vr-section-num">§3</span>How the run unfolded</h2>
+
+        <p>The fleet (3× RTX 4090 + 1× A5000, each running a Sonnet-5 loop)
+        spawned at <b>13:42 UTC</b>. The first submission (<a href="https://github.com/ArcadiaImpact/latent-learning/pull/5">#5</a>) landed 28
+        minutes later and already scored 0.4099 on the final grid — above the
+        0.3455 prior. Ninety minutes in, <a href="https://github.com/ArcadiaImpact/latent-learning/pull/10">#10</a> hit 0.6160, and then the
+        frontier <b>flatlined for six hours</b>: forty-odd PRs of ridge-strength
+        tables, calibration fixes, and kernel blends produced a best gain of
+        +0.004. The breakthrough came at <b>+9.9&nbsp;h</b> — <a href="https://github.com/ArcadiaImpact/latent-learning/pull/138">#138</a>'s
+        sign-flip finding (a pairwise interaction term helps <em>with opposite
+        sign</em> depending on whether it's computed in G or G<sub>pre</sub>),
+        which <a href="https://github.com/ArcadiaImpact/latent-learning/pull/151">#151</a> sharpened into the rank-1 form. Everything above 0.63
+        on this page descends from that observation, in the run's final 2.5
+        hours.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/score_frontier.png"
+               alt="Scatter of all 149 submissions over the 12.5-hour run, submission time vs final-grid held-out LDS. An orange running-best staircase rises from #5 (0.41, +0.5h) through #6 (0.55), #10 (0.616, +1.5h), stays flat for six hours through #27/#91/#123, then climbs through #138 (0.629), #151 (0.633), #160 (0.640) to #174 (0.6414); the winner #176 is a gold star at +11.9h. A grey dashed line marks the prior operator at 0.346; every dot sits above it.">
+          <figcaption><b>The fleet's 12.5 hours, one dot per submission</b> —
+            x is when the PR was opened, y is its score on the <em>final
+            frozen 4-family grid</em> (every head was re-scored once,
+            post-deadline, so the y-axis is apples-to-apples; live scores
+            during the run were computed on whatever grid slice existed at
+            the time). The orange staircase is the running best: <a href="https://github.com/ArcadiaImpact/latent-learning/pull/5">#5</a>
+            (0.4099) → <a href="https://github.com/ArcadiaImpact/latent-learning/pull/6">#6</a> (0.5459) → <a href="https://github.com/ArcadiaImpact/latent-learning/pull/10">#10</a> (0.6160) →
+            <a href="https://github.com/ArcadiaImpact/latent-learning/pull/27">#27</a> (0.6176, then a six-hour plateau) → <a href="https://github.com/ArcadiaImpact/latent-learning/pull/91">#91</a> →
+            <a href="https://github.com/ArcadiaImpact/latent-learning/pull/123">#123</a> → <a href="https://github.com/ArcadiaImpact/latent-learning/pull/138">#138</a> (0.6291, the sign-flip) → <a href="https://github.com/ArcadiaImpact/latent-learning/pull/147">#147</a> →
+            <a href="https://github.com/ArcadiaImpact/latent-learning/pull/151">#151</a> (rank-1 truncation) → <a href="https://github.com/ArcadiaImpact/latent-learning/pull/156">#156</a> → <a href="https://github.com/ArcadiaImpact/latent-learning/pull/160">#160</a> (0.6403)
+            → <a href="https://github.com/ArcadiaImpact/latent-learning/pull/168">#168</a> → <a href="https://github.com/ArcadiaImpact/latent-learning/pull/174">#174</a> (0.6414). Gold star: <a href="https://github.com/ArcadiaImpact/latent-learning/pull/176">#176</a>, the
+            winner — same score as #174, plus the crash fix.
+            <a href="figs/score_frontier.pdf">PDF</a>.</figcaption>
+        </figure>
+
+        <p>Meanwhile the organizer expanded the held-out grid family-by-family
+        for the whole window — SGD scoreable by mid-afternoon, Adam by
+        evening, Muon around 23:00, LoRA-Adam partial at the 02:12:37
+        deadline — re-scoring every open PR after each increment. 179 labeled
+        PRs in 12.5&nbsp;h is one every ~4 minutes fleet-wide; the workers
+        closed 31 themselves as dead ends. The last submissions (<a href="https://github.com/ArcadiaImpact/latent-learning/pull/183">#183</a>,
+        <a href="https://github.com/ArcadiaImpact/latent-learning/pull/184">#184</a>) landed 13 minutes before the wall.</p>
+
+        <h2><span class="vr-section-num">§4</span>Research threads — what the fleet actually did</h2>
+
+        <p>179 PRs collapse into eight threads. Each fold has the thread's
+        arc and its final-grid numbers; scores quoted are from the single
+        frozen post-deadline snapshot, so threads are directly comparable.</p>
+
+        <ol class="vr-idea-thread">
+          <li><details class="vr-fold"><summary><b>Ridge-strength engineering (the inherited base).</b><span class="vr-fold-verdict">plateau thread — per-family tables ≈ one global constant; the winner uses a single λ=40</span></summary> The prior operator's lineage (<a href="https://github.com/ArcadiaImpact/latent-learning/pull/27">#27</a>, <a href="https://github.com/ArcadiaImpact/latent-learning/pull/79">#79</a>) led the board for six
+  hours on per-family ridge-strength tables. Then <a href="https://github.com/ArcadiaImpact/latent-learning/pull/95">#95</a> ran an honest
+  nested-CV and showed a <em>single global constant</em> ties the 9-parameter
+  table; <a href="https://github.com/ArcadiaImpact/latent-learning/pull/100">#100</a> found the principled middle (group by base optimizer,
+  9→3 params); <a href="https://github.com/ArcadiaImpact/latent-learning/pull/104">#104</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/113">#113</a> carved out the one real exception
+  (sgd_l2base wants its own value); and <a href="https://github.com/ArcadiaImpact/latent-learning/pull/118">#118</a> explained the whole thing —
+  the tuned solve sits on a <b>large-λ plateau</b> where ridge is nearly a
+  scaled projection, so fine-grained λ tables have nothing to grab.
+  Final-grid scores across the thread: 0.6176–0.6197, all within 0.002 of
+  each other. Verdict: simple beats elaborate (<a href="https://github.com/ArcadiaImpact/latent-learning/pull/115">#115</a> said it mid-run,
+  and the final grid agrees); the winner carries <a href="https://github.com/ArcadiaImpact/latent-learning/pull/173">#173</a>'s
+  single-global-λ base.</details></li>
+          <li><details class="vr-fold"><summary><b>The rank-1 G interaction term (winner thread).</b><span class="vr-fold-verdict">the run's one new mechanism — +0.024 over the plateau, portable across every base tested</span></summary> <a href="https://github.com/ArcadiaImpact/latent-learning/pull/138">#138</a> noticed a pairwise interaction term (how much the trained
+  subset's documents <em>reinforce each other</em>) helps with <b>opposite
+  sign</b> when computed in G vs G<sub>pre</sub> — the preconditioner
+  scrambles exactly the second-order structure the term needs. <a href="https://github.com/ArcadiaImpact/latent-learning/pull/144">#144</a>
+  bootstrap-confirmed the per-family split ranks by optimizer complexity.
+  <a href="https://github.com/ArcadiaImpact/latent-learning/pull/151">#151</a> then truncated G to its <b>dominant eigenmode only</b> (rank-1),
+  which sharpened the term (0.6327 with <a href="https://github.com/ArcadiaImpact/latent-learning/pull/158">#158</a>'s timeout fix), and the
+  portability campaign began: <a href="https://github.com/ArcadiaImpact/latent-learning/pull/160">#160</a> onto the held-out leader's base
+  (0.6403), <a href="https://github.com/ArcadiaImpact/latent-learning/pull/168">#168</a> onto a second base (0.6412), <a href="https://github.com/ArcadiaImpact/latent-learning/pull/173">#173</a> onto the
+  single-global-λ base (0.6393) — same gain everywhere, same fixed blend
+  weight W_PAIR=0.3. <a href="https://github.com/ArcadiaImpact/latent-learning/pull/174">#174</a> made that last constant <b>self-calibrating</b>
+  (W ∝ λ₁/tr&nbsp;G, solved to be a no-op on the public grid — a pure
+  transfer bet), and <a href="https://github.com/ArcadiaImpact/latent-learning/pull/176">#176</a> added a fleet-discovered crash fix: the
+  winner, 0.6414. The clean ablation <a href="https://github.com/ArcadiaImpact/latent-learning/pull/182">#182</a> (source the term from
+  G<sub>pre</sub> instead: 0.6365, consistently worse) and <a href="https://github.com/ArcadiaImpact/latent-learning/pull/184">#184</a> (the
+  G-vs-G<sub>pre</sub> gap is scale-dominated) closed the loop.</details></li>
+          <li><details class="vr-fold"><summary><b>K_corr fusion attempts.</b><span class="vr-fold-verdict">kernel adds little once the Gram terms are right; nothing composed with the interaction term</span></summary> The loss kernel earned its keep only in niches. <a href="https://github.com/ArcadiaImpact/latent-learning/pull/92">#92</a>'s one-step-CG
+  blend of K<sub>corr</sub> into the pattern term was the era's best local
+  gain; <a href="https://github.com/ArcadiaImpact/latent-learning/pull/96">#96</a> leave-one-family-out-validated it but flagged LoRA-Adam,
+  <a href="https://github.com/ArcadiaImpact/latent-learning/pull/107">#107</a> gated it off for LoRA, <a href="https://github.com/ArcadiaImpact/latent-learning/pull/123">#123</a> ported it to the leading base
+  (0.6197). <a href="https://github.com/ArcadiaImpact/latent-learning/pull/135">#135</a> tried elementwise K<sub>corr</sub> <em>modulation</em>
+  of the pattern term (0.6187). But the composition tests were the point:
+  <a href="https://github.com/ArcadiaImpact/latent-learning/pull/147">#147</a> (modulation + interaction, 0.6308) and <a href="https://github.com/ArcadiaImpact/latent-learning/pull/156">#156</a> (CG-blend +
+  interaction, 0.6348) both landed <em>below</em> the interaction term alone
+  on the same bases, and <a href="https://github.com/ArcadiaImpact/latent-learning/pull/117">#117</a> (MKL-style fusion into the solve geometry)
+  and <a href="https://github.com/ArcadiaImpact/latent-learning/pull/130">#130</a> (additive solve blend) were clean nulls. Verdict: K and the
+  rank-1 G term appear to read overlapping information; G's version is
+  sharper.</details></li>
+          <li><details class="vr-fold"><summary><b>Robustness &amp; fallback engineering.</b><span class="vr-fold-verdict">where a chunk of the winning margin actually came from — three bug classes found and fixed fleet-wide</span></summary> Three genuine bug classes were discovered <em>by the workers, in each
+  other's code</em>. (1) The K<sub>corr</sub> fallback collapsed to
+  near-random without top-mode deflation — found by <a href="https://github.com/ArcadiaImpact/latent-learning/pull/42">#42</a>, fixed across
+  lineages by <a href="https://github.com/ArcadiaImpact/latent-learning/pull/94">#94</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/97">#97</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/105">#105</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/110">#110</a>, tuned by <a href="https://github.com/ArcadiaImpact/latent-learning/pull/136">#136</a>.
+  (2) Uncached <code>eigh</code> calls blew the 300s scoring timeout —
+  <a href="https://github.com/ArcadiaImpact/latent-learning/pull/90">#90</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/158">#158</a> fixed live instances, and <a href="https://github.com/ArcadiaImpact/latent-learning/pull/162">#162</a> audited the fleet
+  ("37 open PRs share this"), spawning pre-emptive cache fixes
+  (<a href="https://github.com/ArcadiaImpact/latent-learning/pull/159">#159</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/163">#163</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/165">#165</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/167">#167</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/169">#169</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/170">#170</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/171">#171</a>).
+  (3) <a href="https://github.com/ArcadiaImpact/latent-learning/pull/172">#172</a> found the <code>ctx["G_pre"]</code> KeyError landmine (the
+  scoring shim <em>drops</em> the key when gram artifacts lag a snapshot;
+  direct indexing crashes the whole family batch instead of falling back) —
+  cross-applied by <a href="https://github.com/ArcadiaImpact/latent-learning/pull/181">#181</a> and by <a href="https://github.com/ArcadiaImpact/latent-learning/pull/176">#176</a>, which is how the winner is
+  literally "the best formula + another worker's crash fix". Several fix-PRs
+  outscored the formulas they fixed.</details></li>
+          <li><details class="vr-fold"><summary><b>Calibration (r2_mean) side-quest.</b><span class="vr-fold-verdict">free, LDS-invariant magnitude fixes — the run's R² gain (−0.05 → 0.10) largely lives here</span></summary> LDS is rank-based, so per-run scale calibration is "free" — it can't
+  move the headline score but fixes R². <a href="https://github.com/ArcadiaImpact/latent-learning/pull/44">#44</a> established the global
+  calibration, <a href="https://github.com/ArcadiaImpact/latent-learning/pull/99">#99</a> made it per-family, and <a href="https://github.com/ArcadiaImpact/latent-learning/pull/121">#121</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/127">#127</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/142">#142</a>
+  ported it across lineages. Magnitudes remain the honest weakness: the
+  winner's R² is 0.1045 — better than the prior operator's −0.0457, far from
+  calibrated.</details></li>
+          <li><details class="vr-fold"><summary><b>Cross-architecture &amp; cross-scale validation discipline.</b><span class="vr-fold-verdict">the fleet invented its own transfer methodology — and it predicted the held-out outcome</span></summary> With the held-out scale secret, workers built their own transfer
+  checks: 8/8-split cross-scale runs on public models
+  (<a href="https://github.com/ArcadiaImpact/latent-learning/pull/85">#85</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/87">#87</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/91">#91</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/93">#93</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/98">#98</a>) and a gpt2 line
+  (<a href="https://github.com/ArcadiaImpact/latent-learning/pull/116">#116</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/124">#124</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/133">#133</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/149">#149</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/150">#150</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/155">#155</a>) as a second
+  architecture. Findings: the ridge-strength form transfers; GAMMA and
+  G-deflation don't; muon's deflation harm replicates at gpt2-medium;
+  <a href="https://github.com/ArcadiaImpact/latent-learning/pull/149">#149</a> even caught adamw <em>flipping</em> on gpt2. This discipline is
+  why the final constants were either cross-validated at two scales or
+  derived from score-time measurements — exactly the property the
+  sequestered eval rewarded.</details></li>
+          <li><details class="vr-fold"><summary><b>Grid-robustness checks (sampling, scale rules).</b><span class="vr-fold-verdict">predictor is robust to subset-selection strategy; density-modulated scale was a wash</span></summary> <a href="https://github.com/ArcadiaImpact/latent-learning/pull/140">#140</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/141">#141</a> swept subset <em>sampling</em> distributions
+  (random vs cluster vs distance) across 9/10 public families — distance
+  sampling hurts almost everywhere, and <a href="https://github.com/ArcadiaImpact/latent-learning/pull/146">#146</a> split the mechanism into
+  two causes. Seeded direction #1 (density-modulated per-run scale) got a
+  real test: <a href="https://github.com/ArcadiaImpact/latent-learning/pull/154">#154</a> modest-positive locally, <a href="https://github.com/ArcadiaImpact/latent-learning/pull/157">#157</a> sign-flips on the
+  ridge-projection lineage — net a wash, not adopted by the winner.</details></li>
+          <li><details class="vr-fold"><summary><b>Clean negatives (the fence around the answer).</b><span class="vr-fold-verdict">ten falsified ideas that stop the next person re-trying them</span></summary> <a href="https://github.com/ArcadiaImpact/latent-learning/pull/126">#126</a> data-driven joint fits collapse to near-baseline (seeded
+  direction #8 falsified); <a href="https://github.com/ArcadiaImpact/latent-learning/pull/175">#175</a> early-stopped GD solve underperforms
+  exact ridge (direction #12); <a href="https://github.com/ArcadiaImpact/latent-learning/pull/177">#177</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/179">#179</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/180">#180</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/183">#183</a>
+  effective-rank ridge corrections are net-negative on both G<sub>pre</sub>
+  and G; <a href="https://github.com/ArcadiaImpact/latent-learning/pull/125">#125</a> MAD-robust normalization loses badly to plain std;
+  <a href="https://github.com/ArcadiaImpact/latent-learning/pull/106">#106</a> docFE-whitening doesn't help; <a href="https://github.com/ArcadiaImpact/latent-learning/pull/128">#128</a> pre-solve matrix
+  blending/whitening hurts monotonically; <a href="https://github.com/ArcadiaImpact/latent-learning/pull/152">#152</a> λ-ensembles don't hedge;
+  <a href="https://github.com/ArcadiaImpact/latent-learning/pull/164">#164</a>/<a href="https://github.com/ArcadiaImpact/latent-learning/pull/161">#161</a> G<sub>pre</sub> deflation hurts all LoRA families;
+  <a href="https://github.com/ArcadiaImpact/latent-learning/pull/134">#134</a> swapping to raw G for Muon runs hurts; and <a href="https://github.com/ArcadiaImpact/latent-learning/pull/131">#131</a>'s
+  "true-minimal" formula (no ridge, no interaction) confirms both remaining
+  components earn their keep.</details></li>
+        </ol>
+
+        <h2><span class="vr-section-num">§5</span>Final result</h2>
 
         <p>The fleet ran its full 12 h and filed 179 scored submissions (31
         self-closed as dead ends along the way). After the deadline — with
@@ -389,24 +567,7 @@
         composition, and cross-applied robustness fixes. The winner is
         literally the best formula <i>plus another worker's crash fix</i>.</p>
 
-        <h3>Final held-out leaderboard (top 8 of 149, one frozen 4-family snapshot)</h3>
-        <div class="vr-table-wrap">
-          <table class="vr-table">
-            <thead>
-              <tr><th>PR</th><th>attempt</th><th class="num">LDS</th><th class="num">R²</th></tr>
-            </thead>
-            <tbody>
-              <tr><td class="vr-pos"><b>#176</b></td><td><b>winner</b> — #174's spectrum-adaptive interaction weight + fleet crash fix</td><td class="num"><b>0.6414</b></td><td class="num">0.104</td></tr>
-              <tr><td>#174</td><td>derive the interaction blend weight from G's own measured spectrum</td><td class="num">0.6414</td><td class="num">0.104</td></tr>
-              <tr><td>#184</td><td>follow-up: the G-vs-G_pre ablation is scale-dominated</td><td class="num">0.6412</td><td class="num">0.110</td></tr>
-              <tr><td>#168</td><td>second portability check of the rank-1 G term</td><td class="num">0.6412</td><td class="num">0.110</td></tr>
-              <tr><td>#163</td><td>eigh-cache timeout fix on #160</td><td class="num">0.6403</td><td class="num">0.076</td></tr>
-              <tr><td>#160</td><td>rank-1 G term ported onto the then-leader's base</td><td class="num">0.6403</td><td class="num">0.076</td></tr>
-              <tr><td>#173</td><td>third portability check: single-global-lambda base</td><td class="num">0.6393</td><td class="num">0.110</td></tr>
-              <tr><td>#182</td><td>ablation: interaction term from G_pre instead — clean negative</td><td class="num">0.6365</td><td class="num">0.109</td></tr>
-            </tbody>
-          </table>
-        </div>
+        
 
         <p>Solid negative results, all confirmed at the unseen scale: the
         interaction term must come from the <i>exact</i> Gram (the
@@ -427,7 +588,425 @@
         denser re-estimation never fit the window) — so kernel-slope
         cross-scale claims stay open, and Gram-slope ones don't.</p>
 
-        <h2><span class="vr-section-num">§4</span>Wrap-up</h2>
+        <h2><span class="vr-section-num">§6</span>Final held-out leaderboard — all 149 scored submissions</h2>
+
+        <p>Every head open at the deadline, scored once on the frozen
+        4-family gemma-3-1b grid (post-deadline wave, 2026-07-08
+        12:42–13:57 UTC). Baseline (prior operator, same grid): LDS
+        0.3455, R² −0.046. All 149 clear it. Bold row: the winner.</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead><tr><th>rank</th><th>PR</th><th class="num">LDS</th><th class="num">R²</th><th>attempt</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/174">#174</a></td><td class="num">0.6414</td><td class="num">0.104</td><td>Derive the interaction term&#x27;s blend weight from G&#x27;s own measured spectral concentration</td></tr>
+              <tr class="vr-row-win"><td>2</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/176">#176</a></td><td class="num">0.6414</td><td class="num">0.104</td><td>Fix ctx[&#x27;G_pre&#x27;]/ctx[&#x27;G&#x27;] KeyError inherited from the PR #27 lineage, on PR #174&#x27;s formula</td></tr>
+              <tr><td>3</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/168">#168</a></td><td class="num">0.6412</td><td class="num">0.110</td><td>Second portability check: rank-1 G interaction term gives same gain on a different base (PR #100)</td></tr>
+              <tr><td>4</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/184">#184</a></td><td class="num">0.6412</td><td class="num">0.110</td><td>Methodological follow-up: G-vs-G_pre interaction ablation (#182) is scale-dominated, not a clean geometry test</td></tr>
+              <tr><td>5</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/160">#160</a></td><td class="num">0.6403</td><td class="num">0.076</td><td>Port rank-1 G interaction term onto the real held-out leader&#x27;s base (best local score this session)</td></tr>
+              <tr><td>6</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/163">#163</a></td><td class="num">0.6403</td><td class="num">0.076</td><td>Fix uncached eigh timeout in PR #160 (same bug PR #158 fixed on PR #151)</td></tr>
+              <tr><td>7</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/173">#173</a></td><td class="num">0.6393</td><td class="num">0.110</td><td>Third portability check: rank-1 G interaction term on a single-global-lambda base</td></tr>
+              <tr><td>8</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/182">#182</a></td><td class="num">0.6365</td><td class="num">0.108</td><td>Ablation: rank-1 interaction term sourced from G_pre instead of G — clean negative result</td></tr>
+              <tr><td>9</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/156">#156</a></td><td class="num">0.6348</td><td class="num">0.114</td><td>Synthesis test: rank-1 G interaction (#151) does NOT compose with K_corr modulation (#135)</td></tr>
+              <tr><td>10</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/165">#165</a></td><td class="num">0.6348</td><td class="num">0.114</td><td>Fix uncached eigh timeout in PR #156 (same bug PR #158 fixed on PR #151)</td></tr>
+              <tr><td>11</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/151">#151</a></td><td class="num">0.6327</td><td class="num">0.115</td><td>Rank-1 truncation of G sharpens the G-geometry interaction term (extends #138)</td></tr>
+              <tr><td>12</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/158">#158</a></td><td class="num">0.6327</td><td class="num">0.115</td><td>Fix a live 300s timeout in PR #151 (uncached eigh on G)</td></tr>
+              <tr><td>13</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/147">#147</a></td><td class="num">0.6308</td><td class="num">0.110</td><td>Synthesis: combine K_corr-modulated PATTERN term (PR #135) with G-geometry interaction term (PR #138)</td></tr>
+              <tr><td>14</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/138">#138</a></td><td class="num">0.6291</td><td class="num">0.115</td><td>Sign-flip finding: pairwise-interaction term helps with opposite sign when computed in G vs G_pre</td></tr>
+              <tr><td>15</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/142">#142</a></td><td class="num">0.6291</td><td class="num">0.116</td><td>Free r2_mean calibration fix for PR #138&#x27;s G-exact interaction formula</td></tr>
+              <tr><td>16</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/144">#144</a></td><td class="num">0.6291</td><td class="num">0.116</td><td>Bootstrap-confirms PR #138&#x27;s per-family split ranks by optimizer complexity</td></tr>
+              <tr><td>17</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/123">#123</a></td><td class="num">0.6197</td><td class="num">0.120</td><td>Port K_corr CG-blend pattern term onto the real-held-out-leading base</td></tr>
+              <tr><td>18</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/135">#135</a></td><td class="num">0.6187</td><td class="num">0.139</td><td>New fusion mechanism: elementwise K_corr modulation of G_pre&#x27;s pattern term</td></tr>
+              <tr><td>19</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/91">#91</a></td><td class="num">0.6186</td><td class="num">0.118</td><td>Cross-scale check PR #79 (current real-held-out leader), not my own formula</td></tr>
+              <tr><td>20</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/100">#100</a></td><td class="num">0.6179</td><td class="num">0.119</td><td>Group LAM_REL by base optimizer type: principled middle ground (9 -&gt; 3 params)</td></tr>
+              <tr><td>21</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/104">#104</a></td><td class="num">0.6179</td><td class="num">0.118</td><td>sgd_l2base needs its own LAM_REL, not PR #100&#x27;s auto-assigned sgd group</td></tr>
+              <tr><td>22</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/27">#27</a></td><td class="num">0.6176</td><td class="num">-8905</td><td>Per-family ridge strength lifts #10&#x27;s whitened G_pre projection to 0.6506 LDS</td></tr>
+              <tr><td>23</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/79">#79</a></td><td class="num">0.6176</td><td class="num">-0.219</td><td>Apply r2_mean calibration fix to PR #27&#x27;s formula (currently strong on real held-out)</td></tr>
+              <tr><td>24</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/84">#84</a></td><td class="num">0.6176</td><td class="num">-0.219</td><td>Methodological note: a fair same-snapshot comparison contradicts PR #78&#x27;s real-held-out GAMMA claim</td></tr>
+              <tr><td>25</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/94">#94</a></td><td class="num">0.6176</td><td class="num">-0.219</td><td>Fix PR #79&#x27;s K_corr fallback: collapses to near-random, deflation fixes it</td></tr>
+              <tr><td>26</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/99">#99</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Per-family (not just global) r2_mean calibration: free, LDS-invariant improvement</td></tr>
+              <tr><td>27</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/111">#111</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Synthesis: PR #27/#79&#x27;s per-family LAM_REL (real held-out co-leader) + per-family calibration + K_corr fallbac</td></tr>
+              <tr><td>28</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/114">#114</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Meta-finding: every tested addition to the base per-family-ridge formula has cost real held-out LDS so far</td></tr>
+              <tr><td>29</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/126">#126</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Negative result: data-driven joint-fit (seed direction #8) collapses to near-baseline</td></tr>
+              <tr><td>30</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/129">#129</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Methodological update: simple-beats-elaborate pattern holds on the bigger n=3 held-out snapshot</td></tr>
+              <tr><td>31</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/140">#140</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Robustness check: subset SAMPLING distribution, not just scale/architecture</td></tr>
+              <tr><td>32</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/141">#141</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Extend sampler-robustness check to 9/10 families: distance sampling hurts almost everywhere</td></tr>
+              <tr><td>33</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/146">#146</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Mechanistic follow-up: the sampler-robustness gap splits into two distinct causes</td></tr>
+              <tr><td>34</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/153">#153</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Fold PR #104&#x27;s cross-scale-validated sgd_l2base LAM_REL into the real-held-out leader</td></tr>
+              <tr><td>35</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/162">#162</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Pre-emptive fix: cache PR #140&#x27;s uncached eigh + fleet-wide audit (37 open PRs share this pattern)</td></tr>
+              <tr><td>36</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/166">#166</a></td><td class="num">0.6176</td><td class="num">-0.219</td><td>Resubmit #94&#x27;s K_corr-fallback fix fresh, for a fair same-snapshot comparison against the current leader</td></tr>
+              <tr><td>37</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/169">#169</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Pre-emptive fix: cache PR #111&#x27;s uncached eigh (same bug family as #105/#108/#140)</td></tr>
+              <tr><td>38</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/170">#170</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Pre-emptive fix: cache PR #114&#x27;s uncached eigh (last of the #105/#108/#111/#114/#140 family)</td></tr>
+              <tr><td>39</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/171">#171</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Cache K_corr-fallback eigh (same uncached-eigh bug class as #41/#158)</td></tr>
+              <tr><td>40</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/172">#172</a></td><td class="num">0.6176</td><td class="num">0.120</td><td>Fix fleet-wide ctx[&#x27;G_pre&#x27;] KeyError in K_corr fallback + negative result for spectral truncation</td></tr>
+              <tr><td>41</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/181">#181</a></td><td class="num">0.6176</td><td class="num">-0.219</td><td>Fix latent ctx[&#x27;G_pre&#x27;] KeyError on PR #79/#94&#x27;s lineage (the actual real held-out co-leader)</td></tr>
+              <tr><td>42</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/95">#95</a></td><td class="num">0.6172</td><td class="num">-0.220</td><td>Honest nested-CV: #27&#x27;s per-family ridge strength barely beats a single global constant</td></tr>
+              <tr><td>43</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/98">#98</a></td><td class="num">0.6172</td><td class="num">-0.220</td><td>Cross-scale check: ridge-strength LAM_REL transfers well, unlike GAMMA or G-deflation</td></tr>
+              <tr><td>44</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/102">#102</a></td><td class="num">0.6172</td><td class="num">0.120</td><td>Synthesis: global ridge strength (PR #95) + per-family calibration (PR #99)</td></tr>
+              <tr><td>45</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/105">#105</a></td><td class="num">0.6172</td><td class="num">0.120</td><td>Fix: K_corr-only fallback branch has the same near-singular-ridge bug PR #42 found elsewhere</td></tr>
+              <tr><td>46</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/122">#122</a></td><td class="num">0.6172</td><td class="num">-0.220</td><td>Synthesis: PR #95&#x27;s global ridge strength + PR #94&#x27;s deflated K_corr fallback fix, combined</td></tr>
+              <tr><td>47</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/132">#132</a></td><td class="num">0.6172</td><td class="num">-0.220</td><td>Synthesis: fold PR #104&#x27;s cross-scale-validated sgd_l2base override into PR #122&#x27;s combined formula</td></tr>
+              <tr><td>48</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/136">#136</a></td><td class="num">0.6172</td><td class="num">-0.220</td><td>Tune the K_corr fallback&#x27;s deflation to 2 eigenmodes, not 1 (extends PR #94)</td></tr>
+              <tr><td>49</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/137">#137</a></td><td class="num">0.6172</td><td class="num">-0.220</td><td>Methodological note: mapping this session&#x27;s sweep across the dominant formula&#x27;s 5 moving parts</td></tr>
+              <tr><td>50</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/148">#148</a></td><td class="num">0.6172</td><td class="num">-0.220</td><td>Methodological note: per-family vs global LAM_REL tie confirmed at a second held-out snapshot (n=3)</td></tr>
+              <tr><td>51</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/167">#167</a></td><td class="num">0.6172</td><td class="num">0.120</td><td>Pre-emptive fix: cache PR #105&#x27;s uncached eigh (origin of the K_corr-fallback pattern)</td></tr>
+              <tr><td>52</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/178">#178</a></td><td class="num">0.6172</td><td class="num">-0.220</td><td>Fresh same-snapshot plain-base submission for a fair comparison against the rank-1 G interaction lineage</td></tr>
+              <tr><td>53</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/108">#108</a></td><td class="num">0.6171</td><td class="num">0.121</td><td>Isolate DOF-analytic ridge rule from GAMMA: plateau-edge theory doesn&#x27;t hold up, GAMMA is the likely culprit</td></tr>
+              <tr><td>54</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/159">#159</a></td><td class="num">0.6171</td><td class="num">0.121</td><td>Pre-emptive fix: cache PR #108&#x27;s uncached eigh (same bug class as #90/#158)</td></tr>
+              <tr><td>55</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/10">#10</a></td><td class="num">0.6160</td><td class="num">-8936</td><td>Doc-heteroskedasticity-corrected normalization: 0.648 LDS, robust improvement over #6</td></tr>
+              <tr><td>56</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/13">#13</a></td><td class="num">0.6160</td><td class="num">-8936</td><td>Cheap Adam-preconditioner (4 calibration batches) transfers within noise of the full one (64)</td></tr>
+              <tr><td>57</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/131">#131</a></td><td class="num">0.6142</td><td class="num">0.140</td><td>True-minimal formula: combine no-ridge-solve with no-W_PAIR</td></tr>
+              <tr><td>58</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/109">#109</a></td><td class="num">0.6107</td><td class="num">0.133</td><td>Synthesis: base-type LAM_REL grouping + cross-architecture W_PAIR + fallback fix</td></tr>
+              <tr><td>59</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/113">#113</a></td><td class="num">0.6107</td><td class="num">0.144</td><td>sgd_l2base needs its own W_PAIR too, not just LAM_REL</td></tr>
+              <tr><td>60</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/103">#103</a></td><td class="num">0.6103</td><td class="num">0.133</td><td>Add the one cross-architecture-validated extra (W_PAIR) to the real held-out leader&#x27;s base</td></tr>
+              <tr><td>61</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/115">#115</a></td><td class="num">0.6103</td><td class="num">0.133</td><td>Methodological note: real held-out data now shows simple beats elaborate, by a wide margin</td></tr>
+              <tr><td>62</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/86">#86</a></td><td class="num">0.6083</td><td class="num">-0.149</td><td>Add W_PAIR to the GAMMA-free base (#27+calibration), completing a 2x2 {GAMMA,W_PAIR} grid</td></tr>
+              <tr><td>63</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/118">#118</a></td><td class="num">0.6067</td><td class="num">0.133</td><td>Mechanistic finding: the tuned ridge solve sits on a large-lambda plateau, nearly equivalent to a plain sum</td></tr>
+              <tr><td>64</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/119">#119</a></td><td class="num">0.6067</td><td class="num">0.133</td><td>Follow-up: the deflated-G chain hits the same ~0.64 plateau, at the same tuned lambda values</td></tr>
+              <tr><td>65</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/121">#121</a></td><td class="num">0.6067</td><td class="num">0.137</td><td>Free per-family r2_mean fix for the zero-ridge-hyperparameter formula (PR #118 + PR #99)</td></tr>
+              <tr><td>66</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/17">#17</a></td><td class="num">0.6039</td><td class="num">-8879</td><td>Per-family ridge strength lifts LDS from 0.6497 (PR #15) to 0.6523</td></tr>
+              <tr><td>67</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/56">#56</a></td><td class="num">0.6038</td><td class="num">-12503</td><td>First cross-model-scale test: gemma-3-1b shows sgd/adam&#x27;s 270M-tuned gamma doesn&#x27;t transfer</td></tr>
+              <tr><td>68</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/78">#78</a></td><td class="num">0.6033</td><td class="num">-0.063</td><td>Add #52&#x27;s global honest-CV GAMMA to #27&#x27;s real-held-out-leading formula (0.6518)</td></tr>
+              <tr><td>69</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/80">#80</a></td><td class="num">0.6028</td><td class="num">-0.063</td><td>Conditional DOF-fraction ridge rule: extrapolate from G&#x27;s measured spectrum ratio</td></tr>
+              <tr><td>70</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/24">#24</a></td><td class="num">0.6007</td><td class="num">-8871</td><td>Deflating G&#x27;s dominant eigenmode before solving there beats G_pre: 0.6497 -&gt; 0.6537 LDS</td></tr>
+              <tr><td>71</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/36">#36</a></td><td class="num">0.6007</td><td class="num">-8871</td><td>Confirmatory: full removal of G&#x27;s top mode is a sharp exact optimum, not a tunable default</td></tr>
+              <tr><td>72</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/68">#68</a></td><td class="num">0.6007</td><td class="num">-0.064</td><td>DOF-analytic G_pre ridge lambda + honest-CV global gamma, no deflation (ties #27&#x27;s per-family lookup, 0.6505)</td></tr>
+              <tr><td>73</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/70">#70</a></td><td class="num">0.6007</td><td class="num">-0.064</td><td>Cross-scale check: #68&#x27;s no-deflation DOF-lambda formula beats deflated/per-family alternatives on real gemma-</td></tr>
+              <tr><td>74</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/74">#74</a></td><td class="num">0.6007</td><td class="num">-0.064</td><td>Nested-honest-CV check: DOF_FRAC doesn&#x27;t need to be per-family either (extends #52)</td></tr>
+              <tr><td>75</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/15">#15</a></td><td class="num">0.6001</td><td class="num">-8915</td><td>l0-based per-doc scale factor lifts #10&#x27;s normalization further to 0.650 LDS</td></tr>
+              <tr><td>76</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/82">#82</a></td><td class="num">0.5995</td><td class="num">-0.182</td><td>Adaptive deflation + continuous DOF_FRAC(ratio) rule (keeps deflation&#x27;s Gemma-family gain, higher cross-arch h</td></tr>
+              <tr><td>77</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/19">#19</a></td><td class="num">0.5992</td><td class="num">-10640</td><td>Negatively-weighted pairwise interaction term lifts #10/#15&#x27;s whitened ridge projection to 0.6511 LDS</td></tr>
+              <tr><td>78</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/88">#88</a></td><td class="num">0.5992</td><td class="num">-0.184</td><td>Single-variable ablation of PR #77: deflation forced off, everything else identical</td></tr>
+              <tr><td>79</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/83">#83</a></td><td class="num">0.5988</td><td class="num">-0.153</td><td>Add global W_PAIR + robust K_corr fallback to #27+GAMMA (#78&#x27;s formula)</td></tr>
+              <tr><td>80</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/64">#64</a></td><td class="num">0.5984</td><td class="num">-0.035</td><td>Replace #18&#x27;s per-family GAMMA table with #52&#x27;s honest-CV global constant (0.15)</td></tr>
+              <tr><td>81</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/81">#81</a></td><td class="num">0.5984</td><td class="num">-0.183</td><td>Full synthesis: spectrum-derived lambda + adaptive deflation + global GAMMA + calibration/fallback fixes</td></tr>
+              <tr><td>82</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/52">#52</a></td><td class="num">0.5980</td><td class="num">-10593</td><td>Nested honest CV shows per-family lookup tables lose to plain global constants</td></tr>
+              <tr><td>83</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/54">#54</a></td><td class="num">0.5980</td><td class="num">0.123</td><td>Free r2_mean fix for the honest-CV global-constant formula (#52)</td></tr>
+              <tr><td>84</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/59">#59</a></td><td class="num">0.5980</td><td class="num">-10593</td><td>Combine honest-CV global constants (#52) with conditional deflation (#53)</td></tr>
+              <tr><td>85</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/77">#77</a></td><td class="num">0.5980</td><td class="num">-0.183</td><td>Synthesis: adaptive deflation + global-only constants (honest-CV) + calibration/fallback fixes</td></tr>
+              <tr><td>86</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/62">#62</a></td><td class="num">0.5976</td><td class="num">-10589</td><td>Held-out-evidence-informed hybrid: conditional deflation + real per-family ridge tables + global gamma/w_pair</td></tr>
+              <tr><td>87</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/66">#66</a></td><td class="num">0.5976</td><td class="num">-10589</td><td>New spectrum data point: gpt2-medium disentangles architecture from scale for the deflation threshold</td></tr>
+              <tr><td>88</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/67">#67</a></td><td class="num">0.5976</td><td class="num">-10589</td><td>Direct benefit check: G-deflation hurts on gpt2-medium (355M) too</td></tr>
+              <tr><td>89</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/69">#69</a></td><td class="num">0.5976</td><td class="num">-10589</td><td>GAMMA&#x27;s near-flat effect (PR #63&#x27;s gpt2 finding) also holds on gpt2-medium (355M)</td></tr>
+              <tr><td>90</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/71">#71</a></td><td class="num">0.5976</td><td class="num">-10589</td><td>Spectrum-derived ridge rule&#x27;s own KAPPA constant doesn&#x27;t transfer to gpt2-medium either</td></tr>
+              <tr><td>91</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/73">#73</a></td><td class="num">0.5976</td><td class="num">-10589</td><td>DOF-fraction ridge rule: calibration doesn&#x27;t transfer, but its ceiling beats fixed lambda and power-law+KAPPA</td></tr>
+              <tr><td>92</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/76">#76</a></td><td class="num">0.5976</td><td class="num">-10589</td><td>Completes the architecture-transfer survey: W_PAIR&#x27;s sign transfers, unlike deflation or ridge-lambda magnitud</td></tr>
+              <tr><td>93</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/60">#60</a></td><td class="num">0.5963</td><td class="num">-12403</td><td>Correction to #56: joint gamma+w_pair sweep (not isolated) on cross-scale data</td></tr>
+              <tr><td>94</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/26">#26</a></td><td class="num">0.5943</td><td class="num">-12517</td><td>Spectrum-derived DOF ridge strength ties per-family lookup (1 constant vs 9)</td></tr>
+              <tr><td>95</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/65">#65</a></td><td class="num">0.5938</td><td class="num">-12187</td><td>Extend cross-scale correction to adamw/muon: gamma&#x27;s sign flips at 1B scale</td></tr>
+              <tr><td>96</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/75">#75</a></td><td class="num">0.5938</td><td class="num">-12187</td><td>Extend cross-scale correction to 7 families: LoRA&#x27;s rank-vs-scale gap</td></tr>
+              <tr><td>97</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/22">#22</a></td><td class="num">0.5933</td><td class="num">-12492</td><td>Per-family pairwise-interaction weight lifts LDS from 0.66 (PR #18) to 0.6658</td></tr>
+              <tr><td>98</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/48">#48</a></td><td class="num">0.5913</td><td class="num">-11970</td><td>Joint per-family grid search over 3 constants: new public high 0.6699, but bootstrap says it&#x27;s mostly noise</td></tr>
+              <tr><td>99</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/18">#18</a></td><td class="num">0.5912</td><td class="num">-8871</td><td>Per-family l0-scaling exponent lifts LDS from 0.6523 (PR #17) to 0.66</td></tr>
+              <tr><td>100</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/23">#23</a></td><td class="num">0.5907</td><td class="num">-11868</td><td>Interaction term still helps on top of #17/#18&#x27;s per-family base: 0.660 -&gt; 0.6616 LDS</td></tr>
+              <tr><td>101</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/29">#29</a></td><td class="num">0.5907</td><td class="num">-12482</td><td>Combine G-deflation (#24) + spectrum-derived DOF lambda (#26): LDS 0.6661</td></tr>
+              <tr><td>102</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/39">#39</a></td><td class="num">0.5907</td><td class="num">-12482</td><td>Unlock and tune the sgd_l2base family with 16 supplementary generated runs</td></tr>
+              <tr><td>103</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/41">#41</a></td><td class="num">0.5907</td><td class="num">-12482</td><td>Cache G&#x27;s top-mode deflation: same score, ~19x faster, removes a flagged timeout risk</td></tr>
+              <tr><td>104</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/44">#44</a></td><td class="num">0.5907</td><td class="num">0.135</td><td>Fix r2_mean for free: a global, sign-safe absolute-magnitude calibration</td></tr>
+              <tr><td>105</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/45">#45</a></td><td class="num">0.5907</td><td class="num">0.137</td><td>Per-family absolute-magnitude calibration, safeguarded against sign flips</td></tr>
+              <tr><td>106</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/28">#28</a></td><td class="num">0.5905</td><td class="num">-12480</td><td>Top-mode deflation + per-family tuning: new best public LDS 0.6683 (was 0.6658)</td></tr>
+              <tr><td>107</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/35">#35</a></td><td class="num">0.5905</td><td class="num">-10610</td><td>Per-family gamma is the load-bearing lookup table; per-family w_pair is not</td></tr>
+              <tr><td>108</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/42">#42</a></td><td class="num">0.5905</td><td class="num">-12480</td><td>Fix: K_corr-only fallback (used when G/G_pre unavailable) scored ~0.013, now 0.166</td></tr>
+              <tr><td>109</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/43">#43</a></td><td class="num">0.5905</td><td class="num">-12480</td><td>Perf: cache deflate_top_mode (PR #41&#x27;s fix, applied to my own formula, both call sites)</td></tr>
+              <tr><td>110</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/46">#46</a></td><td class="num">0.5905</td><td class="num">-12480</td><td>Confirms #35: gamma is the load-bearing per-family table, even for the deflated-G solve matrix</td></tr>
+              <tr><td>111</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/47">#47</a></td><td class="num">0.5905</td><td class="num">-0.209</td><td>Apply #44&#x27;s r2_mean calibration fix to my own formula: -5833 -&gt; -0.14 (score unchanged)</td></tr>
+              <tr><td>112</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/51">#51</a></td><td class="num">0.5905</td><td class="num">-0.209</td><td>G&#x27;s deflation benefit doesn&#x27;t generalize to gpt2/Qwen2.5-0.5B -- direct empirical check</td></tr>
+              <tr><td>113</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/53">#53</a></td><td class="num">0.5905</td><td class="num">-0.209</td><td>Make G-deflation conditional on the target model&#x27;s own measured spectrum</td></tr>
+              <tr><td>114</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/63">#63</a></td><td class="num">0.5905</td><td class="num">-0.209</td><td>Does per-family gamma also fail to generalize? Different failure mode than deflation</td></tr>
+              <tr><td>115</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/72">#72</a></td><td class="num">0.5905</td><td class="num">-0.209</td><td>Completes the trilogy: interaction-term weight (w_pair) transfers well across scale (unlike deflation/gamma)</td></tr>
+              <tr><td>116</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/40">#40</a></td><td class="num">0.5904</td><td class="num">-12527</td><td>Three data-free refinements on #28&#x27;s SOTA: scale-covariate, delta_S, solve-weighted interaction all negative</td></tr>
+              <tr><td>117</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/90">#90</a></td><td class="num">0.5904</td><td class="num">-1517</td><td>Fix a live timeout + free r2 calibration on #40&#x27;s leaderboard-leading LDS formula</td></tr>
+              <tr><td>118</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/93">#93</a></td><td class="num">0.5904</td><td class="num">-1517</td><td>Real 8/8-split check: muon_wd deflation transfers to gemma-3-1b, but a matched grid search shows the apparent </td></tr>
+              <tr><td>119</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/32">#32</a></td><td class="num">0.5903</td><td class="num">-12483</td><td>Spectrum-derived DOF ridge rule (#26) transfers to deflated-G matrix (#24): ties #22, lower overfitting risk t</td></tr>
+              <tr><td>120</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/107">#107</a></td><td class="num">0.5902</td><td class="num">0.137</td><td>Gate the K_corr one-step-CG blend off for LoRA+Adam (fixes PR #92&#x27;s flagged regression)</td></tr>
+              <tr><td>121</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/110">#110</a></td><td class="num">0.5902</td><td class="num">0.137</td><td>Fix a fourth independent instance of the K_corr-fallback near-singularity bug</td></tr>
+              <tr><td>122</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/112">#112</a></td><td class="num">0.5902</td><td class="num">0.137</td><td>Why PR #107&#x27;s family-label K_corr gate can&#x27;t be replaced by a &#x27;measurable property&#x27; version</td></tr>
+              <tr><td>123</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/116">#116</a></td><td class="num">0.5902</td><td class="num">0.137</td><td>Cross-architecture check: muon_wd on gpt2 -- deflation and W_PAIR transfer, GAMMA doesn&#x27;t</td></tr>
+              <tr><td>124</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/124">#124</a></td><td class="num">0.5902</td><td class="num">0.137</td><td>Follow-up to #116: plain muon (no weight decay) shows GAMMA sign-flip too, but deflation is closer to neutral</td></tr>
+              <tr><td>125</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/127">#127</a></td><td class="num">0.5902</td><td class="num">0.138</td><td>Free per-family r2_mean fix for the gated + fallback-fixed K_corr chain (PR #99&#x27;s calibration)</td></tr>
+              <tr><td>126</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/133">#133</a></td><td class="num">0.5902</td><td class="num">0.137</td><td>Third gpt2 cross-architecture point: sgd_l2base&#x27;s deflation harm is the largest yet</td></tr>
+              <tr><td>127</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/139">#139</a></td><td class="num">0.5902</td><td class="num">0.137</td><td>Within-family test complicates the checkpoint-pull-strength hypothesis: deflation harm is non-monotonic in sgd</td></tr>
+              <tr><td>128</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/143">#143</a></td><td class="num">0.5902</td><td class="num">0.137</td><td>Properly-controlled rho sweep reverses #124/#133&#x27;s checkpoint-pull hypothesis</td></tr>
+              <tr><td>129</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/145">#145</a></td><td class="num">0.5902</td><td class="num">0.137</td><td>Synthesis: cross-architecture transfer evidence by family, in one table</td></tr>
+              <tr><td>130</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/149">#149</a></td><td class="num">0.5902</td><td class="num">0.137</td><td>adamw on gpt2: deflation HELPS, breaking the established cross-architecture pattern</td></tr>
+              <tr><td>131</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/150">#150</a></td><td class="num">0.5902</td><td class="num">0.137</td><td>adam (not adamw) shows a small deflation harm on gpt2, falsifying my own preconditioning hypothesis</td></tr>
+              <tr><td>132</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/155">#155</a></td><td class="num">0.5902</td><td class="num">0.137</td><td>muon_wd&#x27;s deflation harm replicates at gpt2-medium (355M), a second non-Gemma scale</td></tr>
+              <tr><td>133</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/85">#85</a></td><td class="num">0.5896</td><td class="num">-10684</td><td>Complete cross-scale check to 10/10 families: lora_sgd&#x27;s gap is specific</td></tr>
+              <tr><td>134</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/87">#87</a></td><td class="num">0.5896</td><td class="num">0.124</td><td>Refit r2_mean calibration for the final 10-family cross-scale formula</td></tr>
+              <tr><td>135</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/97">#97</a></td><td class="num">0.5896</td><td class="num">0.124</td><td>Fix my own chain&#x27;s K_corr fallback: same near-random collapse as PR #42/#94</td></tr>
+              <tr><td>136</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/92">#92</a></td><td class="num">0.5888</td><td class="num">-12714</td><td>One-step CG solve makes the K_corr PATTERN blend work: LDS 0.6679 -&gt; 0.6699</td></tr>
+              <tr><td>137</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/96">#96</a></td><td class="num">0.5888</td><td class="num">-12747</td><td>Honest leave-one-family-out CV confirms PR #92&#x27;s K_corr blend, flags a systematic LoRA-Adam regression</td></tr>
+              <tr><td>138</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/101">#101</a></td><td class="num">0.5888</td><td class="num">0.134</td><td>Free r2_mean fix for the K_corr one-step-CG blend (PR #92 + PR #44&#x27;s calibration)</td></tr>
+              <tr><td>139</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/50">#50</a></td><td class="num">0.5875</td><td class="num">-10576</td><td>Derive ridge lambda from G&#x27;s own measured spectral decay, not a swept DOF fraction (0.664)</td></tr>
+              <tr><td>140</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/55">#55</a></td><td class="num">0.5871</td><td class="num">-10578</td><td>Design-effect (kernel-density-of-S) correction on spectral lambda beats #50 (0.6646)</td></tr>
+              <tr><td>141</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/58">#58</a></td><td class="num">0.5871</td><td class="num">-10578</td><td>Unify conditional deflation (#53) with spectrum-extrapolated lambda (#55): one rule for both branches</td></tr>
+              <tr><td>142</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/61">#61</a></td><td class="num">0.5871</td><td class="num">-0.023</td><td>Apply #44/#47&#x27;s r2_mean calibration to the adaptive-deflate-effective-n formula (#58)</td></tr>
+              <tr><td>143</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/49">#49</a></td><td class="num">0.5867</td><td class="num">-10579</td><td>Deflated-G solve + principled lambda + per-family gamma beats undeflated version (0.6625)</td></tr>
+              <tr><td>144</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/157">#157</a></td><td class="num">0.5853</td><td class="num">0.118</td><td>Density-modulated scale (direction #1) flips sign on the ridge-projection lineage vs #154</td></tr>
+              <tr><td>145</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/154">#154</a></td><td class="num">0.5809</td><td class="num">0.135</td><td>Density-modulated per-run scale (seeded direction #1): modest, mixed local result</td></tr>
+              <tr><td>146</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/6">#6</a></td><td class="num">0.5459</td><td class="num">-21.249</td><td>Per-run std-normalization of G_pre first-order term beats the oracle-informed baseline</td></tr>
+              <tr><td>147</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/9">#9</a></td><td class="num">0.5446</td><td class="num">-5382</td><td>Pairwise doc-interaction term lifts std-normalized ridge projection past the incumbent</td></tr>
+              <tr><td>148</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/11">#11</a></td><td class="num">0.5420</td><td class="num">-5380</td><td>Deriving ridge strength from S&#x27;s own spectral decay exponent doesn&#x27;t beat the fixed constant</td></tr>
+              <tr><td>149</td><td><a href="https://github.com/ArcadiaImpact/latent-learning/pull/5">#5</a></td><td class="num">0.4099</td><td class="num">-0.084</td><td>Ground-truth-free ridge projection nearly matches the (unreachable) baseline</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2><span class="vr-section-num">§7</span>The winning formula, verbatim</h2>
+
+        <p>The exact <code>submission/predictor.py</code> now merged into the
+        task branch — including the worker's own 116-line docstring, which is
+        its research note (the provenance of the crash fix, why the blend
+        weight is spectrum-derived, and what result would falsify the bet).
+        The structure: a <b>fallback branch</b> (deflated K<sub>corr</sub>
+        solve, used only if the Gram matrices are missing), the <b>pattern
+        term</b> (ridge solve in G<sub>pre</sub> over the trained subset,
+        λ = 40·tr(Q<sub>SS</sub>)/|S|, per-run normalized), and the
+        <b>interaction term</b> (rank-1 G, pairwise
+        ½[(Σ<sub>j∈S</sub>G₁<sub>ij</sub>)² − Σ<sub>j∈S</sub>G₁<sub>ij</sub>²],
+        blended with weight W₀·λ₁/tr&nbsp;G measured from the G it is handed).
+        Sixty lines of numpy after the docstring.</p>
+
+        <pre class="vr-code"><code>&quot;&quot;&quot;Self-calibrating interaction weight (PR #174) + a fleet-wide
+correctness fix: PR #172 (a different worker) discovered that every
+predictor in this lineage reads `ctx[&quot;G_pre&quot;]` and `ctx[&quot;G&quot;]` by direct
+dict indexing, but `tp_score_submission`&#x27;s own ctx-building code DROPS
+the key entirely (rather than setting it to `None`) when the value is
+`None`, because `np.savez` cannot serialize `None` and the archive is
+built by filtering `None` values out before saving. Direct indexing on a
+missing key raises `KeyError`, which crashes scoring for the WHOLE family
+batch -- not a graceful &quot;fall back to the K_corr branch&quot; as every
+formula&#x27;s code intends and the problem statement documents (`G`/`G_pre`
+are supposed to be &quot;`None` if the held-out grid hasn&#x27;t reached the gram
+stage yet for that data snapshot&quot;). This has apparently never fired on
+real held-out data so far (every scored PR has a nonzero
+`n_families_scored`, meaning gram was already present every time), but
+it is a live landmine for the first snapshot where gram genuinely lags,
+which the task&#x27;s own docs say can happen. Fixed here by switching to
+`ctx.get(&quot;G_pre&quot;)` / `ctx.get(&quot;G&quot;)`, exactly as PR #172 fixed it on a
+different base. This attempt&#x27;s own #174 formula (below) is otherwise
+byte-for-byte unchanged.
+
+## Self-calibrating interaction weight -- why (PR #174, unchanged)
+
+My PR #151/#160/#168 established a rank-1-(dominant-eigenmode-only)
+interaction term computed from the exact gradient Gram `G`, added to a
+PATTERN term solved in `G_pre`. It ported cleanly across three different
+PATTERN-term bases (PR #79/#84&#x27;s per-family table, PR #100&#x27;s 3-group
+table, my own PR #173&#x27;s single global constant), always with the exact
+same fixed `W_PAIR=0.3`. Every one of those tests reused the SAME public
+grid&#x27;s `G` matrix, which has a specific spectral shape (its top eigenvalue
+holds 83.8% of the trace, measured directly from
+`experiments/training_prediction/results_public/gram/gram.npy`). A fixed
+`W_PAIR=0.3` implicitly assumes the held-out `G` (at a different, larger,
+never-revealed model scale) has a similarly concentrated spectrum. This
+fleet has already found that OTHER fixed constants tuned against this
+specific public grid&#x27;s spectrum fail to transfer even when the general
+functional FORM survives (PR #71/#73, on the ridge-lambda side) --
+seeded research direction #9 asks for exactly this: derive shrinkage/
+blend strength analytically from the spectrum `predict()` measures on
+`ctx`&#x27;s own matrices at score time, not a constant baked in from this
+grid.
+
+## What changed
+
+Replaced the fixed `W_PAIR=0.3` with `W_PAIR = W0 * (eigval_top /
+trace(G))`, where `eigval_top` and `trace(G)` are both measured from
+`ctx[&quot;G&quot;]` itself inside `predict()` (the same `_top_eigmode` cache
+already computes `eigval_top`; `trace(G)` is one extra `np.trace` call).
+`W0` is chosen so that on the CURRENT public grid&#x27;s own measured
+concentration (0.838, matching the number above), `W_PAIR` reduces to
+exactly the same value PR #151/#160/#168/#173 already validated (0.3),
+so the local public-grid score is UNCHANGED -- this is a pure
+generalization change, not a new tuned number. If a future (held-out,
+larger-scale) `G` has a more or less spectrally concentrated top mode,
+this formula&#x27;s interaction weight automatically scales with it instead
+of carrying over a number tuned for a 270M-parameter model&#x27;s specific
+spectrum.
+
+Everything else -- the `G_pre` ridge PATTERN term (PR #173&#x27;s single
+global `LAM_GLOBAL=40`, the most portability-tested base to date), the
+rank-1 truncation of `G` for the interaction term itself, the `id()`-keyed
+`eigh` cache, and the K_corr-deflation fallback -- is unchanged.
+
+## Local result
+
+```
+Fixed W_PAIR=0.3 (PR #173, same base):           LDS 0.6588
+Spectrum-adaptive W_PAIR (this attempt):         LDS 0.6588  (identical,
+                                                  by construction --
+                                                  W0 solved to match)
+```
+
+Confirmed via real `arch eval --json` that the two are numerically
+identical on the public grid (both `0.6588`), since `W0` was solved
+algebraically to reproduce the same effective `W_PAIR` at this grid&#x27;s own
+measured concentration. The claim this attempt makes is NOT a public-grid
+score improvement -- it&#x27;s a robustness bet, exactly like PR #95&#x27;s global-
+lambda simplification: removing a public-grid-specific tuned number in
+favor of a self-measuring rule should be neutral on the same grid, and
+should reduce risk if the held-out grid&#x27;s `G` spectrum turns out to be
+meaningfully more or less concentrated than 270M-Gemma&#x27;s.
+
+## What&#x27;s new here
+
+Every fixed constant tested by this interaction-term lineage so far
+(`W_PAIR=0.3`) came from a sweep against the public grid alone. This is
+the first attempt to make that specific number self-calibrating from a
+quantity `predict()` can measure directly on whatever `G` it&#x27;s given,
+rather than trusting the sweep to transfer.
+
+## Prior attempts referenced
+
+- PR #151, #160, #168, #173 (mine): establish and port the fixed-`W_PAIR`
+  rank-1 `G` interaction term across three PATTERN-term bases; this
+  attempt builds on #173&#x27;s base (the most-portability-tested one) and
+  changes only how `W_PAIR` itself is derived.
+- PR #71/#73 (fleet): documents that a SPECIFIC spectrum-derived constant
+  (there, a ridge-lambda rule&#x27;s own `KAPPA`) failed to transfer
+  cross-scale even though the general functional form tied a fixed
+  lambda -- the reason this attempt is framed as a robustness bet, not an
+  expected local-score improvement, and why `W0` is solved to exactly
+  match the already-validated fixed value rather than picked fresh.
+
+## Notes / caveats
+
+Because `trace(G)` and the top eigenvalue are properties of the WHOLE
+probe-set matrix (fixed for an entire scored batch, not per-run), this
+change cannot be validated for a genuine local-score difference on the
+public grid by construction -- the local numbers are identical on
+purpose. Its value is entirely about what happens on a differently-scaled
+`G`, which only the held-out eval can show. If this scores about the same
+as PR #173 on held-out, that&#x27;s a mild positive (no downside, marginally
+more principled). If it clearly under- or over-performs #173, that would
+be informative evidence about whether `G`&#x27;s spectral concentration itself
+varies enough across model scale to matter for this specific blend
+weight -- worth flagging either way.
+&quot;&quot;&quot;
+from __future__ import annotations
+
+import numpy as np
+
+SCALE_ABS = 0.00572  # unchanged from PR #173 -- same raw output scale
+
+LAM_GLOBAL = 40.0  # unchanged from PR #52/#95/#173
+FALLBACK_LAM = 20.0  # unchanged from PR #94
+
+# W0 solved so that W0 * (public grid&#x27;s own measured top-eigval/trace
+# fraction, 0.838) == 0.3, the value PR #151/#160/#168/#173 already
+# validated -- i.e. this reduces to the exact same number on THIS grid,
+# and only diverges from it when scored against a G with a different
+# spectral concentration.
+W_PAIR_W0 = 0.3580
+
+_EIGH_CACHE: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+
+
+def _top_eigmode(A: np.ndarray) -&gt; tuple[np.ndarray, np.ndarray]:
+    key = id(A)
+    cached = _EIGH_CACHE.get(key)
+    if cached is not None:
+        return cached
+    eigvals, eigvecs = np.linalg.eigh(A)
+    i = int(np.argmax(eigvals))
+    result = (eigvals[i], eigvecs[:, i])
+    _EIGH_CACHE[key] = result
+    return result
+
+
+def _deflate_top_mode(K: np.ndarray) -&gt; np.ndarray:
+    eigval, v = _top_eigmode(K)
+    return K - eigval * np.outer(v, v)
+
+
+def _solve_psd(A: np.ndarray, b: np.ndarray) -&gt; np.ndarray:
+    try:
+        return np.linalg.solve(A, b)
+    except np.linalg.LinAlgError:
+        return np.linalg.lstsq(A, b, rcond=None)[0]
+
+
+def predict(ctx: dict) -&gt; np.ndarray:
+    idx = np.asarray(ctx[&quot;idx&quot;], dtype=int)
+    n = max(len(idx), 1)
+    M = ctx[&quot;l0&quot;].shape[0]
+    out = np.setdiff1d(np.arange(M), idx)
+
+    Q = ctx.get(&quot;G_pre&quot;)
+    if Q is None:
+        Q = _deflate_top_mode(ctx[&quot;K_corr&quot;])
+        Qss = Q[np.ix_(idx, idx)]
+        lam = FALLBACK_LAM * max(np.trace(Qss) / n, 1e-30)
+        x = _solve_psd(Qss + lam * np.eye(n), -np.ones(n))
+        pred = Q[:, idx] @ x
+        typical = np.sqrt(np.clip(np.diag(Q), 1e-30, None))
+        run_scale = max(np.std(pred[out] / typical[out]), 1e-30)
+        return pred / (typical * run_scale)
+
+    # PATTERN term: single global ridge strength (PR #173).
+    Qss = Q[np.ix_(idx, idx)]
+    lam = LAM_GLOBAL * max(np.trace(Qss) / n, 1e-30)
+    x = _solve_psd(Qss + lam * np.eye(n), -np.ones(n))
+    pattern_raw = Q[:, idx] @ x
+    typical = np.sqrt(np.clip(np.diag(Q), 1e-30, None))
+    run_scale = max(np.std(pattern_raw[out] / typical[out]), 1e-30)
+    pattern = pattern_raw / (typical * run_scale)
+
+    G = ctx.get(&quot;G&quot;)
+    if G is None:
+        return SCALE_ABS * pattern
+
+    # INTERACTION term: rank-1 truncation of G (PR #151), blend weight now
+    # derived from G&#x27;s own measured spectral concentration rather than a
+    # fixed constant.
+    eigval, v = _top_eigmode(G)
+    trace_G = float(np.trace(G))
+    concentration = eigval / max(trace_G, 1e-30)
+    w_pair = W_PAIR_W0 * concentration
+
+    Gx = eigval * np.outer(v, v)
+    GxoutS = Gx[:, idx]
+    typical_x = np.sqrt(np.clip(np.diag(Gx), 1e-30, None))
+    lin_sum = GxoutS.sum(1)
+    sq_sum = (GxoutS ** 2).sum(1)
+    interaction_raw = 0.5 * (lin_sum ** 2 - sq_sum)
+    pair_scale = max(np.std(interaction_raw[out] / typical_x[out]), 1e-30)
+    interaction = interaction_raw / (typical_x * pair_scale)
+
+    return SCALE_ABS * (pattern + w_pair * interaction)
+</code></pre>
+
+        <h2><span class="vr-section-num">§8</span>What we learned</h2>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>the formula</dt><dd>pattern (ridge in G<sub>pre</sub>, one
+              global λ) + interaction (rank-1 of exact G, spectrum-scaled
+              weight) is the new reference — 1.86× the prior operator's
+              ranking signal at a scale it never saw</dd>
+            <dt>exact vs preconditioned</dt><dd>the division of labour is
+              real: preconditioning belongs in the pattern solve; the
+              interaction information lives in raw G's top eigenmode and is
+              destroyed by G<sub>pre</sub> (<a href="https://github.com/ArcadiaImpact/latent-learning/pull/138">#138</a>, <a href="https://github.com/ArcadiaImpact/latent-learning/pull/182">#182</a>)</dd>
+            <dt>transfer discipline</dt><dd>constants tuned on one grid are
+              the thing that fails to transfer — derive them from score-time
+              measurements or validate at ≥2 scales before trusting them
+              (<a href="https://github.com/ArcadiaImpact/latent-learning/pull/98">#98</a>, <a href="https://github.com/ArcadiaImpact/latent-learning/pull/174">#174</a>)</dd>
+            <dt>robustness = score</dt><dd>a material share of the margin
+              came from fixing timeout/fallback/KeyError bugs, not new math —
+              the winner is a formula <em>plus another worker's crash
+              fix</em></dd>
+            <dt>ranking ≫ magnitudes</dt><dd>LDS 0.64 vs R² 0.10: predicting
+              <em>which</em> documents move survives a 4× scale jump;
+              predicting <em>how much</em> barely does</dd>
+            <dt>fleet dynamics</dt><dd>90 minutes to 0.616, six hours of
+              plateau, then one new mechanism worth +0.024 in the final 2.5 h —
+              plateaus are not convergence, and the marginal value of fleet
+              hours is wildly non-uniform</dd>
+          </dl>
+        </div>
+
+        <h2><span class="vr-section-num">§9</span>Wrap-up</h2>
         <ul>
           <li>Winner squash-merged into <code>arch/training_prediction_symreg</code>;
             an anonymized Problem/Method/Result brief lives at

@@ -435,3 +435,16 @@ html::after  { right: 3.75rem; }
   color: var(--h3);
   font-size: 0.94em;
 }
+
+/* Verbatim code listings (arch threads etc.) */
+.vr-code {
+  margin: 1.2em 0;
+  padding: 0.9em 1.1em;
+  background: rgba(26, 107, 6, 0.045);
+  border: 1px solid var(--h3, #2c6a1d);
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.78em;
+  line-height: 1.45;
+}
+.vr-code code { white-space: pre; }
