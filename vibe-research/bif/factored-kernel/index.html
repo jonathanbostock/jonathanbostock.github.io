@@ -354,7 +354,7 @@
             <dt>probes</dt><dd>flat: 2,000 (1,000/task); factored: 1,800 (300/cell); Pile: 400 (50/domain) small-budget, 1,200 (150/domain) overnight</dd>
             <dt>pile overnight</dt><dd>pythia-160m, frozen embeddings, γ 1000, 8 chains × (150 burn + 600 draws @ thin 4) per seed, 2 independent seeds, bf16 probe evals; seed gate 0.79</dd>
             <dt>priors</dt><dd>"spec": n·(k−1) assignment params × log n<sub>pairs</sub>; "entropy": ICL label-coding 2n·log k (default); λ-scaled sweep for the frontier</dd>
-            <dt>repro</dt><dd>everything deterministic given seed; commit a5d56cf (branch hadamard); pods eonrmn4psbxdwh (4090), 0zxlboo24nbe9s (H100)</dd>
+            <dt>repro</dt><dd>everything deterministic given seed; commit b5a5b93 (branch hadamard-public, ArcadiaImpact/latent-learning); pods eonrmn4psbxdwh (4090), 0zxlboo24nbe9s (H100)</dd>
           </dl>
         </div>
 
