@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="../../../favicon.svg">
+    <title>ImageNet loss kernel: reproduction, and the label channel — Vibe Research</title>
+    <link rel="stylesheet" href="../../../style.css">
+    <link rel="stylesheet" href="../../style.css?v=itip1">
+    <meta name="description" content="Timaeus' loss-kernel-on-InceptionV1 result reproduces cleanly — UMAP islands, WordNet-sorted blocks, taxonomic lift ~200×. But the per-sample loss of a classifier contains the label, and the taxonomy mostly rides on that channel: on the same 10k images, a label-free ImageGPT's kernel keeps only a weak animacy axis (lift 2–4×, kernel CKA 0.05), even though it is more reproducible (gate 0.94 vs 0.68) and its activations demonstrably carry far more class structure (11.2% vs 4.0% few-shot 1000-way).">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>The ImageNet loss kernel, reproduced — and then taken apart</h1>
+        <p class="vr-byline">
+          <span>2026-07-09 · v1.0</span>
+          <span>1× H100 + a 22-GPU chain fleet · ≈ $200</span>
+          <span><a href="..">BIF experiments</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>Timaeus' <a href="https://arxiv.org/abs/2509.26537">loss-kernel paper</a> closes with
+        its flagship application: compute the
+        <button class="tooltip-button" data-define="loss-kernel">loss kernel</button> of
+        Inception-v1 over 10,000 ImageNet validation images, UMAP it, and watch the WordNet
+        taxonomy appear — an animals↔things split, a dog island, coherent bird / insect /
+        instrument neighbourhoods. The claim: the kernel reveals <em>the structure of the data as
+        the network sees it</em>. But Inception-v1 is a classifier. Its per-sample loss is
+        CE(<i>f</i>(<i>x</i>), <i>y</i>) — <b>a function of the label</b> — and the paper's own
+        Appendix B concedes the sharp version of the problem: run
+        <button class="tooltip-button" data-define="sgld">SGLD</button> on an <em>untrained</em>
+        network and you can still recover the input labels perfectly from the loss kernel,
+        because noise in the classifier head moves same-label losses together. Their mitigation
+        is cosmetic — same-label edges are deleted inside UMAP's neighbour search — and
+        cross-label correlations inherited from the 1000-way head's geometry (nearby class
+        vectors co-move under weight noise) are exactly the kind of "taxonomy" the paper wants to
+        attribute to perception. So: reproduce the result, then recompute the identical kernel
+        for a model whose loss has never seen a label, on the identical images.</p>
+
+        <p class="vr-pull">The classifier result reproduces cleanly (taxonomic lift ≈ 200×, gate
+        0.68). Swap the loss for a label-free one and the taxonomy collapses to 2–4× — while the
+        kernel itself gets <em>more</em> reproducible (gate 0.94). The WordNet geometry is mostly
+        the label channel, not the picture.</p>
+
+        <h2><span class="vr-section-num">§1</span> The reproduction</h2>
+
+        <p>Setup follows their Table 1 exactly: probe posterior
+        <i>p</i>(<i>w</i>|D) ∝ exp(−<i>βL</i><sub>n</sub>(<i>w</i>)) · N(<i>w</i>|<i>w</i>*, γ<sup>−1</sup>I),
+        sampled with SGLD at m=256, C=15 chains, T=500 draws, b=100 burn-in, ε=5·10<sup>−5</sup>,
+        <button class="tooltip-button" data-define="nbeta-gamma">nβ=20, γ=4000</button>; SGLD
+        minibatches from the full 1.28M-image train split; per-sample losses over 10k fixed
+        validation probes recorded at every retained draw; images at 256×256 as the paper
+        specifies. Their checkpoint is unreleased (they trained their own), so we use torchvision
+        googlenet (top-1 sanity: 70.0%) with BatchNorm in eval mode — deviations documented in
+        the repo. Readout precision was chosen by a measured fluctuation A/B per model: bf16
+        readout noise swamps Inception's fluctuations (r=0.83 vs fp32 → fp32), but is fine for
+        ImageGPT at the posterior's own scale (r=0.978 → bf16). Two independent seeds; the
+        <button class="tooltip-button" data-define="gate">reproducibility gate</button> comes out
+        at 0.68 (paper's pooled estimator) / 0.71 (this thread's block-centred one), and the two
+        estimators agree — chains mix well at 6.6M parameters.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig2_umap.png" alt="UMAP embeddings of both kernels, colored by WordNet hierarchy position">
+          <figcaption><b>Fig 1.</b> UMAP of kernel distance (1−R), same-label edges removed, hue =
+          position in the WordNet hierarchy. <b>Left:</b> Inception-v1 reproduces the paper's
+          Figure 1 — coherent hue regions, animals↔things lobes, a tight dog island. <b>Right:</b>
+          ImageGPT-small on the identical images: a hue-mixed cloud with only a faint
+          animate↔inanimate gradient.</figcaption>
+        </figure>
+
+        <p>Every qualitative claim of theirs checks out on our independent pipeline: the UMAP
+        islands (dogs, birds, primates, vehicles), interpretable nearest neighbours (totem poles
+        retrieve totem poles; terriers retrieve terriers), block structure aligned with WordNet
+        when the kernel is sorted by taxonomy, and near-unit colour lift at high γ. The
+        quantitative summary is
+        <button class="tooltip-button" data-define="taxonomic-lift">taxonomic lift</button>:
+        kernel-neighbours of a deep-class image share fine WordNet ancestors up to ≈200× more
+        often than chance.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig3_kernels.png" alt="WordNet-sorted kernel matrices vs ground truth">
+          <figcaption><b>Fig 2.</b> Kernels with probes sorted by WordNet position, next to the
+          ground-truth (negated) tree-distance matrix. Inception's kernel shows the paper's
+          taxonomic block structure; ImageGPT's is nearly flat at this sorting.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§2</span> How big is the label channel?</h2>
+
+        <p>Before swapping models, measure the artifact the paper acknowledges but doesn't
+        quantify. In Inception's kernel, same-label pairs have mean correlation
+        <b>0.42</b> against 0.02 for cross-label pairs; <b>32.6%</b> of every image's top-30
+        kernel neighbours share its exact label, against a 0.098% base rate — a
+        <b>332× same-label lift</b>. And the
+        <button class="tooltip-button" data-define="same-label-exclusion">same-label
+        exclusion</button> that the paper applies inside UMAP turns out to be doing real work in
+        the lift metric too: recompute lift <em>without</em> it and Inception's peak rises from
+        200× to <b>333×</b> — numerically converging to the same-label lift itself, because at
+        deep ancestor depths the neighbour lists are dominated by exact-class retrieval. The
+        label-free model barely moves under the same ablation (pooled peak 2.2× → 2.6×;
+        per-query-depth peak 2.3× → 4.3×): there is no label
+        channel to let back in.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig1_lift.png" alt="Taxonomic lift curves for both models, with and without same-label exclusion">
+          <figcaption><b>Fig 3.</b> Pooled taxonomic lift vs shared-ancestor depth (log scale),
+          with (blue) and without (orange) the paper's same-label exclusion. Left: the classifier
+          — hundreds-fold lift, inflating further when exact-class pairs are allowed back in.
+          Right: the label-free AR model on the same images — single-digit lift either way.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§3</span> The label-free transfer</h2>
+
+        <p>The counterfactual model is <b>ImageGPT-small</b> (iGPT-S, 76M params): an
+        autoregressive pixel-token model over 32×32 images, pretrained on ILSVRC-2012
+        <em>without labels</em>. Its per-image loss is the mean next-token NLL of 1024
+        pixel-tokens — no label anywhere in the loss. Per this thread's design rules the
+        embedding/unembedding (<code>wte</code>, <code>wpe</code>, <code>lm_head</code>) are
+        frozen during SGLD, removing the head-noise channel entirely. Same SGLD configuration,
+        same two-seed protocol, and the <em>same 10,000 probe images</em>, tokenised with the
+        model's fixed 512-colour palette. (One fleet note: the readout costs ~10 s/draw — 207
+        GFLOPs per probe at sequence length 1024 — so the 15,000-draw grid was sharded one chain
+        per GPU across 22 H100s and merged, after verifying shard-merge equivalence on synthetic
+        traces.)</p>
+
+        <div class="vr-table-wrap"><table class="vr-table">
+          <thead><tr><th></th><th>Inception-v1 (classifier)</th><th>ImageGPT-small (label-free)</th></tr></thead>
+          <tbody>
+            <tr><td>taxonomic lift, peak</td><td class="vr-neg">≈200×</td><td>2.3× (block: 3.8×)</td></tr>
+            <tr><td>coarse lift (d′ 2–6)</td><td>2.29</td><td>1.12</td></tr>
+            <tr><td>fine lift (d′ ≥ 10)</td><td class="vr-neg">40.6</td><td>1.75</td></tr>
+            <tr><td>same-label lift in top-30</td><td class="vr-neg">332×</td><td>2.7×</td></tr>
+            <tr><td>colour lift</td><td>1.16</td><td>1.23</td></tr>
+            <tr><td>2-seed gate</td><td>0.68</td><td class="vr-pos">0.94</td></tr>
+            <tr><td>kernel↔kernel <button class="tooltip-button" data-define="cka">CKA</button></td><td colspan="2" style="text-align:center">0.048 (off-diag Pearson 0.025)</td></tr>
+          </tbody>
+        </table></div>
+
+        <p>Two orders of magnitude of taxonomy vanish when the label leaves the loss — and it is
+        not because the label-free kernel is noisy. Its per-seed split-half agreement is 0.95 and
+        the cross-seed gate is 0.94, far above the classifier's 0.68: the weak structure it has
+        is <em>highly</em> reproducible. What survives is a coarse animate↔inanimate gradient
+        (visible in Fig 1 right; block-estimator lift peaks 3.8× at mid depths) plus a colour
+        factor — exactly the organisation this thread has found in every generative-model kernel
+        from CIFAR to RandAR.</p>
+
+        <h2><span class="vr-section-num">§4</span> Present but not prominent? A linear map says no</h2>
+
+        <p>A fair objection: nearest-neighbour metrics only see a kernel's <em>dominant</em>
+        modes. Maybe the classifier-relevant directions exist in the AR kernel's spectrum but are
+        outranked by its big common modes (its top-10 modes hold 42% of the variance, vs 15% for
+        Inception). So:
+        <button class="tooltip-button" data-define="kpca">kernel-PCA</button> both kernels
+        (top 256 modes), and ridge-map the AR embedding onto the classifier embedding on 8k
+        probes, scoring held-out R² on 2k. The answer is a clean no. The map recovers
+        <b>R² = 0.0195</b> against a cross-seed noise ceiling of 0.53 — <b>3.7% of the
+        explainable classifier geometry</b> — and <em>whitening the AR modes (which erases
+        prominence entirely) changes nothing</em> (0.0186). The one direction that does transfer
+        is Inception's mode 2 — the animals↔things axis — at 24% of its explainable variance;
+        every other mode sits below 0.1. Functionally, measuring held-out taxonomic lift in the
+        mapped geometry recovers 2.9× → 7.0× at the peak: a real, purely-linear read of the AR
+        kernel roughly triples its taxonomy, and still lands ~8× short of the classifier.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig4_spectral.png" alt="Per-mode R2 of the linear map and held-out lift in mapped geometry">
+          <figcaption><b>Fig 4.</b> <b>Left:</b> held-out R² per Inception kernel-PCA mode, from
+          the ImageGPT kernel (blue) vs the cross-seed ceiling (grey). Only mode 2 — the
+          animals↔things axis — transfers appreciably. <b>Right:</b> fine-depth taxonomic lift of
+          held-out probes in each geometry: the linear map recovers a sliver, not the
+          structure.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§5</span> Kernels as classifiers</h2>
+
+        <p>The operational version of "how much class structure does the kernel contain":
+        build classifiers from it.
+        <button class="tooltip-button" data-define="kernel-ridge">Kernel ridge</button> on the
+        Gram matrix, kNN votes, and logistic probes on kernel-PCA coordinates, all on a fixed
+        80/20 probe split (8 labelled examples per class), against embedding baselines under the
+        identical protocol — including the canonical one, since classification from activations
+        was the <a href="https://cdn.openai.com/papers/Generative_Pretraining_from_Pixels_V2.pdf">iGPT
+        paper's</a> own headline result (41.9% for iGPT-S with full-data probes).</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig5_classifiers.png" alt="Classifier accuracy by representation at three granularities">
+          <figcaption><b>Fig 5.</b> Held-out top-1 by representation (best method per
+          representation), at 1000-way (log scale), 12-way superclass, and animate/inanimate
+          granularity. The hatched bar is not a real accuracy — a supervised-loss kernel bakes
+          each test image's own label into its features (the Appendix-B artifact,
+          operationalised at ~100%).</figcaption>
+        </figure>
+
+        <div class="vr-table-wrap"><table class="vr-table">
+          <thead><tr><th>representation</th><th>1000-way</th><th>12-way</th><th>2-way</th></tr></thead>
+          <tbody>
+            <tr><td>mean-RGB</td><td>0.7%</td><td>51.2%</td><td>65.3%</td></tr>
+            <tr><td>pixels 32²</td><td>1.0%</td><td>32.5%</td><td>59.0%</td></tr>
+            <tr><td><b>ImageGPT loss kernel</b> (ridge)</td><td class="vr-pos">4.0%</td><td class="vr-pos">66.2%</td><td class="vr-pos">85.8%</td></tr>
+            <tr><td>ImageGPT activations (layer 16)</td><td>11.2%</td><td>70.7%</td><td>89.9%</td></tr>
+            <tr><td>Inception activations (supervised)</td><td>56.8%</td><td>87.5%</td><td>94.8%</td></tr>
+            <tr><td>Inception loss kernel</td><td class="vr-neg">99.9%†</td><td class="vr-neg">99.3%†</td><td class="vr-neg">99.5%†</td></tr>
+          </tbody>
+        </table></div>
+
+        <p>Three readings. First, the label-free loss kernel <em>is</em> a genuine unsupervised
+        representation: 40× chance at 1000-way, 4× pixels, and at coarse granularity it nearly
+        matches the model's own activations. Second, the fine-grained class structure the model
+        demonstrably has (11.2% few-shot from its layer-16 features — the same mid-layer sweet
+        spot the iGPT paper found — 41.9% with full-data probes) is mostly <em>not</em> expressed
+        in its loss geometry: the kernel is a coarse, lossy projection of the representation.
+        Third, the † row: a supervised-loss kernel's test-image features are computed from
+        CE(<i>f</i>(<i>x</i>), <i>y</i>) — the test label enters its own features, so the ~100%
+        is leakage, not accuracy. That is the confound of §2 in its most operational form.</p>
+
+        <h2><span class="vr-section-num">§6</span> What this does and doesn't show</h2>
+
+        <p>The reproduction stands: on a classifier, the loss kernel really does organise
+        ImageNet along WordNet lines, robustly across our independent checkpoint and pipeline.
+        What does not survive scrutiny is the reading that this geometry belongs to "the data as
+        seen by a trained network". Remove the label from the loss and — on identical images,
+        under an identical probe posterior, with better chain statistics — the kernel keeps a
+        single reproducible animacy axis, a colour factor, and essentially nothing finer
+        (CKA 0.05 to the classifier kernel; 3.7% of its explainable geometry linearly present).
+        The taxonomy predominantly rides on the supervised loss: the label input directly, and
+        the 1000-way head geometry it trains.</p>
+
+        <p>Caveats, honestly held: ImageGPT sees 32×32 inputs, so <em>some</em> fine-structure
+        collapse is resolution, not labels — though the near-total loss of even coarse lift
+        (2.29 → 1.12) and of same-label structure (a 32×32-visible signal, had it existed) says
+        resolution is not the main story, and the activation probes prove the model itself holds
+        far more class structure than its kernel shows. The clean follow-ups: a
+        resolution-matched label-free model (LlamaGen-B, null-conditioned, at 256²), and a
+        class-conditional AR model probed with true vs null labels as a dose–response on the
+        label channel. Model scale (76M vs 6.6M) is unmatched in the other direction; nothing
+        smaller exists label-free at any resolution.</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>models</dt><dd>torchvision googlenet IMAGENET1K_V1 (6.6M SGLD params, aux frozen, BN eval) · openai/imagegpt-small (75.6M sampled; wte/wpe/lm_head frozen; flash-SDPA patch ≡ eager to 4·10⁻⁵)</dd>
+            <dt>probes</dt><dd>10,000 seed-fixed ImageNet val images @256² (benjamin-paine/imagenet-1k-256x256), identical for both models; iGPT side tokenised to 32² × 512-colour palette (96.3% agreement with HF processor)</dd>
+            <dt>SGLD</dt><dd>m=256 · C=15 · T=500 · b=100 · ε=5e-5 · nβ=20 · γ=4000 · 2 seeds · readout fp32 (inception) / bf16 (igpt, posterior-scale A/B r=0.978)</dd>
+            <dt>estimators</dt><dd>paper pooled covariance + block-centred (block=50); agreement throughout; raw traces on HF</dd>
+            <dt>fleet</dt><dd>phase 1: 1× H100, ~2.1 h/seed · phase 2: 30 chains sharded 1/GPU over 22 H100s (6 singles + 2× 8-GPU), ~95 min/chain, merged after concat-equivalence check</dd>
+            <dt>gates</dt><dd>inception 0.683 / 0.713 · igpt 0.937 / 0.944 (pooled / block); igpt split-half 0.95 per seed</dd>
+          </dl>
+        </div>
+
+        <div class="vr-colophon">
+          Code · <code>latent-learning</code> branch <code>imagenet-reproduction</code> —
+          <code>experiments/imagenet_kernel/</code> (runners, WordNet ground truth, lift/UMAP/spectral/classifier
+          analyses, shard-merge, 16 CPU tests; full narrative in <code>RESULTS.md</code>).
+          Reproduction target: Adam, Furman &amp; Hoogland,
+          <a href="https://arxiv.org/abs/2509.26537">"The Loss Kernel" (arXiv:2509.26537)</a>, §4 + App. B/D;
+          activations baseline per Chen et al.,
+          <a href="https://proceedings.mlr.press/v119/chen20s.html">"Generative Pretraining from Pixels"</a>.
+          <br>Artefacts · HF <a href="https://huggingface.co/datasets/arcadia-impact/imagenet-loss-kernel-logs">arcadia-impact/imagenet-loss-kernel-logs</a>
+          (<code>imagenet-kernel-20260708/</code>) — SGLD traces (all 60 chain-seeds), kernels, probe
+          metadata, activation features, every analysis in this page, ledgers with git SHAs + pod IDs.
+          <br>Compute · ≈ 65 H100-hours + change across 9 pods ≈ $200 total; all pods stopped, results
+          verified on HF before teardown.
+        </div>
+      </div>
+    </main>
+
+    <script src="../../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "loss-kernel": "K(x,x′) = Cov[ℓ(x;w), ℓ(x′;w)] over a tempered, w*-localised posterior sampled around the trained weights — the covariance of per-sample losses under low-loss-preserving weight perturbations. Same object as this thread's Bayesian influence function; normalised to a correlation R for analysis.",
+        "sgld": "Stochastic-gradient Langevin dynamics: gradient descent on minibatches plus Gaussian noise plus a γ-strength pull back toward the trained weights w*. Samples from the localised probe posterior; every retained step contributes one loss vector over the probes.",
+        "nbeta-gamma": "nβ scales the loss gradient (an effective inverse temperature × dataset size); γ is the strength of the Gaussian tether to w*. The paper's Table-1 ImageNet values, used unchanged for both models — per-coordinate posterior width 1/√γ ≈ 0.016 either way.",
+        "gate": "Off-diagonal Pearson correlation between the kernels of two fully independent SGLD runs (fresh seeds, fresh chains). The thread's standard reproducibility check: structure that doesn't replicate across seeds is estimator noise.",
+        "taxonomic-lift": "For each probe, take its top-30 kernel neighbours (same-label pairs excluded, per the paper); ask how often probe and neighbour share a WordNet ancestor at depth d′, divided by the rate over random cross-label pairs. Lift 1 = taxonomy-blind neighbours; the paper's App. D.2 metric.",
+        "same-label-exclusion": "The paper deletes edges between identically-labelled images inside UMAP's neighbour search, because classifier-head noise makes same-label losses co-fluctuate spuriously (their Appendix B). We apply the same exclusion in the lift metric — and also report what happens without it.",
+        "cka": "Centred kernel alignment: Frobenius cosine between double-centred kernel matrices. 1 = identical geometry up to rotation/scale; 0.05 ≈ unrelated.",
+        "kpca": "Kernel PCA: eigendecompose the double-centred kernel; coordinates are eigenvectors scaled by √eigenvalue, so mode order = share of kernel variance ('prominence'). The embedding whose axes the linear map is fit over.",
+        "kernel-ridge": "One-hot least-squares on the precomputed Gram matrix: α = (K_train + λI)⁻¹Y, scores = K_test,train · α. The strongest simple classifier a kernel supports; λ tuned on an inner validation split.",
+      });
+    </script>
+  </body>
+</html>

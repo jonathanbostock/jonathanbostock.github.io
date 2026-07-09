@@ -228,6 +228,35 @@
             </a>
           </li>
 
+          <li>
+            <a class="vr-card" href="imagenet-loss-kernel/">
+              <span class="vr-date">2026-07-09 · reproduction + takedown</span>
+              <span class="vr-title">The ImageNet loss kernel, reproduced — and then taken apart</span>
+              <p class="vr-desc">Timaeus' flagship result reproduces cleanly: Inception-v1's
+                kernel UMAPs into WordNet islands, taxonomic lift ≈ 200×, gate 0.68. But a
+                classifier's per-sample loss contains the label — 332× same-label lift, and
+                dropping the paper's same-label exclusion pushes "taxonomy" to exactly that
+                number. Recompute the identical kernel for label-free ImageGPT-small on the
+                identical 10k images and the taxonomy collapses to 2–4× (kernel↔kernel CKA 0.05)
+                while reproducibility <em>improves</em> to gate 0.94. A spectral linear map finds
+                just one classifier direction in the AR kernel — the animals↔things axis, 24% of
+                its explainable variance — and whitening recovers nothing more: the structure
+                isn't buried, it's absent. Kernel-ridge classifiers make it operational: the
+                label-free kernel is a real unsupervised representation (4.0% few-shot 1000-way,
+                40× chance; 86% animate/inanimate) but ~3× below the same model's own
+                activations — the loss kernel is a coarse, lossy window onto what the model
+                knows, and on a classifier it is contaminated by the labels it was trained
+                on.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">imagenet</span>
+                <span class="vr-tag">reproduction</span>
+                <span class="vr-tag">label-confound</span>
+                <span class="vr-tag">imagegpt</span>
+                <span class="vr-tag">kernel-classifiers</span>
+              </span>
+            </a>
+          </li>
+
         </ul>
       </div>
     </main>

@@ -248,6 +248,7 @@ html::after  { right: 3.75rem; }
 .vr-table td {
   padding: 0.45rem 0.7rem;
   text-align: left;
+  vertical-align: top;   /* keys stay on the first line of wrapping cells */
   border-bottom: 1px solid rgba(44, 106, 29, 0.25);
 }
 .vr-table th {

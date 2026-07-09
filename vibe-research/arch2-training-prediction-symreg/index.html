@@ -379,6 +379,95 @@
             <dt>code</dt><dd><a href="https://github.com/ArcadiaImpact/latent-learning/tree/arch/training_prediction_symreg">arch/training_prediction_symreg</a></dd>
           </dl>
         </div>
+
+        <p id="ctx-contract">Concretely, a submission is one file —
+        <code>submission/predictor.py</code>, defining
+        <code>predict(ctx: dict) -&gt; np.ndarray</code> — and it is pure
+        numpy/scipy on CPU: no model, no checkpoint, no GPU (the eval pod
+        installs nothing else). All the deep learning — SGLD kernel
+        estimation, per-document gradients, the fine-tune grid itself —
+        happens upstream in the pipeline; the formula only ever sees the
+        precomputed artifacts. The scorer calls <code>predict()</code> once
+        per held-out fine-tune run, and <code>ctx</code> is a plain dict
+        carrying that run's config plus the probe-set matrices shared by
+        every run:</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead><tr><th>ctx key</th><th>type / shape</th><th>meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>K_cov</code> · <code>K_corr</code></td>
+                <td>float64 [<i>M</i>,&nbsp;<i>M</i>]</td>
+                <td>the loss kernel — SGLD-estimated covariance of
+                  per-document losses under a local posterior at the
+                  pretrained checkpoint <i>w</i><sub>0</sub> — and its
+                  Pearson-correlation normalization. Always present; the
+                  scorer zeroes non-finite entries.</td></tr>
+              <tr><td><code>G</code></td>
+                <td>float64 [<i>M</i>,&nbsp;<i>M</i>] · optional</td>
+                <td>exact gradient Gram at <i>w</i><sub>0</sub>:
+                  G<sub>ij</sub> = ⟨∇ℓ<sub>i</sub>,&nbsp;∇ℓ<sub>j</sub>⟩
+                  over the probe documents
+                  (<button class="tooltip-button" data-define="tracin-one-ckpt">one-checkpoint
+                  TracIn</button>)</td></tr>
+              <tr><td><code>G_pre</code></td>
+                <td>float64 [<i>M</i>,&nbsp;<i>M</i>] · optional</td>
+                <td>the same Gram with each gradient
+                  <button class="tooltip-button" data-define="less-precond">Adam-preconditioned</button>
+                  first — the matrix the prior operator propagates
+                  through</td></tr>
+              <tr><td><code>l0</code></td>
+                <td>float64 [<i>M</i>]</td>
+                <td>each probe document's base loss at <i>w</i><sub>0</sub>,
+                  in nats — and the canonical place to read <i>M</i> from
+                  (the winner opens with
+                  <code>M = ctx["l0"].shape[0]</code>)</td></tr>
+              <tr><td><code>docFE</code></td>
+                <td>float64 [<i>M</i>]</td>
+                <td>per-document fixed effect: each doc's mean out-of-subset
+                  <i>dl</i> over a held-back half of the runs (even
+                  subset-seeds; only odd seeds are scored, so a run never
+                  informs its own baseline). Out-of-subset <i>dl</i> is ~99%
+                  this universal doc-identity direction; the scored target
+                  is the residual <i>dl</i>&nbsp;−&nbsp;docFE.</td></tr>
+              <tr><td><code>idx</code></td>
+                <td>int [<i>k</i>]</td>
+                <td><b>the trained subset S</b> — the positions, as 0-based
+                  integer indices into the <i>M</i> probe documents, of the
+                  <i>k</i> docs this run fine-tuned on (<i>k</i> = 32 in the
+                  standard scored cell). Predictions at these positions are
+                  never scored; the task is what happens to everything
+                  <em>else</em>.</td></tr>
+              <tr><td><code>lr</code> · <code>steps</code> · <code>size</code></td>
+                <td>float · int · int</td>
+                <td>this run's fine-tune config: learning rate, optimizer
+                  steps, and |S| (= <code>len(idx)</code>)</td></tr>
+              <tr><td><code>family</code></td>
+                <td>str</td>
+                <td>which of the ten optimizer families the run used:
+                  <code>sgd</code>, <code>adam</code>, <code>adamw</code>,
+                  <code>muon</code>, <code>muon_wd</code>,
+                  <code>lora_sgd</code>, <code>lora_adam</code>,
+                  <code>lora_adam_wd</code>, <code>lora_muon</code>,
+                  <code>sgd_l2base</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The required return is a length-<i>M</i> float vector: predicted
+        per-document loss change, in absolute nats, for <em>all</em>
+        <i>M</i> documents — the in-subset entries are simply never read.
+        On the public grid <i>M</i>&nbsp;=&nbsp;512, probe documents drawn
+        from eight Pile subsets (Pile-CC through PubMed Central); the
+        contract nowhere promises the held-out reproduction keeps any of
+        those numbers, so shapes have to come from <code>ctx</code>, never
+        from constants. Only rank order counts toward the headline score:
+        LDS takes each document, Spearman-correlates predicted vs realized
+        <i>dl</i>&nbsp;−&nbsp;docFE across the standard cell's runs (random
+        sampler, |S|&nbsp;=&nbsp;32, 16 steps) that held that document out,
+        then averages over documents and finally over optimizer families.
+        Raw magnitudes only feed the secondary R² metric.</p>
+
         <p>Mechanically, "sequestered" means: every submission is scored by an
         ephemeral pod that checks out the PR head, <b>restores the scoring
         code and eval harness from the trusted base branch</b> (a PR cannot
@@ -390,6 +479,27 @@
         run count — stayed invisible to the fleet. Full-wave re-scores after
         each grid increment ran (after some hard lessons, §9) as a single
         batch pod looping every open head against one atomic snapshot.</p>
+
+        <p>Two further mechanics of how the scorer builds <code>ctx</code>
+        each seeded one of §4's fleet-wide bug classes. <b>Batching:</b> a
+        family's scored runs all go through one sandboxed subprocess under a
+        single 300-second wall-clock cap, one <code>predict()</code> call
+        per run — and every call is handed the <em>same</em> matrix objects,
+        loaded once per batch. Repeated per-call spectral work is therefore
+        pure waste, which is why the dominant lineage carries an
+        <code>id()</code>-keyed <code>eigh</code> cache (visible in §7's
+        code) and why uncached variants kept dying at the cap.
+        <b>Optionality:</b> <code>G</code>/<code>G_pre</code> are documented
+        as "<code>None</code> if the held-out grid hasn't reached the gram
+        stage for this snapshot", but the shim ships the shared matrices via
+        <code>np.savez</code>, which can't serialize <code>None</code> — so
+        a missing Gram arrives as a missing <em>key</em>, not a
+        <code>None</code> value. <code>ctx["G_pre"]</code> therefore raises
+        a <code>KeyError</code> that takes down the family's entire batch,
+        while <code>ctx.get("G_pre")</code> falls back to the
+        K<sub>corr</sub> branch the way every formula intends — the landmine
+        <a href="https://github.com/ArcadiaImpact/latent-learning/pull/172">#172</a>
+        unearthed and the winning PR exists to fix.</p>
 
 
         <h2><span class="vr-section-num">§3</span>How the run unfolded</h2>
@@ -587,7 +697,11 @@
         decimals</b> (0.737 at 1B vs 0.736 at 270M, R² ≈ 0.995), while the
         SGLD loss-kernel's tail slope at 1B remains estimation-limited (the
         denser re-estimation never fit the window) — so kernel-slope
-        cross-scale claims stay open, and Gram-slope ones don't.</p>
+        cross-scale claims stay open, and Gram-slope ones don't.
+        <em>Post-run update:</em> a day-after v2 re-estimation (§10) closed
+        this — with proper sampling the 1B kernel slope is 0.736 vs 0.743
+        at 270M. <b>The kernel's spectral slope is scale-invariant too</b>;
+        v1's apparent 1.06 was an estimation artifact.</p>
 
         <h2><span class="vr-section-num">§6</span>Final held-out leaderboard — all 149 scored submissions</h2>
 
@@ -766,7 +880,10 @@
         <b>interaction term</b> (rank-1 G, pairwise
         ½[(Σ<sub>j∈S</sub>G₁<sub>ij</sub>)² − Σ<sub>j∈S</sub>G₁<sub>ij</sub>²],
         blended with weight W₀·λ₁/tr&nbsp;G measured from the G it is handed).
-        Sixty lines of numpy after the docstring.</p>
+        Sixty lines of numpy after the docstring, touching five of the
+        <a href="#ctx-contract">ctx keys defined in §2</a>:
+        <code>idx</code>, <code>l0</code>, <code>G_pre</code>,
+        <code>G</code>, and (fallback branch only) <code>K_corr</code>.</p>
 
         <pre class="vr-code"><code>&quot;&quot;&quot;Self-calibrating interaction weight (PR #174) + a fleet-wide
 correctness fix: PR #172 (a different worker) discovered that every
@@ -1028,10 +1145,184 @@ def predict(ctx: dict) -&gt; np.ndarray:
         briefly mass-failed a scoring wave before the fixed wave superseded
         it).</p>
 
+        <h2><span class="vr-section-num">§10</span>Post-hoc ablations — which inputs earn their keep</h2>
+
+        <p><em>Added 2026-07-09, after wrap-up.</em> The winner is a two-term
+        formula over four candidate matrices, so the obvious follow-up is a
+        single-ingredient ablation grid: delete each term, and substitute
+        each term's source matrix, one change at a time, everything else
+        byte-identical. Each variant was scored with the production shim
+        (<code>tp_score_submission.py</code>, unmodified) against both
+        archived snapshots — the public 948-run gemma-3-270m grid and the
+        frozen 506-run, 4-family gemma-3-1b grid from §6, restored from the
+        org-internal held-out archive. Harness anchors all reproduce: the
+        verbatim winner scores 0.6588 public / 0.6414 held-out (matching §6
+        to every reported decimal), the template re-expression of it is
+        identical on every family, and the fixed-<code>W_PAIR</code> variant
+        lands exactly on <a href="https://github.com/ArcadiaImpact/latent-learning/pull/173">#173</a>'s leaderboard score (0.6393).</p>
+
+        <p class="vr-pull">Every substitute for the exact gradient Gram in
+        the interaction term looks nearly free on the development grid and
+        fails at the held-out scale — the ranking the two grids agree on is
+        the one computed from G.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/ablation_lds.png"
+               alt="Horizontal bar chart of twelve ablation variants in five blocks (reference; term removed; pattern-term solve matrix; interaction-term source; refinements undone). Solid bars show held-out gemma-3-1b LDS, open grey circles show public gemma-3-270m LDS. The full formula scores 0.641. Removing the interaction term gives 0.617; the interaction alone collapses to 0.015. Swapping the pattern solve from G_pre to exact G falls to 0.360, to deflated K_cov or K_corr 0.109. Sourcing the interaction from G_pre gives 0.621; from K_cov 0.370 and K_corr 0.328 despite public scores above 0.60 — circles far to the right of their bars. Full-rank interaction 0.635; fixed W_PAIR 0.639. Dashed line marks the prior operator at 0.345."
+               width="720">
+          <figcaption><b>One change at a time.</b> Solid bars: held-out LDS
+            on the frozen gemma-3-1b grid (the metric that decided the run);
+            open circles: the same variant on the public gemma-3-270m grid.
+            Grey dashed line: the prior best operator (0.345); teal dotted
+            line: the winner (0.641). Where the circle sits far right of its
+            bar — both kernel-sourced interaction rows — the public grid
+            would have waved through a formula that fails at the unseen
+            scale. <a href="figs/ablation_lds.pdf">PDF</a>.</figcaption>
+        </figure>
+
+        <p><b>The pattern term is the skeleton; the interaction term is a
+        corrective that cannot stand alone.</b> Pattern-only scores 0.6172
+        held-out — already 1.79× the prior operator — while
+        interaction-only collapses to 0.0148 (negative on SGD). The
+        interaction's +0.024 is also unevenly earned: +0.059 on Muon,
+        +0.044 on LoRA-Adam, +0.005 on SGD, and −0.011 on Adam — the one
+        family where the winner's new mechanism slightly <em>hurts</em>.</p>
+
+        <p><b>The preconditioning is where the pattern term's power lives.</b>
+        Re-solving the same ridge in the exact Gram G drops held-out LDS
+        from 0.641 to 0.360 — right back at the prior operator (0.345),
+        which also solves in G's geometry. What the Adam metric buys is a
+        usable solve geometry: it flattens the Gram's one-direction spectrum
+        (λ₁/tr 0.918 → 0.158 at 1B) so the ridge can see past the universal
+        mean-gradient direction. Solving in the deflated loss-kernel instead
+        (the winner's own no-gram fallback recipe) manages only 0.109 —
+        identically for K<sub>cov</sub> and K<sub>corr</sub> — and bolting
+        the G interaction term onto that kernel base rescues nothing
+        (0.1089 → 0.1089): the corrective is worthless without the right
+        skeleton. The fallback branch, which never fired in production
+        (§4), is real but ~6× weaker than the gram path.</p>
+
+        <p><b>The interaction term is unsubstitutable — and the sequestered
+        eval is what proves it.</b> Sourcing it from K<sub>cov</sub> costs
+        almost nothing on the public grid (0.6269 vs 0.6588) and craters
+        held-out to 0.3699 — a quarter <em>below</em> simply deleting the
+        term. K<sub>corr</sub> is the same story (0.6043 public, 0.3275
+        held-out). Mechanism: the winner's blend weight is
+        W₀·λ₁/tr&nbsp;A measured on whatever matrix A it's handed, and G's
+        spectral concentration is the one that holds across the scale jump
+        (0.838 at 270M → 0.918 at 1B, so w<sub>pair</sub> 0.300 → 0.329)
+        while the kernels' top modes both fatten (0.36 → 0.55; 0.39 → 0.59)
+        <em>and</em> mis-rank at 1B — a mid-weight wrong-signed term shreds
+        the pattern term's fine ordering. The G<sub>pre</sub> substitution
+        completes <a href="https://github.com/ArcadiaImpact/latent-learning/pull/184">#184</a>'s "scale-dominated" point: under the winner's
+        self-calibrating rule the term simply mutes itself
+        (G<sub>pre</sub>'s concentration is 0.158, so w<sub>pair</sub> ≈
+        0.06 → 0.6213, within noise of no-interaction), whereas <a href="https://github.com/ArcadiaImpact/latent-learning/pull/182">#182</a>'s
+        fixed-weight version forced it at full strength and lost outright
+        (0.6365). Either way the information is in G's top eigenmode,
+        nowhere else.</p>
+
+        <p><b>One honest confound: the 1B kernel is under-estimated, and
+        that caveat lands on exactly one row group.</b> The held-out
+        archive's own notes flag it: kernel v1 at 1B got 2 seeds × 2 chains
+        × 80 SGLD draws (burn-in 60) — roughly a third of the public
+        recipe's samples, ~128 degrees of freedom per seed against M = 512
+        — and the denser v2 re-estimation died at launch and never shipped
+        (§5's "estimation-limited" tail). The damage is measurable: the
+        kernel's off-diagonal agreement with G's structure (entrywise
+        Spearman, K<sub>corr</sub> vs diag-normalized G) collapses from
+        0.31 at 270M to 0.00 at 1B, its semantic-cluster coherence halves
+        (within-group corr 0.49 → 0.26), and part of its apparent
+        concentration jump (0.36 → 0.55) is the rank-≈128
+        sample-covariance inflating its top eigenvalues. So the
+        interaction-from-kernel craters above are a test against a
+        <em>noisy</em> K as much as against K per se — a properly-sampled
+        1B kernel might do better, and only a re-run (kernel v2) can say.
+        The pattern-side verdict, though, survives the caveat twice over:
+        at 270M, where K got its full budget and a clean power-law fit
+        (R² 0.96), the kernel pattern solve still reaches only 0.167–0.184
+        against the gram path's 0.649; and K's top eigenmode is ≈ the
+        uniform everything-moves-together direction at <em>both</em> scales
+        (|⟨v₁, 1⟩| = 0.96–0.99) — the one direction docFE already absorbs.
+        A well-estimated kernel still doesn't carry the parameter-space
+        geometry the solve needs.</p>
+
+        <p><b>Postscript, 2026-07-09: we re-ran the estimation, and the
+        verdict survives de-confounding.</b> Kernel v2 at 1B — the
+        re-estimation that died at launch during the run — was re-run
+        post-hoc at the originally-planned density (2 seeds × 4 chains ×
+        140 draws, burn-in 120 → 560 dof/seed vs v1's ~128; lr 3e-7 from
+        the same auto-calibration; chains sharded across 4×H100, ~39 min
+        each; probe-set identity verified against the archived
+        <code>l0</code> at r = 0.99994). The estimate is now <em>better</em>
+        than the public one: 2-seed reproducibility gate <b>0.824</b> vs
+        the public kernel's 0.77. Every v1 spectral anomaly turns out to be
+        estimation artifact — slope 1.06 → <b>0.736</b> (public: 0.743 —
+        the kernel slope is scale-invariant after all, closing §5's open
+        question), cluster coherence 0.26 → 0.44, top-mode share back to
+        public-like (rank-50: 1 → 15). But rescoring the kernel ablations
+        against v2 barely moves the conclusions: the kernel pattern solve
+        rises 0.109 → <b>0.175</b> — exactly its public-grid ceiling, so
+        <em>that</em> gap was estimation — while the kernel-sourced
+        interaction stays net-harmful (K<sub>corr</sub> 0.328 → 0.474,
+        K<sub>cov</sub> 0.370 → 0.370, both far below the 0.617 of simply
+        deleting the term), and the winner and pattern-only controls are
+        unchanged to four decimals. Sharpest of all: with a
+        <em>well-estimated</em> kernel, the entrywise K↔G agreement at 1B
+        is <b>−0.06</b> (vs +0.31/+0.42 at 270M) — the kernel-vs-Gram
+        geometry divergence at scale is <em>real</em>, not noise. The
+        loss kernel isn't a noisy copy of the gradient Gram; at scale it
+        measures something genuinely different (the posterior-covariance
+        metric rather than the raw-gradient one) — and what it measures is
+        not what the training-prediction solve needs. Raw v2 artifacts
+        (chains, traces, ensembles, ledger) live in the org-internal
+        archive under <code>kernel_v2/</code>.</p>
+
+        <p><b>The two refinements are small but real.</b> Un-truncating the
+        interaction (full-rank G) gives back −0.006 (0.6353) — <a href="https://github.com/ArcadiaImpact/latent-learning/pull/151">#151</a>'s
+        rank-1 sharpening confirmed at the unseen scale. Freezing
+        <code>W_PAIR</code> at 0.3 gives back −0.002 (0.6393): the
+        spectrum-derived weight's entire held-out margin. Both refinements
+        cost nothing locally and paid only at transfer — the run's central
+        lesson, in miniature.</p>
+
+        <details class="vr-fold vr-fold-block"><summary><b>Full ablation table</b> — held-out per optimizer family, plus the public grid<span class="vr-fold-verdict">12 variants × 5 held-out numbers × public</span></summary>
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead><tr><th>variant</th><th class="num">held-out</th><th class="num">sgd</th><th class="num">adam</th><th class="num">muon</th><th class="num">lora_adam</th><th class="num">public</th></tr></thead>
+            <tbody>
+              <tr class="vr-row-win"><td>full formula (winner #176)</td><td class="num">0.6414</td><td class="num">0.5770</td><td class="num">0.7049</td><td class="num">0.6583</td><td class="num">0.6255</td><td class="num">0.6588</td></tr>
+              <tr><td>no interaction term</td><td class="num">0.6172</td><td class="num">0.5722</td><td class="num">0.7161</td><td class="num">0.5992</td><td class="num">0.5814</td><td class="num">0.6486</td></tr>
+              <tr><td>no pattern term</td><td class="num">0.0148</td><td class="num">−0.0799</td><td class="num">0.0891</td><td class="num">0.0261</td><td class="num">0.0238</td><td class="num">0.0537</td></tr>
+              <tr><td>pattern solve: G_pre → G</td><td class="num">0.3600</td><td class="num">0.3331</td><td class="num">0.3958</td><td class="num">0.3376</td><td class="num">0.3735</td><td class="num">0.3634</td></tr>
+              <tr><td>pattern solve: G_pre → defl. K_cov</td><td class="num">0.1090</td><td class="num">0.1104</td><td class="num">0.1215</td><td class="num">0.1012</td><td class="num">0.1030</td><td class="num">0.1836</td></tr>
+              <tr><td>pattern solve: G_pre → defl. K_corr</td><td class="num">0.1089</td><td class="num">0.1252</td><td class="num">0.1200</td><td class="num">0.0939</td><td class="num">0.0963</td><td class="num">0.1674</td></tr>
+              <tr><td>fallback branch only (no grams)</td><td class="num">0.1089</td><td class="num">0.1254</td><td class="num">0.1201</td><td class="num">0.0928</td><td class="num">0.0972</td><td class="num">0.1666</td></tr>
+              <tr><td>interaction source: G → G_pre</td><td class="num">0.6213</td><td class="num">0.5750</td><td class="num">0.7145</td><td class="num">0.6070</td><td class="num">0.5887</td><td class="num">0.6452</td></tr>
+              <tr><td>interaction source: G → K_cov</td><td class="num">0.3699</td><td class="num">0.3855</td><td class="num">0.4657</td><td class="num">0.3401</td><td class="num">0.2881</td><td class="num">0.6269</td></tr>
+              <tr><td>interaction source: G → K_corr</td><td class="num">0.3275</td><td class="num">0.3112</td><td class="num">0.3981</td><td class="num">0.3411</td><td class="num">0.2596</td><td class="num">0.6043</td></tr>
+              <tr><td>full-rank G interaction (no rank-1)</td><td class="num">0.6353</td><td class="num">0.5703</td><td class="num">0.6991</td><td class="num">0.6528</td><td class="num">0.6190</td><td class="num">0.6545</td></tr>
+              <tr><td>fixed W_PAIR = 0.3</td><td class="num">0.6393</td><td class="num">0.5792</td><td class="num">0.7069</td><td class="num">0.6514</td><td class="num">0.6199</td><td class="num">0.6588</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Prior-operator baseline on the same frozen grid: 0.3455. The
+        "fallback branch only" row is the winner's own
+        K<sub>corr</sub>-only code path, verbatim — including its
+        unscaled return, so its R² is meaningless by construction (LDS is
+        scale-invariant and unaffected). Variant sources, per-variant
+        score JSONs, the measured spectral concentrations, and the
+        kernel-geometry diagnostics live under
+        <code>experiments/training_prediction/ablations/</code> on the
+        task branch.</p>
+        </details>
+
         <div class="vr-colophon">
           Source · <a href="https://github.com/ArcadiaImpact/latent-learning">ArcadiaImpact/latent-learning</a>, branch <code>arch/training_prediction_symreg</code>.
           <br>Prior result this beat · <a href="../bif/">Loss-landscape grooves</a> thread; full numbers in <a href="https://github.com/ArcadiaImpact/latent-learning/blob/main/experiments/training_prediction/TP_RESULTS.md">TP_RESULTS.md</a>.
           <br>Write-up · <code>findings/training_prediction_symreg/blogpost.md</code> on the task branch · winner merged 2026-07-08.
+          <br>Ablations (§10) · <code>experiments/training_prediction/ablations/</code> on the task branch · scored with the unmodified production shim, 2026-07-09.
+          <br>Kernel v2 (§10 postscript) · dense 1B re-estimation, 4×H100 · raw chains + ensembles in the org-internal archive under <code>kernel_v2/</code> · 2026-07-09.
         </div>
       </div>
     </main>
@@ -1039,6 +1330,8 @@ def predict(ctx: dict) -&gt; np.ndarray:
     <script>
       Object.assign(actionButtonDefinitions, {
         "projection-op": "dl_out = a · Q[out,S] (Q_SS + λI)⁻¹ δ_S — solve for interpolation weights in one kernel's geometry (here, the exact gradient Gram G) using the run's own observed in-subset loss drops as δ_S, then propagate through a second kernel's geometry (the Adam-preconditioned Gram G_pre) to predict the held-out response.",
+        "tracin-one-ckpt": "TracIn (Pruthi et al., 2020) estimates the influence of training example i on example j by summing gradient inner products ⟨∇ℓᵢ, ∇ℓⱼ⟩ over checkpoints along the training trajectory. The one-checkpoint variant keeps only the pretrained checkpoint w₀, which makes the whole influence matrix simply the gradient Gram G computed there.",
+        "less-precond": "As in LESS (Xia et al., 2024): instead of raw gradients, use the update directions Adam would actually apply — each per-document gradient is rescaled by the optimizer's accumulated moment state (estimated here from calibration batches) before taking inner products. G_pre is the Gram of those preconditioned gradients.",
       });
     </script>
   </body>

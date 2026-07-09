@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Sampler shootout: what RMSProp-preconditioning buys the loss kernel — Vibe Research</title>
+    <link rel="stylesheet" href="../../../style.css">
+    <link rel="stylesheet" href="../../style.css">
+    <meta name="description" content="Head-to-head SGLD vs RMSPropSGLD for loss-kernel estimation on Pythia-14M: preconditioning buys the entire step-size axis (0/128 diverged chains, flat lambda over 3.5 decades) but zero convergence speed — and the kernel itself turns out to be a step-size-resolution dial.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Sampler shootout: what RMSProp-preconditioning buys the loss kernel</h1>
+        <p class="vr-byline">
+          <span>2026-07-09</span>
+          <span>2× RTX 4090 · ~8 GPU-h · ~$5</span>
+          <span><a href="../">BIF thread</a></span>
+          <span><a href="../..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>Every experiment in this thread runs on the same instrument: draw weights from a
+        <button class="tooltip-button" data-define="local-posterior">localised tempered posterior</button>
+        around a trained model with
+        <button class="tooltip-button" data-define="sgld">SGLD</button>, read out every probe
+        document's loss at each draw, and take the
+        <button class="tooltip-button" data-define="loss-kernel">loss kernel</button> —
+        the covariance of those losses. Hitchcock &amp; Hoogland's
+        <a href="https://arxiv.org/abs/2507.21449">sampler benchmark</a> says
+        <button class="tooltip-button" data-define="psgld">RMSProp-preconditioned SGLD</button>
+        dominates vanilla SGLD for scalar
+        <button class="tooltip-button" data-define="llc">LLC</button> estimation on deep linear
+        networks — wider usable step-size band, fewer diverged chains, loud failures. None of that
+        directly tests the <i>kernel</i>, a 1024×1024 covariance object whose off-diagonal
+        structure is the whole point. So: pre-registered head-to-head on Pythia-14M over the Pile,
+        one hypothesis per failure mode, decided against thresholds written down before any run.</p>
+
+        <p class="vr-pull">Preconditioning buys the entire step-size axis — zero diverged chains
+        anywhere on a 3.5-decade grid, λ̂ flat to ±5% — but buys no convergence speed at all: its
+        2× faster mixing is exactly cancelled by 2× noisier per-draw kernels. And the kernel
+        itself turns out to be a resolution dial in ε: swapping samplers changes it less than a
+        10× step-size change within either sampler.</p>
+
+        <h2><span class="vr-section-num">§1</span>Setup</h2>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>model</dt><dd>EleutherAI/pythia-14m (d = 14,067,712), final checkpoint; revisions step{16k, 64k, 143k} for controls</dd>
+            <dt>data</dt><dd>NeelNanda/pile-10k → fixed 512-token chunks, no padding; probe set 1024 = 128 × 8 Pile domains (one chunk per document); gradient pool 13,752 chunks</dd>
+            <dt>posterior</dt><dd>nβ = m/ln m = 9.23 (m = 32), γ = 100 tether to w*, per-document summed-NLL gradient (repo convention)</dd>
+            <dt>samplers</dt><dd>SGLD (existing pipeline, unchanged) vs RMSPropSGLD (devinterp semantics: V ← 0.99·V + 0.01·g², P = 1/(√V + 0.1), P on the full drift, √(εP) noise, no Γ term)</dd>
+            <dt>sweep</dt><dd>2 samplers × 8 ε (3e-7 … 1e-3) × 2 seeds, 8 chains × 2000 steps each; identical minibatches and identical Gaussian draws across samplers per seed</dd>
+            <dt>gold</dt><dd>16 chains × 8000 steps at each sampler's best ε, full 1024-probe recording</dd>
+            <dt>engine</dt><dd>chain-vectorised GPTNeoX forward (leading chain dim, chunked LM head, HF-parity-tested), torch.compile, bf16 fwd/bwd + fp32 master weights; 135 ms/step for 8 chains on one 4090</dd>
+            <dt>runtime</dt><dd>2× RTX 4090 (RunPod community, $0.68/hr the pair), preemption-safe per-cell checkpointing</dd>
+          </dl>
+        </div>
+
+        <p>Two deviations from the spec worth owning up front (both forced by reading the
+        benchmark's actual pseudocode, both ablated): the RMSProp stability constant is
+        devinterp's 0.1 rather than the spec's 1e-8 — at 1e-8 the preconditioner on
+        zero-gradient coordinates (91% of this model's parameters are embedding rows, mostly
+        unsampled in any given batch) reaches 10<sup>8</sup> and <b>all 8 chains diverge</b>
+        (median √V literally 0.0, max 3.8×10<sup>17</sup>); and P multiplies the whole drift
+        including the localisation term, matching benchmark Algorithm 3 and Li et al., not the
+        spec's "loss gradient only" paraphrase (that variant is stable but shifts λ̂ by +11%).</p>
+
+        <h2><span class="vr-section-num">§2</span>H1 · the band</h2>
+
+        <figure class="vr-fig">
+          <img src="figs/fig1_band.png" alt="Lambda-hat vs step size with divergence-rate panel.">
+          <figcaption><b>Fig. 1</b> · λ̂ vs ε (top) and diverged-chain fraction (bottom),
+          pooled over 2 seeds × 8 chains. SGLD's usable band is [3e-7, 1e-5]; above it chains
+          heat up (the 3e-5 error bar) and then die (94–100% at ≥1e-4). RMSPropSGLD passes the
+          stability criteria at <b>every</b> grid point with λ̂ ≈ 25–27.5k flat to ±5% over the
+          top 2.5 decades.</figcaption>
+        </figure>
+
+        <p>The pre-registered H1 statistic is the width of the contiguous ε range where, in both
+        seeds, divergence &lt; 10%, λ̂ sd/mean &lt; 0.2, and λ̂ ∈ (0, d/2). SGLD: 1.52 decades.
+        RMSPropSGLD: 3.52 decades — <b>censored by the grid at both ends</b>, with 0/128 chains
+        diverged anywhere. That's +2.0 decades against a pre-registered threshold of +1.0, and it
+        reproduces the DLN benchmark's headline on a real language model. We never even found
+        pSGLD's cliff: it presumably lives above ε = 1e-3, where vanilla SGLD has been dead for
+        two decades of ε.</p>
+
+        <h2><span class="vr-section-num">§3</span>H3 · one kernel, many resolutions</h2>
+
+        <p>Do the two samplers measure the <i>same object</i>? The pre-registered plan compared
+        the two gold kernels by
+        <button class="tooltip-button" data-define="cka">CKA</button> and got 0.62 — but that
+        instrument turned out to be broken in an instructive way: at the τ/2-derived recording
+        stride (k = 101), 63 draws/chain of a 1024×1024 covariance is draw-starved, and each gold
+        kernel only agrees with <i>its own other half</i> at 0.44–0.58 (split-half). 0.62 between
+        samplers is <i>above</i> that ceiling
+        (<button class="tooltip-button" data-define="attenuation">attenuation-corrected</button>
+        ≈ 1.0). The τ/2 stride heuristic is calibrated for scalar λ̂, not for M² covariance
+        objects — re-recording the gold runs at k = 12 (533 draws/chain) fixed the reliability
+        (split-half CKA GOLDV2_REL) and is the cheap fix we'd recommend to anyone using the
+        kernel pipeline: probe evals were only ~5% of gold cost, so there is no economy in
+        recording sparsely.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig2_cka_matrix.png" alt="CKA between every pair of (sampler, step-size) kernels.">
+          <figcaption><b>Fig. 2</b> · Linear CKA between 128-probe kernels for every stable
+          (sampler, ε) cell (seed 0; each cell's seed-replicate CKA is 0.97–0.99, so these
+          numbers are signal, not noise). Banding along the diagonal of each block = the kernel
+          changes smoothly with ε <i>within</i> a sampler; the off-block diagonal (matched ε,
+          different sampler) reads 0.90–0.93 — as high as adjacent-ε agreement within a
+          sampler.</figcaption>
+        </figure>
+
+        <p>The well-powered comparison uses the sweep's 128-probe kernels (3,200 draws each,
+        seed-replicate CKA 0.97–0.99). Verdict: <b>at matched ε the samplers agree, CKA
+        0.90–0.93</b> — passing the pre-registered 0.9 bar — while the kernel itself moves with ε
+        for <i>both</i> samplers (SGLD's own 1e-5 vs 1e-6 kernels: 0.77). ε joins γ and nβ as a
+        resolution dial on the object being measured, which reframes the "best-ε to best-ε"
+        number (0.83): it's bounded by ε-dependence, not sampler disagreement. RMSPropSGLD@1e-5
+        agrees better with SGLD@1e-5 than SGLD@1e-5 agrees with SGLD@1e-6. Practical rule:
+        <b>you can swap samplers, but keep ε when you do</b> — or re-baseline the kernel once.</p>
+
+        <h2><span class="vr-section-num">§4</span>H2 · no free speed</h2>
+
+        <figure class="vr-fig">
+          <img src="figs/fig3_convergence.png" alt="Kernel convergence vs independent replicate.">
+          <figcaption><b>Fig. 3</b> · Convergence of the seed-0 kernel toward the independent
+          seed-1 kernel (dots: steps to 95% of the seed-replicate ceiling). SGLD@1e-6: 543.
+          RMSPropSGLD@1e-5: 537. RMSPropSGLD@1e-3 — with 8× faster mixing — 669. Flat.</figcaption>
+        </figure>
+
+        <figure class="vr-fig">
+          <img src="figs/fig4_tau.png" alt="Integrated autocorrelation time vs step size.">
+          <figcaption><b>Fig. 4</b> · Integrated autocorrelation time of per-sequence probe
+          losses. Mixing accelerates with ε for both samplers — RMSPropSGLD reaches τ = 26 steps
+          at ε = 1e-3 while staying λ̂-stable. None of it converts into kernel precision.</figcaption>
+        </figure>
+
+        <p>Preconditioning does mix faster where it counts: at the band midpoints, τ = 202 steps
+        (pSGLD @ 1e-5) vs 388 (SGLD @ 1e-6), and pSGLD can push to τ = 26 at ε = 1e-3 where SGLD
+        cannot go at all. The pre-registered H2 called for ≥1.5× fewer steps to kernel
+        convergence. Measured four ways — the pre-registered gold statistic (0.75×, i.e.
+        <i>slower</i>, though that instrument is the draw-starved one), and
+        independent-seed-replicate convergence at three operating points (537 vs 543 steps at
+        band midpoints; 669 at pSGLD's fastest-mixing ε) — <b>the answer is no speed win,
+        anywhere</b>. The mechanism is a tidy conservation: hotter, faster-mixing chains have
+        proportionally larger per-sequence loss fluctuations, so each recorded draw carries a
+        proportionally noisier kernel estimate. Steps-to-kernel-precision sits at ~550–700
+        per-chain steps across both samplers and every stable ε we measured. Mixing speed and
+        per-draw SNR cancel.</p>
+
+        <p>The cost clause fails too, comically: SGLD's counterfactual 8-point calibration sweep
+        measures <i>cheaper</i> (4,688 s vs 7,122 s) because its four diverged cells crash early
+        and stop billing. Divergence wastes information, not seconds — half of SGLD's calibration
+        grid yields nothing, but the pre-registered accounting only counts seconds.</p>
+
+        <h2><span class="vr-section-num">§5</span>Controls</h2>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>control</th><th>SGLD</th><th>RMSPropSGLD</th><th>reading</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>untrained model: label recoverability (NMI)</td><td class="num">0.343</td><td class="num">0.359</td><td class="vr-neg">pathology present in both</td></tr>
+              <tr><td>untrained model: clustering ARI</td><td class="num">0.175</td><td class="num">0.148</td><td class="vr-pos">pSGLD not worse</td></tr>
+              <tr><td>untrained: same−cross label corr gap</td><td class="num">0.018</td><td class="num">0.050</td><td class="vr-neg">letter-fails (see text)</td></tr>
+              <tr><td>trained: same−cross label corr gap</td><td class="num">0.087</td><td class="num">0.043</td><td class="vr-pos">pSGLD smaller</td></tr>
+              <tr><td>λ̂ ordering, step16k &lt; 64k &lt; 143k</td><td class="vr-pos">14.7k → 16.4k → 19.6k</td><td class="vr-pos">21.5k → 23.5k → 27.5k</td><td class="vr-pos">both strictly ordered</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The Loss-Kernel paper's Appendix-B warning replicates under <i>both</i> samplers: 100
+        SGMCMC steps on a <i>randomly initialised</i> Pythia-14M yield a kernel from which Pile
+        domains are partially recoverable (NMI ≈ 0.35) — noise injected into embedding rows
+        makes same-token inputs co-fluctuate, no learning required. Preconditioning neither
+        causes nor cures it; the mitigations (freeze embeddings, delete same-label edges) stay
+        mandatory. One pre-registered clause — raw same-label gap "not &gt;20% worse" — fails on
+        its letter (0.050 vs 0.018), but the comparison is confounded: SGLD@1e-6's untrained
+        kernel carries a ~0.85 common-mode correlation floor that compresses its gap, and on the
+        <i>trained</i> model pSGLD's spurious gap is half of SGLD's. We call it a
+        substance-pass and flag it for any probe set with label structure. Checkpoint λ̂
+        ordering is clean for both samplers despite the documented small-Pythia LLC anomaly.
+        Gold-v2 (dense recording) confirms the matched-story on the full 1024-probe kernels:
+        GOLDV2_SUMMARY.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig5_embedding.png" alt="Spectral embeddings of both gold kernels, same-label edges deleted.">
+          <figcaption><b>Fig. 5</b> · Spectral embedding of each gold kernel's correlation graph
+          with the App-B deconfound applied (same-domain edges deleted before building the kNN
+          graph), coloured by Pile domain. Domain structure survives the deconfound under both
+          samplers.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§6</span>Verdict</h2>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>hypothesis</th><th>pre-registered bar</th><th>result</th><th>verdict</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>H1 robustness</td><td>band +1 decade, div ≤ SGLD</td><td>+2.0 decades (censored), 0/128 diverged</td><td class="vr-pos">pass ×2 margin</td></tr>
+              <tr><td>H2 efficiency</td><td>1.5× fewer steps or 2× cheaper</td><td>0.75–1.2×; cost 0.67×</td><td class="vr-neg">fail</td></tr>
+              <tr><td>H3 same object</td><td>CKA ≥ 0.9, ARI ≥ 0.7</td><td>0.90–0.93 at matched ε; ε is a resolution dial</td><td class="vr-pos">pass at matched ε</td></tr>
+              <tr><td>H4 pathologies</td><td>not &gt;20% worse</td><td>recoverability equal; one confounded letter-fail</td><td class="vr-pos">substance pass</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The pre-registered adoption rule (H1 ∧ H3 ∧ (H2 ∨ cost)) is <b>not met</b>: there is
+        no speed case for switching at this scale. The robustness case is overwhelming, though,
+        and it's the case that matters when ε is <i>not</i> already known: a blind ε pick fails
+        4/8 times under SGLD and 0/8 under RMSPropSGLD, per-step overhead is ≤7%, and the DLN
+        benchmark says the gap widens with scale. So: keep SGLD for calibrated, repeated
+        production runs at a known operating point; reach for RMSPropSGLD the moment ε is
+        uncertain — new scale, new γ/nβ, one-shot runs — and re-baseline the kernel at matched ε
+        when you switch. Also, record gold kernels densely: the probe evals are 5% of the cost,
+        and the τ/2 stride heuristic that seemed thrifty was quietly destroying the
+        measurement.</p>
+
+        <div class="vr-colophon">
+          Source · <a href="https://github.com/ArcadiaImpact/latent-learning/tree/main/experiments/rmspropsgld_comparison">experiments/rmspropsgld_comparison</a>
+          (SPEC.md pre-registered; REPORT.md has the full metric-by-metric account; PR PRNUM).
+          <br>Logs &amp; traces · <a href="https://huggingface.co/datasets/arcadia-impact/rmspropsgld-comparison-logs-20260709">arcadia-impact/rmspropsgld-comparison-logs-20260709</a>.
+          <br>Run · 2× RTX 4090 (RunPod community), 37 cells, ~8 GPU-h, ~$5; pod s62fifb0d4q71m; repo @ COMMITSHA.
+        </div>
+      </div>
+    </main>
+    <script src="../../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "loss-kernel": "K(i,j) = Cov over posterior draws of the per-sequence losses of probes i and j. Same object as the Bayesian Influence Function (negated): large positive entries mean two sequences' losses move together under weight perturbations — they share a groove in the loss landscape. Estimated here with the repo's block-centred covariance (block = 5 recorded draws) pooled over chains.",
+        "local-posterior": "p(w) ∝ exp(−nβ·L(w)) · N(w | w*, γ⁻¹I): the training loss tempered by nβ, times a Gaussian tether of strength γ = 100 keeping the chain in w*'s basin. Sampling it explores the local loss geometry without leaving the solution the trained model actually found.",
+        "sgld": "Stochastic-gradient Langevin dynamics: w ← w − (ε/2)(nβ·∇L_batch + γ(w−w*)) + N(0, ε). Gradient descent plus exactly-calibrated Gaussian noise, so the chain samples the tempered posterior instead of minimising.",
+        "psgld": "RMSProp-preconditioned SGLD (Li et al. 2016): keep an EMA V of the squared loss gradient, set per-parameter step P = 1/(√V + 0.1), and scale drift AND noise by P (noise std √(εP)). Flat directions get bigger steps, stiff directions smaller ones — one ε fits all coordinates. The Γ curvature-correction term is dropped (bias O((1−α)²/α³) ≈ 1e-4).",
+        "llc": "Local learning coefficient λ̂ = nβ·(E_posterior[L] − L(w*)): the effective number of directions in which the loss rises around w*, from singular learning theory. Sanity range (0, d/2); here λ̂ ≈ 17–27k against d/2 = 7×10⁶.",
+        "cka": "Centered kernel alignment: ⟨K₁ᶜ, K₂ᶜ⟩_F / (‖K₁ᶜ‖‖K₂ᶜ‖) on double-centred kernel matrices. Scale-invariant similarity between two covariance structures; 1 = identical up to scale. The Loss-Kernel paper uses it for exactly this convergence/robustness role.",
+        "attenuation": "Classical measurement-error correction: observed correlation between two noisy instruments is bounded by √(reliability₁ × reliability₂). Corrected CKA = raw CKA / √(split-half₁ × split-half₂); a corrected value ≈ 1 means the two measurements agree as well as each agrees with itself.",
+      });
+    </script>
+  </body>
+</html>
