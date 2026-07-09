@@ -257,6 +257,29 @@
             </a>
           </li>
 
+          <li>
+            <a class="vr-card" href="sampler-shootout/">
+              <span class="vr-date">2026-07-09 · instrumentation</span>
+              <span class="vr-title">Sampler shootout: what RMSProp-preconditioning buys the loss kernel</span>
+              <p class="vr-desc">Pre-registered SGLD vs RMSPropSGLD head-to-head on Pythia-14M:
+                preconditioning buys the entire step-size axis (0/128 diverged chains, λ̂ flat to
+                ±5% over a censored 3.5-decade grid vs SGLD's 1.5-decade band and cliff) — but
+                zero convergence speed: 2× faster mixing is exactly cancelled by 2× noisier
+                per-draw kernels, and steps-to-kernel-precision comes out dead equal (2,569 =
+                2,569). At matched ε the samplers measure the same kernel (CKA 0.90–0.93); ε
+                itself is a resolution dial, and the spec's τ/2 recording-stride heuristic
+                quietly destroys kernel reliability (split-half 0.44 → 0.96 at 8.5× denser
+                recording for 1.3× cost). Verdict: keep SGLD when calibrated, switch the moment
+                ε is uncertain.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">SGLD estimator</span>
+                <span class="vr-tag">preconditioning</span>
+                <span class="vr-tag">pre-registered</span>
+                <span class="vr-tag">pythia</span>
+              </span>
+            </a>
+          </li>
+
         </ul>
       </div>
     </main>

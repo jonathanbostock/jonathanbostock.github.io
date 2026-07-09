@@ -97,9 +97,10 @@
         (<button class="tooltip-button" data-define="attenuation">attenuation-corrected</button>
         ≈ 1.0). The τ/2 stride heuristic is calibrated for scalar λ̂, not for M² covariance
         objects — re-recording the gold runs at k = 12 (533 draws/chain) fixed the reliability
-        (split-half CKA GOLDV2_REL) and is the cheap fix we'd recommend to anyone using the
+        (split-half CKA 0.94/0.96) and is the cheap fix we'd recommend to anyone using the
         kernel pipeline: probe evals were only ~5% of gold cost, so there is no economy in
-        recording sparsely.</p>
+        recording sparsely (at k = 12 they're still just 31% — 8.5× the draws for 1.3× the
+        cost).</p>
 
         <figure class="vr-fig breakout">
           <img src="figs/fig2_cka_matrix.png" alt="CKA between every pair of (sampler, step-size) kernels.">
@@ -139,11 +140,11 @@
         <p>Preconditioning does mix faster where it counts: at the band midpoints, τ = 202 steps
         (pSGLD @ 1e-5) vs 388 (SGLD @ 1e-6), and pSGLD can push to τ = 26 at ε = 1e-3 where SGLD
         cannot go at all. The pre-registered H2 called for ≥1.5× fewer steps to kernel
-        convergence. Measured four ways — the pre-registered gold statistic (0.75×, i.e.
-        <i>slower</i>, though that instrument is the draw-starved one), and
-        independent-seed-replicate convergence at three operating points (537 vs 543 steps at
-        band midpoints; 669 at pSGLD's fastest-mixing ε) — <b>the answer is no speed win,
-        anywhere</b>. The mechanism is a tidy conservation: hotter, faster-mixing chains have
+        convergence. Measured four ways — the pre-registered gold statistic on the dense
+        instrument (<b>dead equal: 2,569 vs 2,569 per-chain steps</b>, curves literally
+        overlapping), and independent-seed-replicate convergence at three operating points
+        (537 vs 543 steps at band midpoints; 669 at pSGLD's fastest-mixing ε) — <b>the answer
+        is no speed win, anywhere</b>. The mechanism is a tidy conservation: hotter, faster-mixing chains have
         proportionally larger per-sequence loss fluctuations, so each recorded draw carries a
         proportionally noisier kernel estimate. Steps-to-kernel-precision sits at ~550–700
         per-chain steps across both samplers and every stable ε we measured. Mixing speed and
@@ -182,8 +183,13 @@
         <i>trained</i> model pSGLD's spurious gap is half of SGLD's. We call it a
         substance-pass and flag it for any probe set with label structure. Checkpoint λ̂
         ordering is clean for both samplers despite the documented small-Pythia LLC anomaly.
-        Gold-v2 (dense recording) confirms the matched-story on the full 1024-probe kernels:
-        GOLDV2_SUMMARY.</p>
+        Gold-v2 (dense recording, split-half reliability 0.94/0.96) confirms the
+        resolution-dial story on the full 1024-probe kernels: cross-sampler CKA at the two
+        <i>different</i> best ε's is 0.818 (ARI 0.611) — right where the sweep predicted
+        (0.826), below the pre-registered 0.9 bar not because the samplers disagree but because
+        ε = 1e-6 and ε = 1e-5 measure genuinely different-resolution kernels. pSGLD's chains
+        also agree <i>better with each other</i> about the kernel: relative across-chain
+        off-diagonal variance 0.36 vs SGLD's 0.55.</p>
 
         <figure class="vr-fig breakout">
           <img src="figs/fig5_embedding.png" alt="Spectral embeddings of both gold kernels, same-label edges deleted.">
@@ -222,9 +228,9 @@
 
         <div class="vr-colophon">
           Source · <a href="https://github.com/ArcadiaImpact/latent-learning/tree/main/experiments/rmspropsgld_comparison">experiments/rmspropsgld_comparison</a>
-          (SPEC.md pre-registered; REPORT.md has the full metric-by-metric account; PR PRNUM).
+          (SPEC.md pre-registered; REPORT.md has the full metric-by-metric account; PR #187).
           <br>Logs &amp; traces · <a href="https://huggingface.co/datasets/arcadia-impact/rmspropsgld-comparison-logs-20260709">arcadia-impact/rmspropsgld-comparison-logs-20260709</a>.
-          <br>Run · 2× RTX 4090 (RunPod community), 37 cells, ~8 GPU-h, ~$5; pod s62fifb0d4q71m; repo @ COMMITSHA.
+          <br>Run · 2× RTX 4090 (RunPod community), 37 cells, ~8 GPU-h, ~$5; pod s62fifb0d4q71m; repo @ 51a162e.
         </div>
       </div>
     </main>
