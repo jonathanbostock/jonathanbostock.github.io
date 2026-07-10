@@ -41,7 +41,9 @@
         <p class="vr-pull">The classifier result reproduces cleanly (taxonomic lift ≈ 200×, gate
         0.68). Swap the loss for a label-free one and the taxonomy collapses to 2–4× — while the
         kernel itself gets <em>more</em> reproducible (gate 0.94). The WordNet geometry is mostly
-        the label channel, not the picture.</p>
+        the label channel, not the picture. And an addendum with the knife in: the loss kernel
+        turns out to be a lossy linear shadow of the exact <em>gradient</em> kernel — precondition
+        that and the semantics the loss kernel misses come back.</p>
 
         <h2><span class="vr-section-num">§1</span> The reproduction</h2>
 
@@ -194,11 +196,13 @@
           <thead><tr><th>representation</th><th>1000-way</th><th>12-way</th><th>2-way</th></tr></thead>
           <tbody>
             <tr><td>mean-RGB</td><td>0.7%</td><td>51.2%</td><td>65.3%</td></tr>
-            <tr><td>pixels 32²</td><td>1.0%</td><td>32.5%</td><td>59.0%</td></tr>
+            <tr><td>pixels 32²</td><td>1.0%</td><td>32.6%</td><td>59.0%</td></tr>
             <tr><td><b>ImageGPT loss kernel</b> (ridge)</td><td class="vr-pos">4.0%</td><td class="vr-pos">66.2%</td><td class="vr-pos">85.8%</td></tr>
-            <tr><td>ImageGPT activations (layer 16)</td><td>11.2%</td><td>70.7%</td><td>89.9%</td></tr>
+            <tr><td>ImageGPT gradient kernel G (§6)</td><td>8.6%</td><td>69.0%</td><td>87.1%</td></tr>
+            <tr><td><b>ImageGPT precond. gradient G<sub>pre</sub></b> (§6)</td><td class="vr-pos">11.4%</td><td class="vr-pos">73.5%</td><td class="vr-pos">89.5%</td></tr>
+            <tr><td>ImageGPT activations (layer 16)</td><td>11.2%</td><td>70.6%</td><td>89.9%</td></tr>
             <tr><td>Inception activations (supervised)</td><td>56.8%</td><td>87.5%</td><td>94.8%</td></tr>
-            <tr><td>Inception loss kernel</td><td class="vr-neg">99.9%†</td><td class="vr-neg">99.3%†</td><td class="vr-neg">99.5%†</td></tr>
+            <tr><td>Inception loss kernel</td><td class="vr-neg">~100%†</td><td class="vr-neg">99.2%†</td><td class="vr-neg">~100%†</td></tr>
           </tbody>
         </table></div>
 
@@ -212,7 +216,65 @@
         CE(<i>f</i>(<i>x</i>), <i>y</i>) — the test label enters its own features, so the ~100%
         is leakage, not accuracy. That is the confound of §2 in its most operational form.</p>
 
-        <h2><span class="vr-section-num">§6</span> What this does and doesn't show</h2>
+        <h2><span class="vr-section-num">§6</span> Addendum: the exact gradient kernel, and what the loss kernel loses</h2>
+
+        <p>A sibling result forced one more experiment. In
+        <a href="../../arch2-training-prediction-symreg/">the ARCH training-prediction run</a>,
+        the exact <button class="tooltip-button" data-define="gradient-kernel">gradient
+        kernel</button> G — raw per-example gradient inner products at the trained weights, no
+        sampling — predicted fine-tuning-induced loss changes 2–3× better than the SGLD loss
+        kernel, and its <button class="tooltip-button" data-define="adam-precond">Adam-preconditioned</button>
+        variant G<sub>pre</sub> better still. Theory says these objects are family: to leading
+        order the loss kernel is the dampened influence function
+        g<i><sub>i</sub></i><sup>T</sup>(H+γI)<sup>−1</sup>g<i><sub>j</sub></i>
+        (<a href="https://arxiv.org/abs/2509.26544">arXiv:2509.26544</a>) — a curvature-filtered
+        gradient Gram. So: compute G exactly for ImageGPT on the same 10k probes (the classifier
+        is already label-saturated and needs no help) and ask which structure lives where. One
+        fp32 backward per image, each 75.7M-dim gradient unit-normalised into an fp16 row of a
+        1.5 TB store, Gram by striped GEMM across 8×H100 in ~75 min, assembled kernel verified
+        against freshly recomputed fp32 gradients to 1.2·10⁻³. No sketching, no projection.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig6_gradient.png" alt="Lift curves for loss, gradient and preconditioned gradient kernels; UMAP of the preconditioned gradient kernel; fine lift by layer depth">
+          <figcaption><b>Fig 6.</b> Left: pooled taxonomic-lift curves (same-label pairs
+          excluded) for three kernels of the <em>same model on the same images</em>. The loss
+          kernel K plateaus at 2.2×; raw G is weaker still; Adam-preconditioned G<sub>pre</sub>
+          reaches 13.2× <em>at the deepest WordNet levels</em>. Middle: UMAP of G<sub>pre</sub> —
+          a global animals↔things hue gradient, visibly more ordered than the loss kernel's map,
+          still nothing like the classifier's islands. Right: fine-depth lift by layer quartile —
+          the semantic sweet spot is mid-early (L6–11), the gradient-space echo of the
+          activation probe's mid-layer finding.</figcaption>
+        </figure>
+
+        <p>Three findings. <b>First, the loss kernel is a lossy shadow of G.</b> Ridge-mapping
+        G's kernel-PCA embedding onto the loss kernel's recovers R² 0.63 against that kernel's
+        own cross-seed ceiling of 0.69 — <b>91% of the explainable loss-kernel geometry is
+        linearly contained in the gradient Gram</b> (CKA 0.79). Sampling the tethered posterior
+        mostly re-measures gradient geometry through a fixed curvature filter; the Laplace
+        picture, verified at ImageNet scale.</p>
+
+        <p><b>Second, the metric was hiding the semantics.</b> Raw G's neighbourhoods are
+        <em>worse</em> than K's (fine lift 1.27 vs 1.75), and no rank-256 whitening of the kernel
+        fixes it (§4's trick fails here too: R² 0.009→0.011). But rescale the gradients in
+        <em>parameter space</em> — divide by √E[g²], the geometry Adam actually trained in —
+        and everything sharpens at once: few-shot 1000-way accuracy triples to 11.4%,
+        <b>matching the model's best activation probe</b> (11.2%, L16); fine-depth lift goes
+        1.75→4.9 with the peak moving from coarse (8,8) to the deepest WordNet levels (16,15);
+        kNN class votes improve 10×; and the linearly-recoverable share of the classifier kernel
+        doubles (3.7%→7.1% of ceiling). No post-hoc transformation <em>of a kernel</em> can do
+        this — G<sub>pre</sub> is a different quadratic form on function space. The
+        Fisher-kernel literature called it (<a href="https://arxiv.org/abs/2202.01944">GAN
+        gradient features beat GAN activations, arXiv:2202.01944</a>); it holds for the loss
+        kernel's own gradients too.</p>
+
+        <p><b>Third, the label channel stays missing</b> — G<sub>pre</sub> reaches CKA 0.16 with
+        the classifier kernel and 7% of its explainable variance, sharpening the §3 verdict
+        rather than overturning it. One more contrast with the sibling run: the LM gradient Gram
+        there was rank-1-dominated (λ₁ = 84% of trace); the iGPT cosine G is genuinely high-rank
+        (λ₁ = 8.6%, 1059 modes for 90% of trace; G<sub>pre</sub> flatter still). Image-model
+        gradient geometry at the pretrained point has no single groove to collapse into.</p>
+
+        <h2><span class="vr-section-num">§7</span> What this does and doesn't show</h2>
 
         <p>The reproduction stands: on a classifier, the loss kernel really does organise
         ImageNet along WordNet lines, robustly across our independent checkpoint and pipeline.
@@ -224,15 +286,25 @@
         The taxonomy predominantly rides on the supervised loss: the label input directly, and
         the 1000-way head geometry it trains.</p>
 
+        <p>The §6 addendum sharpens the diagnosis into a method point: "the loss landscape's
+        grooves" under-report what even <em>gradient</em> geometry knows about the data. The
+        loss kernel is a curvature-filtered compression of G that happens to discard most of the
+        semantics; correct the parameter-space metric first and the same gradients match the
+        best activation probe. If you want a label-free geometric fingerprint of a model, the
+        interesting object is the metric-corrected gradient kernel, not the loss covariance.</p>
+
         <p>Caveats, honestly held: ImageGPT sees 32×32 inputs, so <em>some</em> fine-structure
         collapse is resolution, not labels — though the near-total loss of even coarse lift
         (2.29 → 1.12) and of same-label structure (a 32×32-visible signal, had it existed) says
         resolution is not the main story, and the activation probes prove the model itself holds
-        far more class structure than its kernel shows. The clean follow-ups: a
-        resolution-matched label-free model (LlamaGen-B, null-conditioned, at 256²), and a
-        class-conditional AR model probed with true vs null labels as a dose–response on the
-        label channel. Model scale (76M vs 6.6M) is unmatched in the other direction; nothing
-        smaller exists label-free at any resolution.</p>
+        far more class structure than its kernel shows. G<sub>pre</sub>'s preconditioner is a
+        LESS-style proxy (E[g²] over 64 train minibatches at w*), not the optimiser's actual
+        second-moment state. The clean follow-ups: a resolution-matched label-free model
+        (LlamaGen-B, null-conditioned, at 256²), a class-conditional AR model probed with true
+        vs null labels as a dose–response on the label channel, and D-TRAK-style output-function
+        ablations of G (mean-NLL may not be the most structured scalar). Model scale (76M vs
+        6.6M) is unmatched in the other direction; nothing smaller exists label-free at any
+        resolution.</p>
 
         <div class="vr-lab">
           <dl>
@@ -242,6 +314,7 @@
             <dt>estimators</dt><dd>paper pooled covariance + block-centred (block=50); agreement throughout; raw traces on HF</dd>
             <dt>fleet</dt><dd>phase 1: 1× H100, ~2.1 h/seed · phase 2: 30 chains sharded 1/GPU over 22 H100s (6 singles + 2× 8-GPU), ~95 min/chain, merged after concat-equivalence check</dd>
             <dt>gates</dt><dd>inception 0.683 / 0.713 · igpt 0.937 / 0.944 (pooled / block); igpt split-half 0.95 per seed</dd>
+            <dt>gradient kernels</dt><dd>exact G + G_pre at pretrained w*: 10k fp32 backwards (mean-token NLL, non-embed params), unit-row fp16 store 1.5 TB, striped GEMM 8×H100 ~75 min/kernel; assembled-vs-recomputed max dev 1.2e-3, independent-halves asymmetry ≤ 1.1e-4; per-layer-group partial Grams for free; G_pre preconditioner = mean-normalised (E[g²]+1e-8)^-1/2 over 64 train minibatches</dd>
           </dl>
         </div>
 
@@ -254,10 +327,12 @@
           activations baseline per Chen et al.,
           <a href="https://proceedings.mlr.press/v119/chen20s.html">"Generative Pretraining from Pixels"</a>.
           <br>Artefacts · HF <a href="https://huggingface.co/datasets/arcadia-impact/imagenet-loss-kernel-logs">arcadia-impact/imagenet-loss-kernel-logs</a>
-          (<code>imagenet-kernel-20260708/</code>) — SGLD traces (all 60 chain-seeds), kernels, probe
-          metadata, activation features, every analysis in this page, ledgers with git SHAs + pod IDs.
-          <br>Compute · ≈ 65 H100-hours + change across 9 pods ≈ $200 total; all pods stopped, results
-          verified on HF before teardown.
+          (<code>imagenet-kernel-20260708/</code>) — SGLD traces (all 60 chain-seeds), loss kernels,
+          exact gradient kernels + layer-group Grams (<code>igpt_grad*/</code>), probe metadata,
+          activation features, every analysis in this page, ledgers with git SHAs + pod IDs.
+          <br>Compute · ≈ 85 H100-hours + change across 11 pods ≈ $255 total; all pods stopped, results
+          verified on HF before teardown. Gradient-kernel conventions follow the ARCH run's
+          <code>tp_gram.py</code> (mean-token loss, non-embedding params, single checkpoint, raw dots).
         </div>
       </div>
     </main>
@@ -274,6 +349,8 @@
         "cka": "Centred kernel alignment: Frobenius cosine between double-centred kernel matrices. 1 = identical geometry up to rotation/scale; 0.05 ≈ unrelated.",
         "kpca": "Kernel PCA: eigendecompose the double-centred kernel; coordinates are eigenvectors scaled by √eigenvalue, so mode order = share of kernel variance ('prominence'). The embedding whose axes the linear map is fit over.",
         "kernel-ridge": "One-hot least-squares on the precomputed Gram matrix: α = (K_train + λI)⁻¹Y, scores = K_test,train · α. The strongest simple classifier a kernel supports; λ tuned on an inner validation split.",
+        "gradient-kernel": "G[i,j] = ⟨∇w ℓ(xᵢ; w*), ∇w ℓ(xⱼ; w*)⟩ — inner products of per-image loss gradients at the pretrained weights, over the same non-embedding parameters the SGLD posterior explored. Deterministic (no sampling); the empirical-NTK-style object, computed here exactly. Cosine-normalised for analysis, matching the loss kernel's correlation convention.",
+        "adam-precond": "Rescale each gradient coordinate by 1/√(E[g²]+ε) before taking inner products, with E[g²] estimated over train minibatches at w* and the preconditioner normalised to mean 1 (a LESS-style proxy for Adam's second moment). Measures similarity in the metric the optimiser actually moved in — the single change that exposes the semantics.",
       });
     </script>
   </body>
