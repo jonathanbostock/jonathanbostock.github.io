@@ -250,8 +250,13 @@
                 sketching) linearly contains 91% of the loss kernel's explainable geometry —
                 and its Adam-preconditioned form recovers the semantics the loss kernel drops:
                 few-shot accuracy triples to match the best activation probe, fine WordNet
-                lift 1.75× → 4.9× with the peak at the deepest levels. The grooves
-                under-report what the gradients know.</p>
+                lift 1.75× → 4.9× with the peak at the deepest levels. The closing control:
+                re-sample the loss kernel under the Fisher-metric prior and it does find the
+                taxonomy — but what it finds is the preconditioned gradient kernel plus
+                Monte-Carlo noise (agreement at 98.6% of its own noise ceiling; the gradient
+                kernel predicts a K_pre seed better than the other seed does). The grooves
+                under-report what the gradients know, and sampling them is the expensive way
+                to compute a GEMM.</p>
               <span class="vr-tags">
                 <span class="vr-tag">imagenet</span>
                 <span class="vr-tag">reproduction</span>

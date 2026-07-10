@@ -43,7 +43,9 @@
         kernel itself gets <em>more</em> reproducible (gate 0.94). The WordNet geometry is mostly
         the label channel, not the picture. And an addendum with the knife in: the loss kernel
         turns out to be a lossy linear shadow of the exact <em>gradient</em> kernel — precondition
-        that and the semantics the loss kernel misses come back.</p>
+        that and the semantics the loss kernel misses come back. Re-sample the loss kernel itself
+        in the corrected metric and it agrees: what it recovers is the preconditioned gradient
+        kernel, noisily, at ~100× the cost.</p>
 
         <h2><span class="vr-section-num">§1</span> The reproduction</h2>
 
@@ -198,6 +200,7 @@
             <tr><td>mean-RGB</td><td>0.7%</td><td>51.2%</td><td>65.3%</td></tr>
             <tr><td>pixels 32²</td><td>1.0%</td><td>32.6%</td><td>59.0%</td></tr>
             <tr><td><b>ImageGPT loss kernel</b> (ridge)</td><td class="vr-pos">4.0%</td><td class="vr-pos">66.2%</td><td class="vr-pos">85.8%</td></tr>
+            <tr><td>ImageGPT Fisher-tether kernel K<sub>pre</sub> (§6b)</td><td>2.9%</td><td>62.2%</td><td>82.0%</td></tr>
             <tr><td>ImageGPT gradient kernel G (§6)</td><td>8.6%</td><td>69.0%</td><td>87.1%</td></tr>
             <tr><td><b>ImageGPT precond. gradient G<sub>pre</sub></b> (§6)</td><td class="vr-pos">11.4%</td><td class="vr-pos">73.5%</td><td class="vr-pos">89.5%</td></tr>
             <tr><td>ImageGPT activations (layer 16)</td><td>11.2%</td><td>70.6%</td><td>89.9%</td></tr>
@@ -237,9 +240,12 @@
         <figure class="vr-fig breakout">
           <img src="figs/fig6_gradient.png" alt="Lift curves for loss, gradient and preconditioned gradient kernels; UMAP of the preconditioned gradient kernel; fine lift by layer depth">
           <figcaption><b>Fig 6.</b> Left: pooled taxonomic-lift curves (same-label pairs
-          excluded) for three kernels of the <em>same model on the same images</em>. The loss
+          excluded) for four kernels of the <em>same model on the same images</em>. The loss
           kernel K plateaus at 2.2×; raw G is weaker still; Adam-preconditioned G<sub>pre</sub>
-          reaches 13.2× <em>at the deepest WordNet levels</em>. Middle: UMAP of G<sub>pre</sub> —
+          reaches 13.2× <em>at the deepest WordNet levels</em> — and the gold curve is the
+          punchline of the §6b control: re-<em>sample</em> the loss kernel under the
+          Fisher-metric prior (K<sub>pre</sub>) and it tracks G<sub>pre</sub>, not K.
+          Middle: UMAP of G<sub>pre</sub> —
           a global animals↔things hue gradient, visibly more ordered than the loss kernel's map,
           still nothing like the classifier's islands. Right: fine-depth lift by layer quartile —
           the semantic sweet spot is mid-early (L6–11), the gradient-space echo of the
@@ -274,6 +280,38 @@
         (λ₁ = 8.6%, 1059 modes for 90% of trace; G<sub>pre</sub> flatter still). Image-model
         gradient geometry at the pretrained point has no single groove to collapse into.</p>
 
+        <h2><span class="vr-section-num">§6b</span> The rebuttal experiment: precondition K itself</h2>
+
+        <p>Fair challenge before writing the loss kernel off: maybe it wasn't lossy — maybe it
+        was <em>sampled in the wrong metric</em>. There's only one meaningful way to test that.
+        A correctly preconditioned sampler provably leaves K unchanged (pSGLD changes mixing,
+        not the target), so the metric must go into the <em>target</em>: replace the paper's
+        isotropic tether γ‖w−w*‖² with the
+        <button class="tooltip-button" data-define="fisher-tether">Fisher-metric tether</button>
+        γ(w−w*)ᵀdiag(1/q)(w−w*), q built from the same E[g²] as G<sub>pre</sub>. Linearised,
+        this posterior's loss kernel <em>is</em> G<sub>pre</sub> — so re-running the full SGLD
+        pipeline (identical 15 chains × 2 seeds × 500 draws; a 3-line change to the update)
+        measures exactly whether the sampled, nonlinear, finite-temperature kernel adds anything
+        beyond its linearisation.</p>
+
+        <p>Result: <b>the metric was the failure — and the sampler adds nothing but noise.</b>
+        K<sub>pre</sub> finds the semantics K missed (fine lift 1.75→3.23, peak relocated to the
+        deepest WordNet levels, kNN class votes ×6, CKA to G<sub>pre</sub> 0.21→0.685 — the gold
+        curve in Fig 6). But its reproducibility collapses (gate 0.937→<b>0.28</b>: the Fisher
+        metric suppresses exactly the loud common-mode directions that made K stable), and the
+        attenuation algebra closes the case: a gate of 0.28 caps any noise-free target's
+        agreement with the 2-seed ensemble at 0.661, and G<sub>pre</sub> hits 0.652 — <b>98.6%
+        of the ceiling</b>. Sharpest form: ridge-mapping embeddings, G<sub>pre</sub> predicts a
+        K<sub>pre</sub> seed (R² 0.51) <em>better than the other K<sub>pre</sub> seed does</em>
+        (R² 0.13). The infinite-sample K<sub>pre</sub> is statistically indistinguishable from
+        G<sub>pre</sub>: thirty GPU-hours of Langevin sampling produced a noisy Monte-Carlo
+        estimate of a matrix one GEMM over the gradient store computes exactly. (The noise has
+        teeth, too: 1000-way kernel-ridge <em>drops</em> below isotropic K, 0.025 vs 0.040,
+        even as robust local kNN improves 6× — global solvers amplify estimator noise.
+        Contrast the isotropic pair: K's ensemble ceiling is 0.98 but it agrees with raw G at
+        only 0.49 — <em>there</em> the curvature filter genuinely reshapes the kernel; under
+        the Fisher tether, the linearisation is the whole story.)</p>
+
         <h2><span class="vr-section-num">§7</span> What this does and doesn't show</h2>
 
         <p>The reproduction stands: on a classifier, the loss kernel really does organise
@@ -290,8 +328,13 @@
         grooves" under-report what even <em>gradient</em> geometry knows about the data. The
         loss kernel is a curvature-filtered compression of G that happens to discard most of the
         semantics; correct the parameter-space metric first and the same gradients match the
-        best activation probe. If you want a label-free geometric fingerprint of a model, the
-        interesting object is the metric-corrected gradient kernel, not the loss covariance.</p>
+        best activation probe. And §6b closes the loop in both directions: the loss-covariance
+        <em>instrument</em> is redeemed in principle — sampled under the right prior geometry,
+        it does see the taxonomy — and retired in practice, because what it sees is G<sub>pre</sub>
+        plus Monte-Carlo noise, at ~100× the compute of the GEMM that computes G<sub>pre</sub>
+        exactly (and estimating the metric requires the gradients anyway). If you want a
+        label-free geometric fingerprint of a model, the interesting object is the
+        metric-corrected gradient kernel, not the loss covariance.</p>
 
         <p>Caveats, honestly held: ImageGPT sees 32×32 inputs, so <em>some</em> fine-structure
         collapse is resolution, not labels — though the near-total loss of even coarse lift
@@ -315,6 +358,7 @@
             <dt>fleet</dt><dd>phase 1: 1× H100, ~2.1 h/seed · phase 2: 30 chains sharded 1/GPU over 22 H100s (6 singles + 2× 8-GPU), ~95 min/chain, merged after concat-equivalence check</dd>
             <dt>gates</dt><dd>inception 0.683 / 0.713 · igpt 0.937 / 0.944 (pooled / block); igpt split-half 0.95 per seed</dd>
             <dt>gradient kernels</dt><dd>exact G + G_pre at pretrained w*: 10k fp32 backwards (mean-token NLL, non-embed params), unit-row fp16 store 1.5 TB, striped GEMM 8×H100 ~75 min/kernel; assembled-vs-recomputed max dev 1.2e-3, independent-halves asymmetry ≤ 1.1e-4; per-layer-group partial Grams for free; G_pre preconditioner = mean-normalised (E[g²]+1e-8)^-1/2 over 64 train minibatches</dd>
+            <dt>K_pre</dt><dd>Fisher-tether SGLD: w ← w − (lr/2)(nβ·q⊙ĝ + γ(w−w*)) + √(lr)·√q⊙ξ, q = s²/mean(s²) (same inv_sqrt_v as G_pre, recomputed to 9-digit agreement); identical hyperparameters to K; pilot ‖w−w*‖ 141 = isotropic; 30 chains, 2× 8×H100 ~2.5 h; gate 0.280; reproduction spec in <code>KPRE_SPEC.md</code></dd>
           </dl>
         </div>
 
@@ -330,9 +374,10 @@
           (<code>imagenet-kernel-20260708/</code>) — SGLD traces (all 60 chain-seeds), loss kernels,
           exact gradient kernels + layer-group Grams (<code>igpt_grad*/</code>), probe metadata,
           activation features, every analysis in this page, ledgers with git SHAs + pod IDs.
-          <br>Compute · ≈ 85 H100-hours + change across 11 pods ≈ $255 total; all pods stopped, results
+          <br>Compute · ≈ 140 H100-hours + change across 14 pods ≈ $427 total; all pods deleted, results
           verified on HF before teardown. Gradient-kernel conventions follow the ARCH run's
-          <code>tp_gram.py</code> (mean-token loss, non-embedding params, single checkpoint, raw dots).
+          <code>tp_gram.py</code> (mean-token loss, non-embedding params, single checkpoint, raw dots);
+          K_pre sampling spec in <code>KPRE_SPEC.md</code> (repo + HF).
         </div>
       </div>
     </main>
@@ -351,6 +396,7 @@
         "kernel-ridge": "One-hot least-squares on the precomputed Gram matrix: α = (K_train + λI)⁻¹Y, scores = K_test,train · α. The strongest simple classifier a kernel supports; λ tuned on an inner validation split.",
         "gradient-kernel": "G[i,j] = ⟨∇w ℓ(xᵢ; w*), ∇w ℓ(xⱼ; w*)⟩ — inner products of per-image loss gradients at the pretrained weights, over the same non-embedding parameters the SGLD posterior explored. Deterministic (no sampling); the empirical-NTK-style object, computed here exactly. Cosine-normalised for analysis, matching the loss kernel's correlation convention.",
         "adam-precond": "Rescale each gradient coordinate by 1/√(E[g²]+ε) before taking inner products, with E[g²] estimated over train minibatches at w* and the preconditioner normalised to mean 1 (a LESS-style proxy for Adam's second moment). Measures similarity in the metric the optimiser actually moved in — the single change that exposes the semantics.",
+        "fisher-tether": "Replace the localising prior's isotropic quadratic γ‖w−w*‖² with γ·Σₖ(wₖ−w*ₖ)²/qₖ, q = s²/mean(s²) from the same per-coordinate gradient scale as G_pre: coordinates with loud typical gradients get a tether up to ~10⁵× stiffer (pinned at w*), the quiet bulk fluctuates as before. Sampled with preconditioned Langevin (loss-grad ×q, noise ×√q, tether untouched) so mixing stays uniform. Total posterior width is unchanged (mean-1 q); the fluctuation budget is redistributed. Linearised, this posterior's loss kernel equals G_pre.",
       });
     </script>
   </body>
