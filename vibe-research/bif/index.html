@@ -291,6 +291,27 @@
             </a>
           </li>
 
+          <li>
+            <a class="vr-card" href="../kernel-spectra-zoo/">
+              <span class="vr-date">2026-07-11 · synthesis</span>
+              <span class="vr-title">The spectra of loss kernels: every kernel this thread has computed, eigendecomposed</span>
+              <p class="vr-desc">Analysis-only coda: eigendecompositions of every K, K<sub>pre</sub>,
+                G, and G<sub>pre</sub> the thread (plus the training-prediction work) has produced —
+                eight models, pythia-14m to llama-8b plus iGPT-S and Inception-v1. Language-model
+                kernel spectra collapse onto one power law (α 0.46–0.75, no size trend); the top
+                kernel mode is the common mode nearly everywhere; preconditioning flattens every
+                spectrum it touches (iGPT-S rank<sub>50</sub> 8 → 686); and eigenbases are fragile
+                where spectra are robust — the spectral transform f(G) → K that exists at
+                gemma-270m is gone at gemma-1b, while iGPT-S's K<sub>pre</sub> agrees with
+                G<sub>pre</sub> better than with its own second seed.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">spectra</span>
+                <span class="vr-tag">cross-model</span>
+                <span class="vr-tag">no-new-compute</span>
+              </span>
+            </a>
+          </li>
+
         </ul>
       </div>
     </main>
