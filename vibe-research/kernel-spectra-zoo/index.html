@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+    <title>The spectra of loss kernels — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="Eigendecompositions of every loss kernel and gradient Gram we've computed — K, K_pre, G, G_pre across eight models from pythia-14m to llama-8b plus two image models. The spectrum is a universal power law that survives scale transfer; the eigenbasis is not.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>The spectra of loss kernels</h1>
+        <p class="vr-byline">
+          <span>2026-07-11 · analysis-only</span>
+          <span>local CPU · $0 (all data pre-existing)</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>Across the <a href="../bif/">loss-kernel thread</a> and the
+        <a href="../arch2-training-prediction-symreg/">training-prediction work</a> we have
+        quietly accumulated a zoo of second-moment matrices: SGLD-sampled
+        <button class="tooltip-button" data-define="loss-kernel">loss kernels</button> <i>K</i>
+        on eight different models, two <i>preconditioned</i> loss kernels
+        <i>K</i><sub>pre</sub>, and exact gradient Grams <i>G</i> / Adam-preconditioned Grams
+        <i>G</i><sub>pre</sub> at three of those models. This page eigendecomposes all of
+        them — no new training, no new sampling, just <code>eigh</code> on matrices we already
+        had — and asks three questions: what do the spectra look like, what does
+        preconditioning do to them, and when do two of these objects share an
+        <em>eigenbasis</em> rather than just a spectrum?</p>
+
+        <p class="vr-pull">Every loss kernel we have ever computed has a heavy-tailed
+        power-law spectrum whose top mode leans on the common mode — and the spectrum
+        transfers across model scale while the eigenbasis does not: the spectral transform
+        f(G) → K that exists at gemma-270m is gone at gemma-1b.</p>
+
+        <h2><span class="vr-section-num">§1</span>The four objects, and what we have</h2>
+
+        <p>All four matrices are M×M Grams over a fixed probe set of documents (or images),
+        computed once at the trained checkpoint <i>w</i><sub>0</sub>:</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>K</dt><dd>loss kernel: covariance of per-document losses under a localized
+              <button class="tooltip-button" data-define="sgld">SGLD</button> posterior around
+              <i>w</i><sub>0</sub> (the <button class="tooltip-button" data-define="bif">BIF</button>
+              estimator; block-centred, seed-gated)</dd>
+            <dt>K<sub>pre</sub></dt><dd>the same loss kernel sampled under <em>preconditioned</em>
+              dynamics — RMSProp-SGLD at its own calibrated step size (pythia-14m gold), or an
+              isotropic sampler with a <button class="tooltip-button" data-define="fisher-tether">Fisher-metric
+              localizer</button> (iGPT-S)</dd>
+            <dt>G</dt><dd>exact gradient Gram <i>G<sub>ij</sub></i> = <i>g<sub>i</sub></i> ·
+              <i>g<sub>j</sub></i> at <i>w</i><sub>0</sub> (one-checkpoint TracIn; cosine-normalized
+              for iGPT-S)</dd>
+            <dt>G<sub>pre</sub></dt><dd>Adam-preconditioned Gram
+              <i>g<sub>i</sub></i>ᵀ diag(1/√<i>v</i>) <i>g<sub>j</sub></i>, LESS-style</dd>
+          </dl>
+        </div>
+
+        <p>Theory says these are all the same thing in different metrics: linearize the model
+        and the delta method gives <i>K</i> ≈ <i>J</i> Σ <i>J</i>ᵀ where Σ is the posterior
+        covariance — a curvature-filtered Gram of the same per-document gradients that build
+        <i>G</i> = <i>JJ</i>ᵀ and <i>G</i><sub>pre</sub> = <i>JPJ</i>ᵀ. Whether that
+        relationship is <em>visible downstairs</em>, in 512-doc space, is an empirical
+        question. The coverage:</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>model</th><th>probe set</th><th class="num">M</th><th>K</th><th>K<sub>pre</sub></th><th>G</th><th>G<sub>pre</sub></th><th>experiment</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>pythia-14m</td><td>pile, 8 domains</td><td class="num">1024</td><td class="vr-pos">✓ gold</td><td class="vr-pos">✓ pSGLD</td><td>—</td><td>—</td><td>sampler A/B</td></tr>
+              <tr><td>pythia-160m</td><td>pile, 8 domains</td><td class="num">400</td><td class="vr-pos">✓ ×2 seeds</td><td>—</td><td>—</td><td>—</td><td>estimator validation</td></tr>
+              <tr><td>gemma-3-270m</td><td>pile, 8 domains</td><td class="num">512</td><td class="vr-pos">✓</td><td>—</td><td class="vr-pos">✓</td><td class="vr-pos">✓</td><td>training-prediction (public)</td></tr>
+              <tr><td>gemma-3-1b</td><td>pile, 8 domains</td><td class="num">512</td><td class="vr-pos">✓ v1+v2</td><td>—</td><td class="vr-pos">✓</td><td class="vr-pos">✓</td><td>training-prediction (held-out)</td></tr>
+              <tr><td>gemma-3-4b-it</td><td>persona responses</td><td class="num">376</td><td class="vr-pos">✓ ×2 seeds</td><td>—</td><td>—</td><td>—</td><td>character-BIF (OCT)</td></tr>
+              <tr><td>llama-3.1-8b-it</td><td>persona responses</td><td class="num">490</td><td class="vr-pos">✓ ×2 seeds</td><td>—</td><td>—</td><td>—</td><td>character-BIF (TIDE)</td></tr>
+              <tr><td>iGPT-S</td><td>ImageNet val</td><td class="num">10000</td><td class="vr-pos">✓ ×2 seeds</td><td class="vr-pos">✓ Fisher ×2</td><td class="vr-pos">✓ cos</td><td class="vr-pos">✓ cos</td><td>ImageNet kernel</td></tr>
+              <tr><td>inception-v1</td><td>ImageNet val</td><td class="num">10000</td><td class="vr-pos">✓ ×2 seeds</td><td>—</td><td>—</td><td>—</td><td>ImageNet kernel</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>iGPT-S is the only cell with the full 2×2 — both kernels and both Grams — and
+        pythia-14m is the only direct K-vs-K<sub>pre</sub> sampler A/B on language. Nobody has
+        sampled a preconditioned kernel at Gemma scale yet (that's the obvious gap this page
+        leaves open).</p>
+
+        <h2><span class="vr-section-num">§2</span>Gemma-3-1B: same spectrum, different basis</h2>
+
+        <p>The training-prediction study left a specific puzzle. Its winning formula —
+        developed on a public gemma-3-270m grid, scored on a sequestered gemma-3-1b
+        reproduction — includes a pairwise-interaction term built from the top eigenmode of
+        the exact Gram <i>G</i>, and the post-hoc ablations found that this term is nearly
+        substitutable at the development scale: source it from the <em>loss kernel's</em> top
+        eigenmode instead and the public-grid score barely moves (LDS 0.659 → 0.627). But the
+        same substitution <em>halves</em> the held-out score at 1b (0.641 → 0.370). Somewhere
+        between 270m and 1b, K's eigenvectors stop being interchangeable with G's. The
+        spectral decomposition locates the change:</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig1_gemma1b.png" alt="Three panels: gemma-3-1b spectra of G, G_pre, K v1 and v2; subspace overlap curves for K~G at both scales against controls; and transform-fit dumbbells showing the spectral transform collapsing from R² 0.88 at 270m to 0.25 at 1b.">
+          <figcaption><b>Fig. 1</b> · gemma-3-1b. <b>Left:</b> trace-normalized eigenvalue decay.
+          <i>G</i> is rank-1 dominated (λ₁ = 92% of trace); <i>G</i><sub>pre</sub> is flat
+          (λ₁ = 16%); <i>K</i> sits in between (λ₁ = 34%) — and beyond rank ~3 all three decay
+          with the <em>same</em> power law (slope 0.74 for K and G alike). The under-sampled v1
+          kernel shows what estimator starvation looks like: a too-steep slope (1.06) and a tail
+          that dies at rank ≈ 250. <b>Middle:</b> overlap of top-<i>k</i> eigenspaces.
+          <i>G</i><sub>pre</sub>~<i>G</i> (violet) is the "same basis, different metric" control;
+          K seed0~seed1 (grey dashes) is the noise ceiling; K~G at 1b (orange) sits far below
+          both until <i>k</i> ≈ 64, where it converges to the seed ceiling. <b>Right:</b> best
+          spectral transform <i>f</i>(<i>G</i>) → <i>K</i> (double-centred Frobenius R², matrix
+          functions preserve eigenvectors): at 270m a power law <i>c·G</i><sup>0.6</sup> reaches
+          0.88 of a 0.89 ceiling; at 1b the ceiling itself collapses to 0.29 — barely above the
+          0.22 random-basis floor.</figcaption>
+        </figure>
+
+        <p>Three readings, in order of how much they surprised me:</p>
+
+        <ul>
+          <li><b>K and G share a spectrum but not an eigenbasis.</b> At 270m the two matrices
+          are strongly related as patterns (centered <button class="tooltip-button"
+          data-define="cka">CKA</button> 0.92; the best matrix function of <i>G</i> reconstructs
+          88% of <i>K</i>'s centered Frobenius mass). At 1b the same pipeline, same probe set,
+          same estimator (v2, 2-seed gate 0.70) gives CKA 0.10, and <em>no</em> spectral
+          transform can do better than 0.29 — the eigenvectors have decoupled, so nothing that
+          preserves them can bridge the gap. Meanwhile both spectra still decay at slope 0.74.
+          A term sourced from K's eigenmodes can imitate one sourced from G's only while the
+          bases align — at 270m they do, at 1b they don't, and the ablation table's collapse
+          (0.63 → 0.37) is that fact showing up in LDS units.</li>
+          <li><b>K's top eigenvector is the common mode; G's is not.</b> K's leading mode has
+          overlap 0.99 with the uniform vector — "every document's loss moves together" — while
+          G's leading mode overlaps uniform at only 0.57. The fine-tuning experiments measured
+          this directly: 99.2% of the out-of-subset response is a universal improvement
+          direction. The loss kernel <em>sees</em> that direction; the raw gradient Gram
+          mostly doesn't.</li>
+          <li><b>Estimator quality shows up in the spectrum tail first.</b> The v1 kernel
+          (too few effective samples) matched v2 at cos 0.97 in raw pattern but its spectrum
+          told the truth: slope 1.06 vs 0.74 and a rank-250 cliff. A power-law slope check is
+          a cheap under-sampling alarm that doesn't need a second seed.</li>
+        </ul>
+
+        <h2><span class="vr-section-num">§3</span>The zoo: one power law everywhere</h2>
+
+        <p>Same decomposition, every model. To compare kernels across probe sets and
+        amplitude scales, the figure and table use the correlation flavour (unit
+        diagonal); Fig. 1's covariance-flavour numbers differ slightly.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig2_zoo.png" alt="Loss-kernel eigenspectra for six language models and three image-model kernels, all approximately power-law.">
+          <figcaption><b>Fig. 2</b> · Trace-normalized loss-kernel spectra (correlation flavour),
+          log–log. <b>Left:</b> six language models spanning 14M→8B parameters, two probe-set
+          types (pile documents, persona responses), three model families — the decay exponents
+          α span only 0.46–0.75, with no visible trend in model size. <b>Right:</b> the image
+          models. iGPT-S's kernel looks like the language kernels (α 1.16 at the top, uniform-ish
+          leading mode); the Fisher-tethered K<sub>pre</sub> is far flatter. Inception-v1 is the
+          one supervised model in the zoo.</figcaption>
+        </figure>
+
+        <p>Numbers for every kernel and Gram (kernels in correlation flavour, for
+        cross-model comparability):</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th></th><th>model</th><th>note</th><th class="num">M</th><th class="num">&lambda;&#8321;/tr</th><th class="num">&alpha;</th><th class="num">rank&#8325;&#8320;</th><th class="num">rank&#8329;&#8320;</th><th class="num">u&#8321;</th><th class="num">seed CKA</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><b>K</b></td><td>pythia-14m</td><td>pile · gold SGLD</td><td class="num">1024</td><td class="num">0.065</td><td class="num">0.72</td><td class="num">90</td><td class="num">627</td><td class="num">0.58</td><td class="num">—</td></tr>
+              <tr><td><b></b></td><td>pythia-160m</td><td>pile · 2 seeds</td><td class="num">400</td><td class="num">0.361</td><td class="num">0.46</td><td class="num">21</td><td class="num">192</td><td class="num">0.98</td><td class="num">0.93</td></tr>
+              <tr><td><b></b></td><td>gemma-3-270m</td><td>pile</td><td class="num">512</td><td class="num">0.390</td><td class="num">0.67</td><td class="num">5</td><td class="num">175</td><td class="num">0.99</td><td class="num">—</td></tr>
+              <tr><td><b></b></td><td>gemma-3-1b</td><td>pile · v2</td><td class="num">512</td><td class="num">0.389</td><td class="num">0.59</td><td class="num">13</td><td class="num">205</td><td class="num">0.98</td><td class="num">0.65</td></tr>
+              <tr><td><b></b></td><td>gemma-3-4b-it</td><td>persona responses</td><td class="num">376</td><td class="num">0.296</td><td class="num">0.60</td><td class="num">23</td><td class="num">157</td><td class="num">0.99</td><td class="num">0.51</td></tr>
+              <tr><td><b></b></td><td>llama-3.1-8b-it</td><td>persona responses</td><td class="num">490</td><td class="num">0.189</td><td class="num">0.75</td><td class="num">27</td><td class="num">173</td><td class="num">0.96</td><td class="num">0.68</td></tr>
+              <tr><td><b></b></td><td>igpt-s</td><td>ImageNet</td><td class="num">10000</td><td class="num">0.344</td><td class="num">1.16</td><td class="num">9</td><td class="num">1180</td><td class="num">0.98</td><td class="num">0.93</td></tr>
+              <tr><td><b></b></td><td>inception-v1</td><td>ImageNet · supervised</td><td class="num">10000</td><td class="num">0.027</td><td class="num">1.05</td><td class="num">261</td><td class="num">2734</td><td class="num">0.88</td><td class="num">0.69</td></tr>
+              <tr><td><b>K<sub>pre</sub></b></td><td>pythia-14m</td><td>RMSProp-SGLD gold</td><td class="num">1024</td><td class="num">0.088</td><td class="num">0.49</td><td class="num">167</td><td class="num">700</td><td class="num">0.54</td><td class="num">—</td></tr>
+              <tr><td><b></b></td><td>igpt-s</td><td>Fisher tether</td><td class="num">10000</td><td class="num">0.013</td><td class="num">0.79</td><td class="num">715</td><td class="num">4620</td><td class="num">0.86</td><td class="num">0.34</td></tr>
+              <tr><td><b>G</b></td><td>gemma-3-270m</td><td>raw Gram</td><td class="num">512</td><td class="num">0.838</td><td class="num">0.74</td><td class="num">1</td><td class="num">31</td><td class="num">0.57</td><td class="num">—</td></tr>
+              <tr><td><b></b></td><td>gemma-3-1b</td><td>raw Gram</td><td class="num">512</td><td class="num">0.918</td><td class="num">0.74</td><td class="num">1</td><td class="num">1</td><td class="num">0.57</td><td class="num">—</td></tr>
+              <tr><td><b></b></td><td>igpt-s</td><td>cosine Gram</td><td class="num">10000</td><td class="num">0.086</td><td class="num">1.33</td><td class="num">22</td><td class="num">1059</td><td class="num">0.16</td><td class="num">—</td></tr>
+              <tr><td><b>G<sub>pre</sub></b></td><td>gemma-3-270m</td><td>Adam-precond.</td><td class="num">512</td><td class="num">0.092</td><td class="num">0.73</td><td class="num">52</td><td class="num">347</td><td class="num">0.31</td><td class="num">—</td></tr>
+              <tr><td><b></b></td><td>gemma-3-1b</td><td>Adam-precond.</td><td class="num">512</td><td class="num">0.158</td><td class="num">0.75</td><td class="num">43</td><td class="num">332</td><td class="num">0.56</td><td class="num">—</td></tr>
+              <tr><td><b></b></td><td>igpt-s</td><td>cosine, precond.</td><td class="num">10000</td><td class="num">0.020</td><td class="num">0.66</td><td class="num">1497</td><td class="num">7414</td><td class="num">0.87</td><td class="num">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:0.85em">Kernels shown in correlation flavour (unit diagonal) for cross-model comparability — Fig.&nbsp;1 quotes the covariance flavour, hence small differences. Grams as stored (iGPT&#8217;s are cosine-normalized). &alpha; = power-law decay exponent fit over ranks 3&hairsp;&ndash;&hairsp;M/3; rank<sub>q</sub> = modes holding q% of the trace; u&#8321; = |top eigenvector &middot; uniform|; seed CKA = centered CKA between the two seed kernels (an eigen-pattern noise ceiling).</p>
+
+        <p>Consistent facts across the zoo: the spectrum is heavy-tailed everywhere
+        (rank<sub>90</sub> is a third of M, give or take — never low-rank in the "top ten
+        modes suffice" sense), and the leading eigenvector is close to the uniform vector
+        nearly everywhere (u-overlap 0.53–0.99, strongest for the Gemma/llama kernels). The
+        power-law exponent is remarkably insensitive to model size <em>within</em> language —
+        α spans just 0.46–0.75 from 14M to 8B parameters, across three model families and two
+        completely different probe-set designs — while the image kernels run steeper
+        (α ≈ 0.8–1.2). The apparent outliers are estimator stories, not model stories:
+        pythia-160m's α = 0.46 comes from the noisiest instrument in the table (2 seeds,
+        early validation-era chains), and gemma-1b's v1 kernel steepening to 1.06 is pure
+        under-sampling (§2).</p>
+
+        <h2><span class="vr-section-num">§4</span>What preconditioning does: flatten</h2>
+
+        <p>We have three independent versions of "the same object, with and without a
+        preconditioner": the pythia-14m sampler A/B (SGLD vs RMSProp-SGLD, both at their own
+        calibrated step size), the iGPT-S Fisher-tether control, and the exact Grams
+        G → G<sub>pre</sub> at three models. All of them move the same direction:</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig3_precond.png" alt="Three panels: pythia-14m K vs K_pre spectra; iGPT-S full 2x2 spectra; dumbbell chart of rank50/M moving right under preconditioning for five instances.">
+          <figcaption><b>Fig. 3</b> · Preconditioning flattens the spectrum, in every instance
+          we have. <b>Left:</b> pythia-14m gold kernels — the RMSProp-preconditioned sampler's
+          kernel needs 107 modes for half its variance where plain SGLD needs 57, with the
+          mid-band slope dropping 0.87 → 0.65. <b>Middle:</b> the iGPT-S 2×2. The kernels and
+          the Grams pair up: K with G (steep, concentrated), K<sub>pre</sub> with G<sub>pre</sub>
+          (flat, high-rank). <b>Right:</b> rank<sub>50</sub>/M for each raw → preconditioned
+          pair.</figcaption>
+        </figure>
+
+        <p>The iGPT-S numbers are the dramatic ones: the Fisher tether takes λ₁/tr from 0.35
+        to 0.013 and rank<sub>50</sub> from 8 to 686 — an ~85× increase in how many modes carry
+        the bulk. This is exactly what the ImageNet experiment concluded by other means:
+        the isotropic kernel is dominated by a few loud common-mode directions (reproducible,
+        semantically crude), and the preconditioner suppresses precisely those, exposing the
+        high-rank semantic structure underneath — at the cost of per-seed reproducibility
+        (2-seed gate 0.94 → 0.28). The same trade shows up in the training-prediction work as
+        <em>raw-covariance K degrading as the optimizer departs from SGD</em> while
+        G<sub>pre</sub> is the best rank predictor for every optimizer: the flat, whitened
+        geometry is the one fine-tuning actually moves in.</p>
+
+        <h2><span class="vr-section-num">§5</span>Which pairs share geometry?</h2>
+
+        <figure class="vr-fig">
+          <img src="figs/fig4_alignment.png" alt="Lollipop chart of centered CKA for eight matrix pairs, with 2-seed noise ceilings marked.">
+          <figcaption><b>Fig. 4</b> · Centered CKA between pairs, judged against each kernel's
+          own 2-seed noise ceiling (grey ticks) where available. Alignment is pair- and
+          scale-dependent: the theory pair K<sub>pre</sub>~G<sub>pre</sub> at iGPT-S is the
+          strongest cross-family agreement in the zoo, K~G collapses at gemma-1b, and
+          G<sub>pre</sub>~G is high only where the raw Gram is rank-1-dominated. The
+          K<sub>pre</sub>~G<sub>pre</sub> dot sitting <em>right of</em> its own seed tick is
+          not an error: the comparison uses the 2-seed ensemble kernel, which is cleaner
+          than either seed — G<sub>pre</sub> is the de-noised K<sub>pre</sub>.</figcaption>
+        </figure>
+
+        <ul>
+          <li><b>The pair theory most wants to be equal, is.</b> Linearized, the loss kernel
+          sampled under the Fisher-metric prior <em>is</em> G<sub>pre</sub> — and at iGPT-S,
+          K<sub>pre</sub>~G<sub>pre</sub> is the strongest cross-family alignment in the zoo:
+          CKA 0.67 with top-eigenvector overlap 0.97, and the transform fit is essentially
+          <em>linear</em> (γ = 0.92, at 99% of its spectral ceiling). Meanwhile the two
+          K<sub>pre</sub> seeds agree with <em>each other</em> at only CKA 0.34 — the exact
+          Gram matches the sampled kernel better than the kernel matches itself. The
+          ImageNet analysis had already concluded by other means that K<sub>pre</sub> is
+          G<sub>pre</sub> plus Monte-Carlo noise; the eigenbasis agrees.</li>
+          <li><b>K~G alignment is not a monotone scale story.</b> CKA 0.92 at gemma-270m,
+          0.10 at gemma-1b, 0.57 at iGPT-S (0.79 with both sides diagonal-normalized —
+          flavour matters at iGPT-S because the stored Gram is cosine while K is a raw
+          covariance). Whatever controls the collapse, it isn't parameter count alone.</li>
+          <li><b>"Within family" isn't automatic either.</b> G<sub>pre</sub>~G keeps CKA
+          0.49–0.84 at the Gemmas — where raw G is rank-1-dominated and its top eigenvector
+          survives preconditioning verbatim (overlap 0.999 at 1b) — but drops to 0.15 at
+          iGPT-S, where the cosine Gram is already high-rank and the preconditioner genuinely
+          reshuffles the basis. In doc space, preconditioning is a rescaling at LLM scale and
+          a reshaping at iGPT-S.</li>
+          <li><b>Sampler choice barely matters; metric choice does.</b> The pythia-14m
+          sampler A/B (plain vs RMSProp SGLD, each at its own calibrated ε) leaves the kernel
+          pattern at CKA 0.82 — consistent with that experiment's conclusion that the sampler
+          swap changes the kernel less than a 10× step-size change. Changing the
+          <em>localizer metric</em> (iGPT-S Fisher tether) is what actually moves the
+          eigenbasis (K<sub>pre</sub>~K CKA 0.14).</li>
+          <li><b>So when is K "just f(G)"?</b> Apparently: when the model is small relative to
+          the probe task, or when you sample in the right metric. At 270m the posterior
+          curvature filter behaves like a matrix function of G (γ ≈ 0.6 — roughly a
+          square-root-ish shrinkage of G's spectrum). At 1b it doesn't, and the residual —
+          whatever K measures that no f(G) can express — is exactly the part that made the
+          loss kernel a complementary feature in the training-prediction formulas rather than
+          a redundant one.</li>
+        </ul>
+
+        <h2><span class="vr-section-num">§6</span>Take-aways and loose ends</h2>
+
+        <ul>
+          <li><b>Spectra are the transferable observable.</b> Power-law slope and concentration
+          survive a 4× scale jump that destroys eigenvector alignment. If a downstream formula
+          must transfer across scales, key its <em>constants</em> to spectral summaries
+          (λ₁/tr, slope, rank fractions) and recompute eigenvectors fresh at the new scale —
+          never carry one scale's eigenmodes to another. The winning training-prediction
+          formula obeys this by construction (its only adaptive constant is derived from
+          λ₁/tr G at score time), before we knew why it should.</li>
+          <li><b>A slope check is a free estimator diagnostic.</b> Under-sampled kernels
+          steepen and truncate (v1 at 1b: α 0.74 → 1.06, dead tail past rank 250). Cheap to
+          compute, no second seed needed.</li>
+          <li><b>The 2×2 is really a 1×2.</b> Preconditioning is the axis that matters:
+          K pairs with G, K<sub>pre</sub> pairs with G<sub>pre</sub>, and the pre-column is
+          flatter, more semantic, and less reproducible per-seed in every instance we have.</li>
+          <li><b>Loose end: no K<sub>pre</sub> at Gemma scale.</b> The iGPT-S result (K<sub>pre</sub>
+          ≈ G<sub>pre</sub> + noise) retired the sampled kernel for that setup, but the 1b
+          alignment collapse is exactly the situation where a Fisher-tethered K<sub>pre</sub>
+          would be informative: does sampling in the right metric restore the K–G bridge that
+          the isotropic kernel loses at scale? One 8×H100 afternoon would answer it.</li>
+          <li><b>Loose end: where does the eigenbasis decouple?</b> We have 270m (aligned) and
+          1b (not). A 540m-ish intermediate would locate the transition and say whether it's
+          gradual or sharp.</li>
+        </ul>
+
+        <div class="vr-colophon">
+          <p>Analysis: <code>experiments/kernel_spectra_zoo/</code> in
+          <a href="https://github.com/ArcadiaImpact/latent-learning">latent-learning</a>
+          (code, SPEC/RESULTS, and the full stats/pairs/fits JSON + eigenvalue arrays;
+          compute_spectra.py generalizes the held-out spectral ablation
+          <code>experiments/training_prediction/ablations/spectral_transform.py</code> — same
+          math, bands adapted to M — and independently reproduces its numbers, the published
+          iGPT Gram spectra, and rmspropsgld's gold cross-sampler CKA). Data:
+          training-prediction grids (<code>results_public/</code> + held-out 1b),
+          llm_validation pythia-pile kernels, rmspropsgld gold kernels, character-BIF k64
+          kernels, and <code>arcadia-impact/imagenet-loss-kernel-logs</code> (iGPT-S /
+          Inception-v1 kernels + Grams). Papers: the
+          <a href="https://arxiv.org/abs/2509.26537">Loss Kernel</a>,
+          <a href="https://arxiv.org/abs/2509.26544">BIF</a>,
+          <a href="https://arxiv.org/abs/2402.04333">LESS</a> (G<sub>pre</sub>).
+          No GPUs were harmed: sixteen 10,000×10,000 eigendecompositions (~75 s each; the
+          slow part was 21 QR random-basis baselines) ran niced in the background on a
+          16-core desktop over ~2.6 h.</p>
+        </div>
+      </div>
+    </main>
+
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "loss-kernel": "K_ij = Cov(ℓ_i, ℓ_j) under a posterior sampled around the trained checkpoint: how document i's loss co-fluctuates with document j's when the weights jiggle. Estimated by SGLD chains localized at w₀; the Bayesian influence function is its rescaled version.",
+        "sgld": "Stochastic-gradient Langevin dynamics: SGD plus calibrated Gaussian noise plus a localizing pull γ(w−w₀), so the chain samples a tempered local posterior around the checkpoint instead of optimizing.",
+        "bif": "Bayesian influence function (arXiv:2509.26544): the posterior covariance of per-sample losses, used as an influence measure. The loss kernel is the same matrix read as a similarity kernel.",
+        "fisher-tether": "Replace the isotropic localizer γ‖w−w₀‖² with γ(w−w₀)ᵀdiag(1/q)(w−w₀), q ∝ the RMSProp-style second-moment estimate — the same diagonal metric that defines G_pre. Linearized, the posterior loss kernel under this prior is exactly G_pre.",
+        "cka": "Centered kernel alignment: cosine similarity between double-centred matrices, ⟨A_c, B_c⟩ / (‖A_c‖‖B_c‖). 1 = same relational pattern, 0 = unrelated. Insensitive to overall scale and to the uniform common mode.",
+      });
+    </script>
+  </body>
+</html>

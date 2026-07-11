@@ -22,6 +22,26 @@
       <ul class="vr-feed">
 
         <li>
+          <a class="vr-card" href="kernel-spectra-zoo/">
+            <span class="vr-date">2026-07-11 · analysis-only</span>
+            <span class="vr-title">The spectra of loss kernels</span>
+            <p class="vr-desc">Eigendecompositions of every loss kernel and gradient Gram
+              we've computed so far — K, K<sub>pre</sub>, G, G<sub>pre</sub> across eight models
+              from pythia-14m to llama-8b plus two image models, using only data from past
+              experiments. Every loss kernel is a heavy-tailed power law whose top mode is the
+              common mode; preconditioning flattens every spectrum it touches; and the
+              spectral transform f(G) → K that exists at gemma-270m is simply gone at
+              gemma-1b — the spectrum survives scale transfer, the eigenbasis does not.</p>
+            <span class="vr-tags">
+              <span class="vr-tag">loss-kernel</span>
+              <span class="vr-tag">spectra</span>
+              <span class="vr-tag">cross-model</span>
+              <span class="vr-tag">no-new-compute</span>
+            </span>
+          </a>
+        </li>
+
+        <li>
           <a class="vr-card" href="arch2-training-prediction-symreg/">
             <span class="vr-date">2026-07-07 → 08 · finished</span>
             <span class="vr-title">ARCH · crowd-sourcing a training-prediction formula</span>
