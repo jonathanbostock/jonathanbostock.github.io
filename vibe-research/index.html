@@ -22,6 +22,28 @@
       <ul class="vr-feed">
 
         <li>
+          <a class="vr-card" href="gpre-ridge-horizon/">
+            <span class="vr-date">2026-07-13 · follow-up</span>
+            <span class="vr-title">The winning ridge, stress-tested against longer training</span>
+            <p class="vr-desc">The symreg winner's one tunable constant — the ridge strength in
+              its G<sub>pre</sub> solve — swept over ten orders of magnitude at every training
+              horizon. At the 16-step held-out eval it shipped for, λ₀ = 40 is the exact argmax
+              (LDS 0.617), but the optimum is a one-sided plateau and the solve is worth +0.003
+              over a plain column sum. On 1200-step runs that actually learn, λ is nearly
+              irrelevant: SGD stays predictable at every horizon, AdamW collapses by 256 steps
+              for every λ — and a solve-free first-order prediction significantly beats the whole
+              ridge family there (P = 0.019). The constant was never the problem; horizon is a
+              regime change. Plus a cautionary tale about fleet-wave dedupe.</p>
+            <span class="vr-tags">
+              <span class="vr-tag">training-prediction</span>
+              <span class="vr-tag">gradient-kernel</span>
+              <span class="vr-tag">ridge</span>
+              <span class="vr-tag">horizon</span>
+            </span>
+          </a>
+        </li>
+
+        <li>
           <a class="vr-card" href="kernel-spectra-zoo/">
             <span class="vr-date">2026-07-11 · analysis-only</span>
             <span class="vr-title">The spectra of loss kernels</span>

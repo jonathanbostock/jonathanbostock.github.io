@@ -312,6 +312,26 @@
             </a>
           </li>
 
+          <li>
+            <a class="vr-card" href="../gpre-ridge-horizon/">
+              <span class="vr-date">2026-07-13 · follow-up</span>
+              <span class="vr-title">The winning ridge, stress-tested against longer training</span>
+              <p class="vr-desc">The training-prediction winner's ridge strength, swept over ten
+                orders of magnitude at every horizon on the runs that actually learn. λ₀ = 40 is
+                the exact argmax at the 16-step eval it shipped for — a one-sided plateau where
+                the solve is worth +0.003 over a plain column sum — but on 1200-step runs the
+                dial is nearly irrelevant: SGD stays predictable throughout, AdamW's
+                predictability collapses by 256 steps at every λ, and a solve-free first-order
+                prediction significantly beats the whole ridge family there. The failure is the
+                linearization, not the regularization.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">training-prediction</span>
+                <span class="vr-tag">gradient-kernel</span>
+                <span class="vr-tag">ridge</span>
+              </span>
+            </a>
+          </li>
+
         </ul>
       </div>
     </main>

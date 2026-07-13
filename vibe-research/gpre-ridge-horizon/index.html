@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+    <title>The winning ridge, stress-tested against longer training — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="The arch2 training-prediction winner's G_pre ridge is exactly optimal at the 16-step horizon it shipped for (held-out LDS 0.617 at λ0=40). On 1200-step runs that actually learn, ridge strength turns out to be nearly irrelevant across eight orders of magnitude — SGD stays predictable at every horizon, AdamW's predictability collapses by 256 steps for every λ, and a solve-free first-order prediction significantly beats the whole ridge family there.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>The winning ridge, stress-tested against longer training</h1>
+        <p class="vr-byline">
+          <span>2026-07-13</span>
+          <span>analysis of existing runs · one 28-vCPU RunPod box, ~1&thinsp;h</span>
+          <span><a href="../bif/">BIF thread</a></span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>The <a href="../arch2-training-prediction-symreg/">arch2 symbolic-regression run</a>
+        ended with a formula whose core is a ridge solve in the
+        <button class="tooltip-button" data-define="gpre">preconditioned gradient Gram</button>:
+        solve (<i>G</i><sub>pre</sub>[<i>S</i>,<i>S</i>] + <i>λI</i>)&thinsp;<i>x</i> = <b>1</b>
+        on the trained subset <i>S</i>, predict <i>G</i><sub>pre</sub>[:,<i>S</i>]&thinsp;<i>x</i>
+        for everything else, with <i>λ</i> = <i>λ</i><sub>0</sub>·tr(<i>G</i><sub>pre</sub>[<i>S</i>,<i>S</i>])/|<i>S</i>|
+        and a fleet-tuned <i>λ</i><sub>0</sub> = 40. Follow-up runs at longer horizons showed the
+        formula's <button class="tooltip-button" data-define="lds">LDS</button> falling as training
+        went on. This piece turns the one knob the formula has: sweep
+        <i>λ</i><sub>0</sub> over ten orders of magnitude, at every horizon, and see what was the
+        constant's fault and what wasn't. Everything here uses the winner's
+        <em>pattern term only</em> — the rank-1 interaction term is switched off throughout —
+        and only training runs that actually <em>reduce</em> loss.</p>
+
+        <h2><span class="vr-section-num">§1</span>At the horizon it shipped for, 40 was exactly right</h2>
+
+        <p>First the anchor. The held-out eval that picked the winner scores predictors on
+        16-step <button class="tooltip-button" data-define="quench">quench runs</button> of
+        gemma-3-1b across four optimizer families. Re-scoring the pattern term through the
+        unmodified pipeline at thirteen values of <i>λ</i><sub>0</sub>:</p>
+
+        <figure class="vr-fig">
+          <img src="figs/fig1_heldout_anchor.png" alt="Held-out LDS vs ridge strength: rises from 0.35 at λ0=0.01 to 0.617 at λ0=40, then plateaus flat to λ0=10000.">
+          <figcaption><b>Fig. 1</b> · Pattern-term LDS on the 16-step held-out 1B grid vs ridge
+          strength. Thin blue lines: the four optimizer families; thick line: their mean — the
+          shipped score. The dashed line marks the fleet's <i>λ</i><sub>0</sub> = 40.</figcaption>
+        </figure>
+
+        <p class="vr-pull">λ<sub>0</sub> = 40 is the exact argmax of the held-out score (0.617) — but the
+        optimum is a one-sided plateau, and the solve itself is worth just +0.003 over its own
+        λ→∞ limit.</p>
+
+        <p>Everything from <i>λ</i><sub>0</sub> ≈ 20 to 10<sup>4</sup> scores 0.614–0.617, while
+        small <i>λ</i> falls off a cliff (0.35 at <i>λ</i><sub>0</sub> = 0.01). At sixteen steps
+        the inversion barely matters — as <i>λ</i>→∞ the solution degenerates to a plain
+        column sum of the Gram, and that already gets you 0.614. The fleet's constant sits at the
+        start of the safe plateau: correctly tuned, for a dial that is nearly free at this
+        horizon.</p>
+
+        <h2><span class="vr-section-num">§2</span>One line per λ, across 1200-step runs that learn</h2>
+
+        <p>The stress test: 1200-step LoRA fine-tunes of gemma-3-1b on random 32-doc subsets —
+        plain SGD and AdamW, learning rates calibrated so the runs genuinely descend
+        (net probe-loss change −0.07 and −0.10 nats respectively), with loss snapshots at
+        τ = 16, 64, 256, 1024 steps. Scoring is the eval's own protocol
+        (<button class="tooltip-button" data-define="docfe">docFE</button> from a held-back half
+        of runs, LDS on the other half; n<sub>val</sub> = 13 SGD / 16 AdamW). One line per
+        <i>λ</i><sub>0</sub>, goodness of fit against number of training steps:</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig2_lambda_lines_vs_steps.png" alt="LDS vs training steps, one line per lambda. SGD: all lambda lines flat around 0.2-0.3 at every horizon. AdamW: all lambda lines fall together from 0.31 at 16 steps to about zero at 256+ steps; the no-solve first-order line sits above all of them at late steps.">
+          <figcaption><b>Fig. 2</b> · LDS vs training steps, one line per ridge strength
+          (teal ramp, dark→pale = weak→strong ridge; orange = the shipped
+          <i>λ</i><sub>0</sub> = 40). Grey dashed:
+          <button class="tooltip-button" data-define="fdt">first-order prediction, no solve at
+          all</button>.</figcaption>
+        </figure>
+
+        <p class="vr-pull">Across eight orders of magnitude of λ the lines form one tight band:
+        for these runs, ridge strength is nearly irrelevant — what changes with horizon is
+        whether the geometry predicts at all.</p>
+
+        <p>Two entirely different fates, neither of which the dial controls. <b>SGD stays
+        predictable at every horizon</b> — LDS ≈ 0.21–0.29 from 16 steps to 1024, drifting
+        mildly upward for weaker ridges (best fixed retune <i>λ</i><sub>0</sub> ≈ 0.03: +0.054
+        at τ = 1024, paired bootstrap CI [−0.015, +0.115], P(Δ&gt;0) = 0.94 — suggestive, not
+        conclusive). <b>AdamW collapses for every λ</b>: 0.31 at 16 steps, ≈ 0 by 256, and the
+        best value over the whole grid at τ ≥ 256 is 0.02.</p>
+
+        <h2><span class="vr-section-num">§3</span>What fails is the solve, not the constant</h2>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig3_horizon.png" alt="LDS vs horizon for shipped lambda, retuned lambda, and the no-solve first-order prediction, with bootstrap confidence whiskers. For AdamW the first-order line is above both ridge lines at 256 and 1024 steps.">
+          <figcaption><b>Fig. 3</b> · The shipped ridge, the best fixed retune, and the
+          solve-free first-order prediction across horizon. Whiskers: paired-bootstrap 95% CI
+          (val runs resampled, n<sub>boot</sub> = 2000) on the retuned line.</figcaption>
+        </figure>
+
+        <p>For AdamW at τ = 1024 the ranking flips outright: the first-order prediction beats
+        the <em>best</em> ridge in the sweep by Δ = 0.067, and the paired bootstrap puts that
+        difference at 95% significance ([+0.003, +0.123] in favour of no-solve,
+        P = 0.019). Once a preconditioned optimizer has run long enough to leave the regime
+        where <i>w</i><sub>0</sub>-gradient geometry describes the trajectory, inverting that
+        geometry harder cannot help — the failure is the linearization, not the
+        regularization.</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>arm</th><th>predictor</th><th class="num">τ=16</th><th class="num">τ=64</th><th class="num">τ=256</th><th class="num">τ=1024</th></tr>
+            </thead>
+            <tbody>
+              <tr><td rowspan="3">SGD</td><td>ridge @40 (shipped)</td><td class="num">+0.205</td><td class="num">+0.266</td><td class="num">+0.260</td><td class="num">+0.226</td></tr>
+              <tr><td>ridge @0.0316 (retuned)</td><td class="num">+0.210</td><td class="num">+0.289</td><td class="num">+0.290</td><td class="num vr-pos">+0.280</td></tr>
+              <tr><td>first-order (no solve)</td><td class="num">+0.230</td><td class="num">+0.298</td><td class="num">+0.296</td><td class="num">+0.275</td></tr>
+              <tr><td rowspan="3">AdamW</td><td>ridge @40 (shipped)</td><td class="num">+0.308</td><td class="num">+0.130</td><td class="num vr-neg">−0.079</td><td class="num">+0.006</td></tr>
+              <tr><td>ridge @0.001 (≈ best on grid)</td><td class="num">+0.322</td><td class="num">+0.148</td><td class="num vr-neg">−0.047</td><td class="num">+0.018</td></tr>
+              <tr><td>first-order (no solve)</td><td class="num">+0.356</td><td class="num">+0.215</td><td class="num">+0.017</td><td class="num">+0.085</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2><span class="vr-section-num">§4</span>A data-hygiene footnote</h2>
+
+        <p>The first pass of this sweep showed the SGD arm decaying too — 0.25 at 16 steps down
+        to 0.03 at equilibrium — which would have made a tidier story. It was an artifact: the
+        run pool contained four late top-up runs executed with a different config (3× the
+        learning rate, ⅓ the weight-decay tether), three of them landing in the scored half.
+        Filtering each arm to its modal config restored the flat curves above and reconciled the
+        numbers with the committed baseline. Worth remembering whenever runs accumulate across
+        fleet waves: <em>the dedupe that keeps the latest file is not the dedupe that keeps the
+        same experiment</em>.</p>
+
+        <h2><span class="vr-section-num">§5</span>Why you'd expect the dial to want to shrink</h2>
+
+        <p>Kernel-regression theory says gradient flow trained for time <i>t</i> is equivalent
+        to ridge regression with <i>λ</i> ∝ 1/<i>t</i> (Ali, Kolter &amp; Tibshirani 2019), and
+        the same implicit damping appears inside modern unrolled-attribution methods
+        (SOURCE, Bae et al. 2024: per-segment damping ≈ 1/(<i>η̄K</i>)). A constant tuned at 16
+        steps should be ~64× too strong by 1024 — and the SGD arm's best-λ does drift down with
+        horizon (0.3 at τ = 16 → 0.03 later), in units where <i>λ</i><sub>0</sub> counts
+        multiples of the subset Gram's mean eigenvalue (EK-FAC's damping convention is 0.1 in
+        the same units; the shipped value is 40). But for these learning runs the drift is worth
+        a few hundredths of LDS at most. The practical summary for the formula: the constant was
+        never the problem; horizon is a regime change, not a recalibration.</p>
+
+        <p>Caveats: 13–16 scored runs per arm make single-cell LDS noisy (the bootstrap CIs in
+        Fig. 3 are the honest read); the retuned λ is chosen on the same runs it is scored on,
+        so treat retuned-vs-shipped gaps as upper bounds; and the two arms here carry small
+        parameter noise and a decoupled weight-decay tether so that 1200-step runs stay bounded —
+        the τ-snapshots are quenched loss changes measured against the same pre-run baseline as
+        the 16-step eval.</p>
+
+        <div class="vr-colophon">
+          Source · <span style="font-family:inherit">latent-learning repo,
+          <code>experiments/training_prediction/equilibrated/</code></span>
+          (<code>ridge_lambda_sweep.py</code>, <code>ridge_sweep_bootstrap.py</code>,
+          <code>heldout_lambda_sweep.py</code>; results in <code>ridge_sweep_20260713_090849/</code>,
+          commits <code>651e132…4da37c3</code>).
+          <br>Data · <a href="https://huggingface.co/datasets/arcadia-impact/training-prediction-1b-heldout-20260708">arcadia-impact/training-prediction-1b-heldout-20260708</a>
+          (held-out grid, 1200-step runs, and this sweep's outputs under <code>equilibrated/</code>).
+          <br>Cut from this page · the same sweep over the thread's thermal/Langevin (SGLD)
+          arms, which heat rather than learn; those results live in the repo's
+          <code>RESULTS.md</code> alongside the sweep outputs.
+        </div>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "gpre": "G_pre: the Adam-preconditioned per-document gradient Gram at the base weights w₀ — (G_pre)ᵢⱼ = ⟨gᵢ/√v, gⱼ/√v⟩ with v the elementwise second-moment estimate over the training pool (LESS-style). The best single rank predictor of fine-tuning transfer in the original grid, for every optimizer family.",
+        "lds": "Linear Datamodeling Score, rank form: for each held-out document, the Spearman correlation across runs between predicted and observed loss change (after subtracting the per-document fixed effect), averaged over documents. 1 = perfect ranking of which runs move which documents; 0 = no signal.",
+        "quench": "A short fine-tune from the base weights measured as a before/after loss difference on the probe set — the training-prediction grid's standard cell trains 16 full-batch steps on a 32-document subset, then reads out the per-document loss change everywhere else.",
+        "docfe": "Per-document fixed effect: the mean out-of-subset loss change of each document, estimated on a held-back half of the runs and subtracted from the scored half's targets — removes the universal 'training on anything helps everything' component so predictors are scored on the subset-specific signal.",
+        "fdt": "The linear-response prediction with no inversion: predicted change on document i is −(1/|S|)·Σⱼ∈S Tⱼ·G_pre[i,j], token-count-weighted. It is what the ridge solution degenerates to as λ→∞ (up to the weighting), and costs one matrix-vector product.",
+      });
+    </script>
+  </body>
+</html>
