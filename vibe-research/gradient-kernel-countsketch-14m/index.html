@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>How wide a hash buys a gradient kernel? — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="CountSketching preconditioned per-token gradients of Pythia-14M: error follows 1.65/sqrt(D·S), so D·S ≈ 27k buys a 1% kernel. Full methodology, benchmarks, and a cost model for Pythia-1.4B.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>How wide a hash buys a gradient kernel?</h1>
+        <p class="vr-byline">
+          <span>2026-07-13</span>
+          <span>RTX PRO 4000 Blackwell · ≈$3 of GPU</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>We want the N×N similarity matrix of <em>per-token gradients</em> of a
+        language model — every selected token position is one datapoint, its
+        gradient is one row, and the kernel entry
+        <i>G</i><sub><i>ij</i></sub> = <i>g</i><sub><i>i</i></sub><sup>⊤</sup>diag(<i>q</i>)<i>g</i><sub><i>j</i></sub>
+        is a <button class="tooltip-button" data-define="fisher-kernel">preconditioned</button>
+        inner product in parameter space. The obstruction is size: at
+        Pythia-1.4B scale that's 4.25M rows of 1.4B-dimensional vectors. This
+        pilot built and validated the whole pipeline at Pythia-14M, compressing
+        each gradient on the fly with
+        <button class="tooltip-button" data-define="countsketch">CountSketch</button>
+        so the Jacobian never exists in memory — and measured the question in
+        the title. The answer is clean:
+        <b>error = 1.65/√(D·S)</b>, so a total sketch width of
+        <b>D·S ≈ 27,000 buys a 1% kernel</b>, independent of the 14M-dimensional
+        ambient space being hashed.</p>
+
+        <h2><span class="vr-section-num">§1</span>The object, and why sketch it</h2>
+
+        <p>The motivation is Timaeus-style developmental interpretability:
+        their <button class="tooltip-button" data-define="bif">Bayesian
+        influence function</button> and susceptibility-spectroscopy line
+        computes essentially this kernel over 4.25M Pile token-contexts of
+        Pythia-1.4B by SGLD sampling, at a reported cost of roughly 4,800
+        H200-hours. To first order, the loss-fluctuation covariance those
+        samplers estimate is a preconditioned gradient Gram matrix — which we
+        can attack directly with explicit gradients if we can store the rows.
+        We can't (4.25M × 1.4B fp32 ≈ 24 PB), so each row is compressed the
+        moment it exists:</p>
+
+        <ul>
+          <li><b>Preconditioner.</b> A frozen diagonal second moment
+          <i>v</i> = 𝔼[<i>g</i>²] estimated once over 256 token gradients;
+          rows are scaled by √<i>q</i> with
+          <i>q</i> = (<i>v</i>+ε)<sup>−1</sup> normalized to mean 1. This is
+          Adam/Fisher geometry — the same frozen-optimizer-state correction
+          TrackStar found essential — and it doubles as variance armour for
+          the sketch (it shrinks heavy coordinates).</li>
+          <li><b>CountSketch, D independent tables of width S.</b> Each
+          coordinate hashes (<button class="tooltip-button" data-define="splitmix">SplitMix64</button>)
+          to one bucket per table with a random sign; the feature is the
+          1/√D-scaled concatenation, so
+          ẑ<sub><i>i</i></sub><sup>⊤</sup>ẑ<sub><i>j</i></sub> is an unbiased
+          estimate of <i>G</i><sub><i>ij</i></sub>. Crucially the estimator is
+          <em>linear</em> (mean-combine, not the classical median), so the
+          features drop straight into a streaming SVD for a final low-rank
+          factor.</li>
+          <li><b>No materialization.</b> A fused Triton kernel reads each
+          gradient once, scales, hashes, and atomically accumulates into the
+          [C, D, S] output — the preconditioned vector never touches HBM. The
+          exact preconditioned row norm is accumulated alongside, so
+          correlation kernels normalize by exact diagonals, not sketched
+          ones.</li>
+        </ul>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>model</dt><dd>EleutherAI/pythia-14m (P = 14,067,712 included params)</dd>
+            <dt>data</dt><dd>NeelNanda/pile-10k, packed 512-token sequences</dd>
+            <dt>exact subset</dt><dd>256 token losses; exact grads materialized to a disk memmap, kernel in fp64</dd>
+            <dt>sketch</dt><dd>S = 8192, D = 4 (seeds 101–104 / 201–204), fp32 accumulate, fp16 store</dd>
+            <dt>preconditioner</dt><dd>second moment, 256 per-token samples, ε = 1e-8, fp32 artifact / fp16 runtime</dd>
+            <dt>hardware</dt><dd>1× RTX PRO 4000 Blackwell 24 GB, $0.57/hr, torch 2.13 cu130</dd>
+            <dt>code</dt><dd><a href="https://github.com/ArcadiaImpact/gradient-kernel">ArcadiaImpact/gradient-kernel</a></dd>
+          </dl>
+        </div>
+
+        <p>Two methodological details did most of the work. First, <b>nested
+        widths</b>: because buckets are <i>hash</i> &amp; (S−1), a sketch computed
+        once at S=8192 folds offline to every smaller power of two — the
+        entire width ladder below is one gradient pass, not five. Second,
+        <b>same-pass validation</b>: the exact rows and the sketched features
+        are computed from the <em>same</em> gradient tensors, so the comparison
+        isolates sketch error from gradient nondeterminism (autocast, atomics)
+        entirely.</p>
+
+        <h2><span class="vr-section-num">§2</span>Required hash width</h2>
+
+        <figure class="vr-fig">
+          <img src="figs/fig1_width_ladder.png" alt="Log-log plot of relative Frobenius error against total sketch width D*S, showing measured points following the 1.65 over square-root D*S line, with markers for the widths needed for 2%, 1% and 0.5% error.">
+          <figcaption><b>Fig. 1</b> · Relative Frobenius error of the sketched
+          kernel vs total width D·S, against the 256-row exact kernel. Blue:
+          D=4 folded ladder. Orange: each table alone at S=8192 (rescaled ×D).
+          Everything sits on ε = 1.65/√(D·S).</figcaption>
+        </figure>
+
+        <p class="vr-pull">Kernel error obeys ε ≈ 1.65/√(D·S): 2% costs
+        D·S ≈ 7k, 1% costs ≈ 27k, 0.5% costs ≈ 109k — and only the product
+        D·S matters, not how you split it.</p>
+
+        <p>Three things worth noticing. The exponent is exactly the
+        <button class="tooltip-button" data-define="jl">Johnson–Lindenstrauss</button>
+        prediction — halving error costs 4× width, with no visible deviation
+        over the measured 16× range. The single-table points (D=1, S=8192,
+        i.e. D·S = 8192) land in the same cloud as the D=4, S=2048 point with
+        the same budget — the D-vs-S split is close to free, so D is chosen
+        for engineering reasons (independent table subsets make good stability
+        diagnostics) rather than accuracy. And the constant 1.65 was measured
+        on <em>preconditioned</em> 14M-dimensional rows; nothing in the JL
+        argument says it grows with P, but whether it survives to 140M/1.4B —
+        where embedding-row heavy hitters get relatively heavier — is exactly
+        what the next pilot must check (see §4 caveats).</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig2_downstream.png" alt="Three panels showing max principal angle of top-8 and top-32 eigenspaces decreasing with D*S, kNN recall at 1 and 10 increasing with D*S, and max relative error of top-8 eigenvalues decreasing with D*S.">
+          <figcaption><b>Fig. 2</b> · What the width buys downstream, on the
+          256-row exact subset. Left: <button class="tooltip-button" data-define="principal-angles">principal angles</button>
+          between exact and sketched top-r eigenspaces. Middle: nearest-neighbour
+          recall under the correlation kernel. Right: worst top-8 eigenvalue
+          error.</figcaption>
+        </figure>
+
+        <p>The Frobenius number is not the whole story — different downstream
+        uses need different widths:</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>S (D=4)</th><th class="num">D·S</th><th class="num">relF</th><th class="num">off-diag ρ</th><th class="num">recall@1</th><th class="num">top-8 angle</th><th>grade</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>512</td><td class="num">2,048</td><td class="num">4.06%</td><td class="num">0.9979</td><td class="num">0.73</td><td class="num">14.9°</td><td class="vr-neg">coarse spectra only</td></tr>
+              <tr><td>1024</td><td class="num">4,096</td><td class="num">2.86%</td><td class="num">0.9988</td><td class="num">0.80</td><td class="num">15.1°</td><td class="vr-neg">coarse spectra only</td></tr>
+              <tr><td>2048</td><td class="num">8,192</td><td class="num">1.54%</td><td class="num">0.9994</td><td class="num">0.79</td><td class="num">6.7°</td><td>eigenspace-grade</td></tr>
+              <tr><td>4096</td><td class="num">16,384</td><td class="num">1.26%</td><td class="num">0.9998</td><td class="num">0.85</td><td class="num">5.9°</td><td>eigenspace-grade</td></tr>
+              <tr><td>8192</td><td class="num">32,768</td><td class="num">0.88%</td><td class="num">0.9998</td><td class="num">0.89</td><td class="num">3.6°</td><td class="vr-pos">neighbour-grade</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p><b>Eigenspace work is cheap; neighbour work is expensive.</b> The
+        top-8 eigenvalues are within ~1% and the top-8 eigenspace within a few
+        degrees already at D·S ≈ 8k–16k. But kNN recall@1 is still climbing at
+        our maximum width (0.89 at 32k, no plateau in sight) — retrieval-style
+        analyses at token level plausibly want D·S ≥ 64k. That the spec's
+        suggested production setting (D=4, S=8192) lands at ~0.9% Frobenius and
+        0.89 recall is a validation of that default, with the caveat that
+        "recall of exact neighbours" is a brutal metric when many neighbours
+        are near-ties.</p>
+
+        <p>Two failure-mode checks from the literature came back reassuring
+        but not dismissible. Entrywise, near-zero off-diagonal entries are
+        noise-dominated (the JL guarantee is ±ε‖g<sub>i</sub>‖‖g<sub>j</sub>‖,
+        so tiny entries drown) — quartile-stratified errors confirm it, which
+        is why every conclusion above is spectral or rank-based, never
+        single-entry. And the preconditioned rows remain surprisingly
+        <em>incoherent-hostile</em>: the p99 of max|x|/‖x‖₂ is 0.85, i.e. for
+        1% of rows a single coordinate carries most of the mass. CountSketch's
+        known weakness is exactly colliding heavy hitters; at 14M, D=4 tables
+        absorb it (the ladder sits on the JL line), but this is the number to
+        re-measure first at 140M.</p>
+
+        <p>One cheap win confirmed on the way: the fp16 runtime copy of the
+        preconditioner is indistinguishable from fp32 (sketch-vs-sketch
+        off-diagonal ρ = 0.99992, eigenspace angles at numerical zero) — so
+        the 1.4B run can carry 2.8 GB of √q per GPU instead of 5.6 GB.</p>
+
+        <h2><span class="vr-section-num">§3</span>Throughput, and what 1.4B would cost</h2>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig3_vjp_benchmark.png" alt="Grouped bar chart of token-gradient rows per second for serial, batched-retain and batched-recompute backends across chunk sizes 1 to 16; serial bars around 80-89 rows/s are solid, batched bars are hatched fallback timings around 35-66 rows/s, with one OOM cell.">
+          <figcaption><b>Fig. 3</b> · Per-token VJP throughput. Solid = passes
+          strict vectorization; hatched = torch 2.13's legacy-vmap
+          <em>fallback</em> timing, which the spec treats as a failed
+          configuration; batched-retain at C=16 OOMs on 24 GB.</figcaption>
+        </figure>
+
+        <p>The benchmark produced a finding we didn't plan for: on torch 2.13,
+        <code>is_grads_batched</code> hits legacy-vmap fallbacks for seven core
+        ops of the transformer backward (embedding, layer-norm, GELU, softmax
+        backwards, …) — every batched configuration is "failed" under the
+        spec's strictness rule, and even its permissive fallback timing loses
+        to plain serial VJPs (35–66 vs 80–89 rows/s). <b>Production backend:
+        serial, chunk size 4–16.</b> The fused hash adds
+        <b>11.6%</b> on top of gradient extraction (1.34 ms vs 11.5 ms per row
+        at D=4, S=8192; Triton sustains ~42 GB/s vs ~9 GB/s for the PyTorch
+        reference), comfortably inside the 25% budget the spec set.</p>
+
+        <p>Extrapolating naively (backward cost ∝ P at fixed sequence length):
+        88.6 rows/s at 14M → ~0.89 rows/s/GPU at 1.4B, so the 4.25M-row target
+        is ≈ <b>1,330 GPU-hours ≈ $760</b> at this card's $0.57/hr — data
+        parallel with zero gradient synchronization, so nodes multiply
+        trivially. Against the ~4,800 H200-hour SGLD-sampling baseline for the
+        same object, that's roughly <b>25× cheaper</b>, before any of the
+        obvious wins (bf16 forwards, a layerwise-fused backward that never
+        stores the full C×P chunk). The number is a cost <em>model</em>, not a
+        measurement — the 140M pilot exists to catch its lies.</p>
+
+        <h2><span class="vr-section-num">§4</span>Caveats and next</h2>
+
+        <ul>
+          <li><b>N = 256.</b> All error metrics are against a 256-row exact
+          subset (the largest that's cheap to materialize exactly). The JL
+          argument says entrywise error doesn't care about N, but recall-type
+          metrics get harder as N grows — the neighbour-grade width
+          recommendation is a lower bound.</li>
+          <li><b>One model, one scale.</b> The constant 1.65 is measured at
+          14M. The spec conjectures width requirements track spectrum and
+          coordinate coherence, not P; the 140M pilot re-runs this exact
+          ladder to test that, with the incoherence tail (p99 0.85) as the
+          leading suspect if it breaks.</li>
+          <li><b>Batched VJP could come back.</b> The vmap fallbacks are a
+          torch-version fact, not physics; <code>torch.func.jacrev</code>
+          alternates and a layerwise-fused Backend C are both open paths if
+          serial becomes the bottleneck at 1.4B.</li>
+          <li><b>Sketch-vs-SGLD agreement is unmeasured.</b> We built the
+          cheap estimator of the object; quantitative comparison against
+          SGLD-based susceptibility clusters on a small Pythia is the
+          scientific next step, and disagreement wouldn't automatically be our
+          error (samplers have their own biases).</li>
+        </ul>
+
+        <div class="vr-colophon">
+          Code · <a href="https://github.com/ArcadiaImpact/gradient-kernel">github.com/ArcadiaImpact/gradient-kernel</a>
+          (spec, 13-task plan, 130 CPU + 8 GPU tests; commit b2f71d9).
+          <br>Run artifacts · <a href="https://huggingface.co/datasets/arcadia-impact/gradient-kernel-pythia14m-pilot-20260713">arcadia-impact/gradient-kernel-pythia14m-pilot-20260713</a>
+          (validation metrics, benchmark JSONs, ledgers; private).
+          <br>Figures · <code>scripts/make_vibe_figs.py</code> in the repo · pod zemn58cbs4a8lr, ~5.5 h × $0.57.
+        </div>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "countsketch": "A random linear map: each input coordinate is assigned (by hash) one bucket per table and a random ±1 sign; the bucket accumulates the signed value. Inner products of sketches are unbiased estimates of inner products of the originals, with variance shrinking as 1/(width).",
+        "fisher-kernel": "Weighting each parameter coordinate by an inverse second moment q = 1/(E[g²]+ε), the diagonal Fisher/Adam metric. Classical roots: Jaakkola & Haussler's Fisher kernel (1998); frozen-optimizer-state versions used by TrackStar and LESS.",
+        "bif": "Bayesian influence function: the covariance of per-datapoint losses under a local Gibbs posterior, estimated by SGLD sampling around a checkpoint. To leading order it equals a preconditioned gradient inner product with the (regularized) inverse Hessian as the metric.",
+        "splitmix": "A 64-bit counter-based hash (three xor-shift-multiply rounds). Deterministic, seedable, bit-identical between the CPU reference and the Triton GPU kernel — so a sketch is reproducible from the seeds recorded in the run ledger.",
+        "jl": "Johnson–Lindenstrauss: random projections to k dimensions preserve inner products up to ±ε·‖x‖‖y‖ with ε ∝ 1/√k. CountSketch achieves the same rate with O(1) work per nonzero instead of O(k).",
+        "principal-angles": "The canonical angles between two r-dimensional subspaces — 0° everywhere means identical spans. Computed between the top-r eigenvector spans of the exact and sketched kernels.",
+      });
+    </script>
+  </body>
+</html>
