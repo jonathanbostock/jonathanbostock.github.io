@@ -305,9 +305,11 @@
 
       <div class="align-left vr-prose">
         <p><b>This run is finished.</b> This page was a live notebook while the
-        fleet ran; it now records the final state. The stand-alone write-up is
-        <code>findings/training_prediction_symreg/blogpost.md</code> on the
-        task branch.</p>
+        fleet ran; it now records the final state. The stand-alone write-up now
+        lives on <code>main</code> at
+        <code>experiments/training_prediction/symreg/blogpost.md</code>
+        (run-time path <code>findings/training_prediction_symreg/blogpost.md</code>;
+        the task branch has been archived into main and deleted).</p>
 
         <h2><span class="vr-section-num">§0</span>TL;DR — conclusion</h2>
 
@@ -1128,7 +1130,9 @@ def predict(ctx: dict) -&gt; np.ndarray:
         <ul>
           <li>Winner squash-merged into <code>arch/training_prediction_symreg</code>;
             an anonymized Problem/Method/Result brief lives at
-            <code>findings/training_prediction_symreg/blogpost.md</code>.</li>
+            <code>findings/training_prediction_symreg/blogpost.md</code>
+            (since archived to main as
+            <code>experiments/training_prediction/symreg/blogpost.md</code>).</li>
           <li>The full held-out archive — per-document loss vectors for all
             ~500 runs, exact G/G<sub>pre</sub>, kernel v1 + eigendecompositions,
             scoring logs, final leaderboard — is preserved in an org-internal
@@ -1313,16 +1317,184 @@ def predict(ctx: dict) -&gt; np.ndarray:
         scale-invariant and unaffected). Variant sources, per-variant
         score JSONs, the measured spectral concentrations, and the
         kernel-geometry diagnostics live under
-        <code>experiments/training_prediction/ablations/</code> on the
-        task branch.</p>
+        <code>experiments/training_prediction/ablations/</code> on main.</p>
         </details>
 
+        <h2 id="s11"><span class="vr-section-num">§11</span>Why the fleet could never make K work — the missing transform</h2>
+
+        <p>Two post-hoc questions about the loss kernel, one from outside
+        and one from inside. From outside: across all 179 PRs, did any use
+        of K ever actually help? We fetched all 149 scored predictors at
+        their exact leaderboard SHAs and AST-scanned each for
+        K<sub>cov</sub>/K<sub>corr</sub> reads outside the never-fired
+        fallback branch. The answer is stark: <b>zero scored submissions
+        ever used K as the live pattern-solve matrix</b>, and among the
+        eleven lineages that used it anywhere (CG-blends, elementwise
+        modulation, kernel-density scaling), the best genuine delta over an
+        otherwise-identical no-K base was <b>+0.0021</b> — inside the
+        plateau's own spread — while several uses were sharply negative
+        (−0.016 to −0.032). Every synthesis that included K was beaten by
+        the same formula with K deleted. The fleet probed the whole
+        operator algebra — additive, multiplicative, fused, whitened,
+        eigenvector-covariate, LEVEL-proxy — and hit a wall everywhere.</p>
+
+        <p class="vr-pull">The wall is geometric: at 1B there is no
+        function of G that reaches K — their eigenvalues match almost
+        perfectly, and their eigenvectors don't match at all.</p>
+
+        <p>From inside: all three ctx matrices are Grams of the <em>same</em>
+        512 probe gradients under different parameter-space metrics —
+        G&nbsp;=&nbsp;JJᵀ, G<sub>pre</sub>&nbsp;=&nbsp;J·P·Jᵀ (Adam's
+        diagonal), and by the delta method K&nbsp;≈&nbsp;J·Σ·Jᵀ with Σ the
+        SGLD posterior covariance (≈ inverse curvature). Writing
+        J&nbsp;=&nbsp;USVᵀ, a metric M descends to a doc-space transform of
+        G exactly when W&nbsp;=&nbsp;VᵀMV commutes with S² — G carries U
+        and S but <em>zero bits</em> about how the gradient span is
+        oriented relative to M's eigenbasis. Measured: the matrices share
+        their bulk spectral slope to two decimals at both scales
+        (≈&nbsp;k<sup>−0.74</sup>), so eigenvalues were never the
+        obstruction. At 270M the commutation approximately holds — after
+        projecting out the common mode, K&nbsp;≈&nbsp;c·G<sup>0.6</sup>
+        with R²&nbsp;0.88, essentially the ceiling for any spectral map,
+        and exactly the ridge-flattening the delta method predicts. At 1B
+        it is gone, not attenuated: the best possible f(G) explains 0.29 of
+        centered K versus <b>0.22 for a random basis</b>. Two controls make
+        this trustworthy: the known metric pair G<sub>pre</sub>&nbsp;←&nbsp;G
+        fits as a spectral map with R²&nbsp;0.99 at 1B (exponent ≈&nbsp;½,
+        as an H<sup>−1/2</sup>-style preconditioner should), and K's
+        seed-replicates fit each other at 0.96 — the method would have
+        found K's transform if it existed. A last twist: the badly-estimated
+        v1 kernel resembled G <em>better</em> (CKA 0.68) than the converged
+        v2 (0.10) — an under-burned SGLD chain is still descending, and
+        descent is gradient flow, so a bad kernel is secretly a noisy copy
+        of G. Improving the estimation revealed the divergence rather than
+        curing it. The information the fleet needed — W's off-diagonal
+        orientation — lives in parameter space, and the
+        <code>predict(ctx)</code> contract never exposes it.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/spectral_transform.png" alt="Spectra of K and G, eigenvector overlap heatmaps, and transform-fit R² across scales">
+          <figcaption>K and G share a spectrum but not (at 1B) an
+          eigenbasis. Left: trace-normalized spectra — identical bulk
+          decay, different heads (v1's rank-cliff visible as the dashed
+          plunge). Middle: band-binned eigenvector overlap, cleanly
+          band-diagonal at 270M, structureless at 1B. Right: Frobenius R²
+          of the transform families — the G<sub>pre</sub> control works at
+          both scales; K's transform exists at 270M and collapses to the
+          random-basis floor at 1B.</figcaption>
+        </figure>
+
+        <h2 id="s12"><span class="vr-section-num">§12</span>The regime where K wins — equilibrated fine-tuning</h2>
+
+        <p>If K isn't a broken G, what is it the response kernel
+        <em>of</em>? Linear-response theory gives a precise answer: the
+        grid's 16-step deterministic quenches respond through the gradient
+        Gram (substitute Δw into Δℓ and only G-blocks appear — the winning
+        ridge formula <em>is</em> the discretized linear-response solution
+        of gradient flow), while the
+        <button class="tooltip-button" data-define="fdt-def">fluctuation–dissipation theorem</button>
+        says K&nbsp;=&nbsp;Cov(ℓᵢ,&nbsp;ℓⱼ) is the response kernel of the
+        <em>tilted tempered posterior</em>: upweight doc j in the effective
+        Hamiltonian, let the ensemble re-equilibrate, and
+        d⟨ℓᵢ⟩/dε&nbsp;=&nbsp;−nβ·K<sub>ij</sub>. Two different learning
+        processes, two different kernels. So we ran the other process:
+        mixin fine-tunes (base corpus + ε-upweighted subset S, ε&nbsp;=&nbsp;0.5)
+        at gemma-3-1b, run past stationarity with tail-averaged probe
+        readouts, scored with the run's own LDS protocol on the same 32
+        subsets. Five arms: full-parameter SGLD at the kernel's exact
+        temperature and localizer (the clean FDT test), SGLD on LoRA
+        adapters, and three "normal-looking" recipes — SGD, AdamW, and
+        Muon, each with decay-to-init and injected noise at a practical
+        learning rate. The design only became feasible with
+        <button class="tooltip-button" data-define="crn-def">common-random-numbers coupling</button>:
+        posterior fluctuations are 0.55 nats/doc against a ~0.05-nat
+        signal, but with every run in a group replaying the identical
+        noise stream, 98.9% of the per-doc noise is shared and cancels in
+        rank scoring.</p>
+
+        <p class="vr-pull">Each kernel predicts its own process and fails
+        the other's: G<sub>pre</sub> 0.64 vs K 0.11 on quenches;
+        K 0.71 vs G −0.25 on the equilibrated ensemble.</p>
+
+        <p><b>The double dissociation is clean and internally
+        replicated.</b> In the full-parameter arm — the exact sampler K was
+        estimated with — the FDT form of K predicts the equilibrated
+        response at <b>LDS 0.713</b> (n=7 val runs, every run individually
+        positive at 0.41–0.65 against its coupled base twin) while every
+        gradient-family predictor is ≤ 0.21 and raw G is −0.25. The
+        LoRA arm replicates at 0.43 in each of two independent noise
+        groups (attenuated exactly as its γ-mismatch and subspace
+        restriction predict). Within-run probe checkpoints show the
+        rotation directly: K's LDS climbs from noise at step 16 to 0.48 at
+        the tail while G-family stays flat. And a self-consistency check
+        seals the mechanism: each arm's <em>own</em> tail-fluctuation
+        covariance, leave-one-run-out, predicts the SGLD arms at 0.60/0.42
+        — FDT confirmed with no reference to v2-K at all.</p>
+
+        <p><b>But the theorem has a boundary, and practical fine-tuning
+        lives outside it.</b> The three realistic arms sort into a law. The
+        gentle SGD arm (learns −0.07 nats, fluctuations 30× weaker than
+        SGLD's) is predicted by <em>G-family</em> (fdt_G<sub>pre</sub>
+        0.32) and not by K or even its own covariance — with noise that
+        weak, the stationary state is the drift-vs-decay fixed point and
+        its response is still gradient-geometric: a long quench in
+        disguise. The AdamW and Muon arms are predicted by <em>nothing in
+        ctx</em> — including their own measured covariances (−0.04, −0.11)
+        — and the Muon arm closes the escape hatch, since it is thermally
+        SGLD-like (warm, non-learning) yet still violates
+        fluctuation–dissipation. What Adam and Muon share is preconditioned,
+        non-gradient-flow updates with noise unmatched to their metric:
+        non-equilibrium steady states, where response ≠ covariance. Their
+        correct kernel would be the Gram in <em>that optimizer's</em>
+        metric — a
+        <button class="tooltip-button" data-define="psgld-def">pSGLD-style kernel</button>
+        no ctx matrix provides.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/equilibrated_final.png" alt="Rotation curve and five-arm stationary-state comparison">
+          <figcaption>Left: within the SGLD arm, K's predictive power
+          grows with horizon while the gradient family stays at noise.
+          Right: across all five stationary states plus the original
+          quench anchor — the posterior covariance (orange) predicts
+          exactly the noise-dominated Langevin arms, the gradient family
+          (teal) predicts the quench and the gentle SGD arm, and the
+          preconditioned arms are orphaned by every predictor including
+          their own covariance (pale squares).</figcaption>
+        </figure>
+
+        <p><b>What this settles.</b> The fleet's 179-PR wall against K
+        (§11) wasn't K being a bad matrix — it was K being the response
+        kernel of a learning process the task never ran. Run that process
+        and K delivers its strongest number of the whole project. But the
+        boundary matters just as much: "equilibrated" must mean
+        <em>thermally</em> equilibrated at the kernel's own temperature
+        (n/log&nbsp;n tempering — deliberately hot, loss-elevated, nothing a
+        practitioner would call fine-tuning). Every recipe that actually
+        learns stays drift-dominated, where the original G<sub>pre</sub>
+        winner — or nothing yet — rules. A companion piece stress-tests
+        exactly that boundary on the learning arms:
+        <a href="../gpre-ridge-horizon/">sweeping the winner's ridge strength
+        across horizon</a> shows the constant is precisely optimal at 16 steps,
+        nearly irrelevant across eight orders of magnitude on the 1200-step
+        runs, and — for AdamW — beaten by a solve-free first-order prediction
+        at long horizon: the failure is the linearization, not the
+        regularization. As far as we can tell from the
+        literature (the BIF line validates SGLD kernels on retraining-LDS;
+        Schioppa et&nbsp;al. argue influence formulas describe a few
+        fine-tuning steps), the quench-vs-equilibrium contrast itself had
+        not been run before. Predictions if this picture is right: a
+        pSGLD-estimated kernel should pick up the AdamW arm, and hotter
+        noisy fine-tuning should interpolate the SGD arm from
+        G-predictable toward K-predictable.</p>
+
         <div class="vr-colophon">
-          Source · <a href="https://github.com/ArcadiaImpact/latent-learning">ArcadiaImpact/latent-learning</a>, branch <code>arch/training_prediction_symreg</code>.
+          Source · <a href="https://github.com/ArcadiaImpact/latent-learning">ArcadiaImpact/latent-learning</a> — run artifacts archived on main under <code>experiments/training_prediction/symreg/</code>; task branch <code>arch/training_prediction_symreg</code> deleted after archival.
           <br>Prior result this beat · <a href="../bif/">Loss-landscape grooves</a> thread; full numbers in <a href="https://github.com/ArcadiaImpact/latent-learning/blob/main/experiments/training_prediction/TP_RESULTS.md">TP_RESULTS.md</a>.
-          <br>Write-up · <code>findings/training_prediction_symreg/blogpost.md</code> on the task branch · winner merged 2026-07-08.
-          <br>Ablations (§10) · <code>experiments/training_prediction/ablations/</code> on the task branch · scored with the unmodified production shim, 2026-07-09.
+          <br>Write-up · <code>experiments/training_prediction/symreg/blogpost.md</code> · winner merged 2026-07-08.
+          <br>Ablations (§10) · <code>experiments/training_prediction/ablations/</code> on main · scored with the unmodified production shim, 2026-07-09.
           <br>Kernel v2 (§10 postscript) · dense 1B re-estimation, 4×H100 · raw chains + ensembles in the org-internal archive under <code>kernel_v2/</code> · 2026-07-09.
+          <br>K-audit + spectra (§11) · 149 predictors at leaderboard SHAs; transform search in <code>experiments/training_prediction/ablations/spectral_transform.py</code> · 2026-07-09.
+          <br>Equilibrated FT (§12) · 149 runs, 5 arms, fleet of 15 community RTX&nbsp;4090 singles · harness <code>experiments/training_prediction/tp_equilibrated.py</code>, runs + analysis in the org-internal archive under <code>equilibrated/</code> · 2026-07-10/11.
         </div>
       </div>
     </main>
@@ -1332,6 +1504,9 @@ def predict(ctx: dict) -&gt; np.ndarray:
         "projection-op": "dl_out = a · Q[out,S] (Q_SS + λI)⁻¹ δ_S — solve for interpolation weights in one kernel's geometry (here, the exact gradient Gram G) using the run's own observed in-subset loss drops as δ_S, then propagate through a second kernel's geometry (the Adam-preconditioned Gram G_pre) to predict the held-out response.",
         "tracin-one-ckpt": "TracIn (Pruthi et al., 2020) estimates the influence of training example i on example j by summing gradient inner products ⟨∇ℓᵢ, ∇ℓⱼ⟩ over checkpoints along the training trajectory. The one-checkpoint variant keeps only the pretrained checkpoint w₀, which makes the whole influence matrix simply the gradient Gram G computed there.",
         "less-precond": "As in LESS (Xia et al., 2024): instead of raw gradients, use the update directions Adam would actually apply — each per-document gradient is rescaled by the optimizer's accumulated moment state (estimated here from calibration batches) before taking inner products. G_pre is the Gram of those preconditioned gradients.",
+        "fdt-def": "Fluctuation–dissipation theorem: for a system in thermal equilibrium, its linear response to a small perturbation is proportional to its equilibrium fluctuations. Here: tilt the tempered posterior by ε·ℓ_j and the expected shift in ℓ_i is −nβ·ε·Cov(ℓ_i, ℓ_j) — the loss kernel IS the response kernel, but only for ensembles that genuinely sample a Gibbs state.",
+        "crn-def": "Common random numbers: every run in a group is driven by the identical noise stream and base-minibatch sequence (same seeded generator), so only the subset tilt differs between runs. Per-document MCMC noise then appears as a shared across-run offset which per-document rank scoring cancels exactly — measured noise-commonality 0.989.",
+        "psgld-def": "Preconditioned SGLD (Li et al., 2016): Langevin sampling in an adaptive (RMSProp/Adam-style) metric, with the noise covariance matched to the preconditioner so the stationary law is still a proper Gibbs measure. The loss covariance of such a sampler would be the Adam-metric analogue of K — the natural candidate kernel for the AdamW arm's stationary response.",
       });
     </script>
   </body>

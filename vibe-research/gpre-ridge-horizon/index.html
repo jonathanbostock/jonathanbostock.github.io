@@ -27,7 +27,8 @@
         solve (<i>G</i><sub>pre</sub>[<i>S</i>,<i>S</i>] + <i>λI</i>)&thinsp;<i>x</i> = <b>1</b>
         on the trained subset <i>S</i>, predict <i>G</i><sub>pre</sub>[:,<i>S</i>]&thinsp;<i>x</i>
         for everything else, with <i>λ</i> = <i>λ</i><sub>0</sub>·tr(<i>G</i><sub>pre</sub>[<i>S</i>,<i>S</i>])/|<i>S</i>|
-        and a fleet-tuned <i>λ</i><sub>0</sub> = 40. Follow-up runs at longer horizons showed the
+        and a fleet-tuned <i>λ</i><sub>0</sub> = 40.
+        <a href="../arch2-training-prediction-symreg/#s12">Follow-up runs at longer horizons</a> showed the
         formula's <button class="tooltip-button" data-define="lds">LDS</button> falling as training
         went on. This piece turns the one knob the formula has: sweep
         <i>λ</i><sub>0</sub> over ten orders of magnitude, at every horizon, and see what was the
@@ -164,7 +165,9 @@
           (held-out grid, 1200-step runs, and this sweep's outputs under <code>equilibrated/</code>).
           <br>Cut from this page · the same sweep over the thread's thermal/Langevin (SGLD)
           arms, which heat rather than learn; those results live in the repo's
-          <code>RESULTS.md</code> alongside the sweep outputs.
+          <code>RESULTS.md</code> alongside the sweep outputs, and the equilibrated-FT
+          story itself is <a href="../arch2-training-prediction-symreg/#s12">§12 of the
+          run page</a>.
         </div>
       </div>
     </main>
