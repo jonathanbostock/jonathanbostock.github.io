@@ -73,19 +73,21 @@
               <span class="vr-date">2026-07-14 · closing the loop</span>
               <span class="vr-title">MNIST across training: the gradient kernel is the BIF at init — and something else at convergence</span>
               <p class="vr-desc">The BIF thread's foundation experiment redone with exact
-                gradient Grams at all 31 checkpoints of the same run, same probes, same
-                protocol, ~18 s per checkpoint (×545 cheaper). At init it reproduces the
-                published epoch-0 cell to r = 0.9999996; digit structure peaks at epoch 2
-                (ARI 0.23, and 0.36 at 5,100 probes — the BIF's ensemble headline from one
-                checkpoint, past SGLD's probe-noise wall) and then fades as the model
-                converges (r<sub>eff</sub> 26 → ~100: converged per-image gradients are
-                idiosyncratic noise) while the SGLD BIF holds flat — point gradients and
-                posterior curvature are the same probe of a young landscape and different
-                probes of a converged one. The one regime where sampling earns its premium.</p>
+                no-embedding gradient Grams at all 31 checkpoints of the same run, same
+                probes, same protocol, ~18 s per checkpoint (×545 cheaper). At init it
+                reproduces the published epoch-0 cell to r = 0.9999996; digit structure
+                peaks at epoch 2 (ARI 0.23, rising to 0.34 at 5,100 probes — past SGLD's
+                probe-noise wall) and then fades as the model converges (r<sub>eff</sub>
+                22 → ~100: converged per-image gradients are idiosyncratic noise) while
+                the SGLD BIF holds flat — point gradients and posterior curvature are the
+                same probe of a young landscape and different probes of a converged one.
+                Also: preconditioning subsumes embedding-exclusion. Interactive
+                cluster hierarchy per checkpoint, hover for member digits.</p>
               <span class="vr-tags">
                 <span class="vr-tag">mnist</span>
                 <span class="vr-tag">training-dynamics</span>
                 <span class="vr-tag">bif-comparison</span>
+                <span class="vr-tag">interactive</span>
                 <span class="vr-tag">×545</span>
               </span>
             </a>
