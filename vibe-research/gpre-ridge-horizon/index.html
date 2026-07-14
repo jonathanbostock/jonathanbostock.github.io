@@ -6,7 +6,7 @@
     <title>The winning ridge, stress-tested against longer training — Vibe Research</title>
     <link rel="stylesheet" href="../../style.css">
     <link rel="stylesheet" href="../style.css">
-    <meta name="description" content="The arch2 training-prediction winner's G_pre ridge is exactly optimal at the 16-step horizon it shipped for (held-out LDS 0.617 at λ0=40). On 1200-step runs that actually learn, ridge strength turns out to be nearly irrelevant across eight orders of magnitude — SGD stays predictable at every horizon, AdamW's predictability collapses by 256 steps for every λ, and a solve-free first-order prediction significantly beats the whole ridge family there.">
+    <meta name="description" content="The arch2 training-prediction winner's G_pre ridge is exactly optimal at the 16-step horizon it shipped for (held-out LDS 0.617 at λ0=40). On noisy 1200-step runs λ looks irrelevant — but on clean deterministic quenches extended to 1024 steps, the optimum slides down with horizon exactly as kernel-regression theory predicts: re-tuning λ rescues SGD prediction (+0.30 LDS at 256 steps, P=.997) while Adam collapses for every λ. The dial matters; the regime decides.">
   </head>
   <body>
     <main id="page">
@@ -153,7 +153,63 @@
         so treat retuned-vs-shipped gaps as upper bounds; and the two arms here carry small
         parameter noise and a decoupled weight-decay tether so that 1200-step runs stay bounded —
         the τ-snapshots are quenched loss changes measured against the same pre-run baseline as
-        the 16-step eval.</p>
+        the 16-step eval. That last caveat turned out to matter: §6 removes it.</p>
+
+        <h2 id="s6"><span class="vr-section-num">§6</span>Postscript: on clean quenches, the optimum does move</h2>
+
+        <p><b>Added 2026-07-14.</b> The sections above left a confound: the only long-horizon
+        runs carried injected noise and a decay-to-init tether, and there λ barely mattered.
+        So we re-ran the question on <em>true</em> deterministic quenches — the held-out
+        eval's own standard cell (identical 32-doc subsets, per-family learning rates, seeds,
+        fp32 harness; τ=16 snapshots reproduce the original runs digit-for-digit), extended
+        16 → 1024 steps with probes at every power of two. 96 runs — SGD, Adam, Muon,
+        LoRA-Adam — on a 15×H100 fleet, ~$220.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig4_lq_lambda_lines.png" alt="Four panels, one per optimizer family: LDS vs training steps with one line per ridge strength. SGD's lines fan apart after 64 steps with small-lambda lines on top; Adam, Muon and LoRA-Adam collapse to zero or below by 128-512 steps for every lambda; the no-solve line goes strongly negative late for SGD and Adam.">
+          <figcaption><b>Fig. 4</b> · Clean quenches: LDS vs training steps, one line per
+          λ₀ (dark→pale teal = weak→strong; orange = shipped λ₀ = 40; grey dashed = no-solve
+          first-order). Unlike the noisy arms of Fig. 2, the SGD λ-lines <em>fan apart</em>
+          beyond 64 steps.</figcaption>
+        </figure>
+
+        <p class="vr-pull">On clean SGD quenches the ridge optimum slides down with horizon
+        exactly as kernel-regression theory predicts — the same λ₀ = 0.316 that significantly
+        hurts at 16 steps (P = 0.003) buys +0.30 of LDS at 256 steps (P = 0.997).</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig5_lq_moving_optimum.png" alt="Left: LDS vs ridge strength for SGD, one line per horizon; the argmax star moves from the right plateau at 16 steps to progressively smaller lambda at 128 through 1024 steps. Right: optimal lambda vs training steps on log-log axes for SGD and Muon, falling between 1/tau and tau^-2 guide lines.">
+          <figcaption><b>Fig. 5</b> · Left: the SGD LDS-vs-λ₀ curve per horizon; ★ = argmax.
+          At τ = 16 the optimum is the familiar right-hand plateau; from τ = 128 an interior
+          optimum appears and marches left — λ₀* ≈ 0.3 at 128, 0.1 at 256, 0.01 at 512.
+          Right: λ₀*(τ) on log-log axes, falling between the gradient-flow 1/τ scaling and
+          τ⁻² (steeper than 1/τ, consistent with response saturation on top of the
+          time-rescaling).</figcaption>
+        </figure>
+
+        <p>Three things the clean runs settle. <b>First, the horizon-dependent ridge is real</b>
+        — §2's "λ is nearly irrelevant" was a property of the noisy/tethered dynamics, not of
+        long training as such. On clean SGD, re-tuning rescues late prediction outright: LDS
+        0.076 → 0.379 at τ = 256 (Δ = +0.303 [+0.072, +0.491], P = 0.997), 0.034 → 0.261 at
+        τ = 512, with the paired sign-flip against τ = 16 making the moving optimum
+        unambiguous. <b>Second, at long horizon the solve is no longer decoration.</b> The
+        first-order response goes <em>anti</em>-predictive once out-of-subset transfer reverses
+        into interference (mean out-of-S Δloss flips from −0.06 nats at τ = 16 to +0.1…+3.5
+        nats by τ = 256–1024): fdt scores −0.05 at τ = 256 while the retuned solve holds +0.38
+        (Δ = +0.43, P = 1.000). The 16-step picture — solve worth +0.003 over a column sum —
+        inverts completely. <b>Third, Adam's collapse is the linearization, full stop.</b> With
+        no noise and no tether, Adam still dies at τ ≥ 128 for every λ across twelve decades
+        (best 0.09, then ≤ 0; LoRA-Adam identical), having dug ~2.3× deeper into the subset by
+        that point than SGD. Muon sits in between: predictable through τ = 256 — though there
+        via the plain first-order form, not the solve (P = 0.023 in fdt's favour) — with its
+        argmax drifting 10 → 0.03 before it too collapses by τ = 512.</p>
+
+        <p>The practical summary for the winning formula sharpens: its fixed λ₀ = 40 is
+        correct at the horizon it shipped for, over-damped ~100–4000× beyond a couple hundred
+        SGD steps (where a 1/(η·τ)-style schedule would keep most of the signal), and no λ
+        schedule saves the preconditioned optimizers — their fix has to come from re-linearizing
+        (TracIn-style multi-checkpoint Grams, or SOURCE-style segment curvature), not from the
+        damping dial.</p>
 
         <div class="vr-colophon">
           Source · <span style="font-family:inherit">latent-learning repo,
@@ -161,8 +217,12 @@
           (<code>ridge_lambda_sweep.py</code>, <code>ridge_sweep_bootstrap.py</code>,
           <code>heldout_lambda_sweep.py</code>; results in <code>ridge_sweep_20260713_090849/</code>,
           commits <code>651e132…4da37c3</code>).
+          <br>Long quenches (§6) · <code>experiments/training_prediction/tp_long_quench.py</code> +
+          <code>long_quench/</code> (SPEC, fleet script, <code>sweep_20260714/</code>,
+          commits <code>cbe83d9…5f665e8</code>) · 96 runs, 15×H100, 2026-07-13/14.
           <br>Data · <a href="https://huggingface.co/datasets/arcadia-impact/training-prediction-1b-heldout-20260708">arcadia-impact/training-prediction-1b-heldout-20260708</a>
-          (held-out grid, 1200-step runs, and this sweep's outputs under <code>equilibrated/</code>).
+          (held-out grid, 1200-step runs under <code>equilibrated/</code>, clean long quenches
+          under <code>long_quench/</code>).
           <br>Cut from this page · the same sweep over the thread's thermal/Langevin (SGLD)
           arms, which heat rather than learn; those results live in the repo's
           <code>RESULTS.md</code> alongside the sweep outputs, and the equilibrated-FT
