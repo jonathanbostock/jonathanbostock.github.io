@@ -23,17 +23,21 @@
 
         <li>
           <a class="vr-card" href="gradient-kernel-countsketch-14m/">
-            <span class="vr-date">2026-07-13</span>
-            <span class="vr-title">How wide a hash buys a gradient kernel?</span>
-            <p class="vr-desc">CountSketching preconditioned per-token gradients of
-              Pythia-14M: kernel error follows 1.65/&radic;(D&middot;S), so D&middot;S &asymp; 27k buys 1%.
-              Eigenspace work is cheap, neighbour work is expensive, serial VJPs beat
-              batched on torch 2.13, and the Pythia-1.4B target prices at ~$760.</p>
+            <span class="vr-date">2026-07-13 → 14</span>
+            <span class="vr-title">A sketch-error law for gradient kernels</span>
+            <p class="vr-desc">CountSketching preconditioned per-token gradients across
+              Pythia 14M/70M/410M, &plusmn;embeddings: error = c/&radic;(D&middot;S) with
+              c = &radic;(1+r<sub>eff</sub>), the kernel's stable rank &mdash; flat at 23.3
+              from 19M to 302M params, so the width any accuracy needs is predictable in
+              advance. Freeze the embeddings (&epsilon;-floor heavy hitters), factor the
+              preconditioner rank-1 (kernel &rho; = 0.99 from 300 KB of state), and
+              Pythia-1.4B &times; 4.25M tokens prices at $250&ndash;480 on measured A100
+              throughput.</p>
             <span class="vr-tags">
               <span class="vr-tag">gradient-kernels</span>
               <span class="vr-tag">sketching</span>
               <span class="vr-tag">interpretability</span>
-              <span class="vr-tag">pilot</span>
+              <span class="vr-tag">scaling</span>
             </span>
           </a>
         </li>
