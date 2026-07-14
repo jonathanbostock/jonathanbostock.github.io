@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+    <title>Gradient kernels as a production object — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css?v=gk1">
+    <meta name="description" content="A thread of experiments making the preconditioned per-token gradient kernel a production object: a sketch-error law that prices any accuracy in advance, PageRank conductance clustering with LLM-judged cluster quality, what preconditioning should mean for MoE experts, and the BIF thread's MNIST foundation redone exactly with gradient Grams.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Gradient kernels as a production object</h1>
+        <p>The BIF thread ended with a verdict: the loss kernel is the
+        <button class="tooltip-button" data-define="gradient-kernel">gradient kernel's</button>
+        lossy shadow, and sampling it is the expensive way to compute a GEMM.
+        This thread takes the hint and builds the GEMM into an instrument —
+        <button class="tooltip-button" data-define="countsketch">CountSketch</button>
+        the preconditioned per-token gradients as they are computed, know the
+        error in advance, and feed the result to things that want an N×N
+        similarity: conductance clustering, influence retrieval, training-dynamics
+        probes. Each piece stands on its own; read top-down for the arc.
+        <a href="..">← back to Vibe Research</a></p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <ul class="vr-feed">
+
+          <li>
+            <a class="vr-card" href="../bif/imagenet-loss-kernel/">
+              <span class="vr-date">2026-07-09 → 10 · origin, from the BIF thread</span>
+              <span class="vr-title">The ImageNet loss kernel, reproduced — and then taken apart</span>
+              <p class="vr-desc">Where this thread comes from: Timaeus' flagship loss-kernel
+                result reproduces, then decomposes — on a classifier it is mostly the label
+                channel, and on a label-free ImageGPT the exact gradient kernel linearly
+                contains 91% of its explainable geometry. The Adam-preconditioned gradient
+                kernel recovers the semantics the loss kernel drops (few-shot accuracy ×3,
+                matching the model's best activation probe), and re-sampling the loss kernel
+                under the Fisher prior just returns the gradient kernel plus Monte-Carlo
+                noise. Conclusion adopted here as premise: compute the gradient kernel
+                directly.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">origin</span>
+                <span class="vr-tag">imagegpt</span>
+                <span class="vr-tag">gradient-kernel</span>
+              </span>
+            </a>
+          </li>
+
+          <li>
+            <a class="vr-card" href="../gradient-kernel-countsketch-14m/">
+              <span class="vr-date">2026-07-13 → 14 · foundation</span>
+              <span class="vr-title">A sketch-error law for gradient kernels</span>
+              <p class="vr-desc">The instrument. CountSketching preconditioned per-token
+                gradients across Pythia 14M/70M/410M, ±embeddings: error = c/√(D·S) with
+                c = √(1+r<sub>eff</sub>), the kernel's stable rank — flat at 23.3 from 19M
+                to 302M params, so the width any accuracy needs is predictable in advance.
+                Freeze the embeddings (ε-floor heavy hitters), factor the preconditioner
+                rank-1 (kernel ρ = 0.99 from 300 KB of state), and Pythia-1.4B × 4.25M
+                tokens prices at $250–480 on measured A100 throughput.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">error-law</span>
+                <span class="vr-tag">sketching</span>
+                <span class="vr-tag">scaling</span>
+                <span class="vr-tag">pythia</span>
+              </span>
+            </a>
+          </li>
+
+        </ul>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "gradient-kernel": "Gradient kernel: G_ij = g_i^T diag(q) g_j, the preconditioned inner product of per-datapoint loss gradients. The linear-response (γ→∞) limit of the Bayesian influence function — what SGLD sampling estimates, computed exactly.",
+        "countsketch": "CountSketch: each parameter coordinate is hashed to one of S buckets per table (D tables) with a random sign; a gradient row becomes a D·S-dim signed bucket-sum computed on the fly, and sketched inner products are unbiased estimates of the true ones.",
+      });
+    </script>
+  </body>
+</html>
