@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="../../../favicon.svg">
+    <title>MNIST across training: the gradient kernel vs the BIF — Vibe Research</title>
+    <link rel="stylesheet" href="../../../style.css">
+    <link rel="stylesheet" href="../../style.css?v=gkmd1">
+    <meta name="description" content="Exact preconditioned gradient kernels at all 31 checkpoints of the BIF thread's MNIST pixel transformer: digit structure peaks at epoch 2 and fades with convergence while the SGLD BIF stays flat. Same object at initialisation (r=0.9999996), steadily different geometry as the basin forms. One checkpoint at 5,100 probes matches the BIF's cross-checkpoint ensemble at ×545 less compute.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>MNIST across training: the gradient kernel is the BIF at init — and something else at convergence</h1>
+        <p class="vr-byline">
+          <span>2026-07-14</span>
+          <span>1× RTX PRO 4500 · ≈$1 of GPU</span>
+          <span><a href="..">gradient-kernel thread</a> · <a href="../..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>The <a href="../../bif/mnist-grooves/">BIF thread's foundation page</a>
+        clustered the loss-landscape kernel of a pixel-level autoregressive MNIST
+        transformer at every checkpoint and found the digit taxonomy carved during
+        training — via SGLD sampling, at real cost per cell, gated on seed
+        agreement. Its epoch-0 control couldn't use SGLD at all (no stable local
+        posterior at a random init) and fell back on the γ→∞ limit of the
+        localised BIF: the raw <b>gradient Gram</b>. This page runs that limit
+        object — plus the Adam-style
+        <button class="tooltip-button" data-define="precond">preconditioned</button>
+        version — at <em>all 31 checkpoints</em> of the very same training run,
+        on the very same 510 probes, with the very same spectral-clustering
+        protocol, and compares against the published SGLD numbers point for
+        point. Deterministic, no chains, no gate: ~18 s per checkpoint.</p>
+
+        <p class="vr-pull">At initialisation the gradient kernel <em>is</em> the
+        BIF (off-diagonal r = 0.9999996 against the published epoch-0 cell). As
+        training converges they part ways: the gradient kernel's digit structure
+        peaks at epoch 2 (ARI 0.23) and fades to 0.10 by epoch 30, while the
+        SGLD BIF holds flat at ≈0.31. Point gradients and posterior curvature
+        are the same probe of a young landscape and different probes of a
+        converged one.</p>
+
+        <figure>
+          <img src="figs/f1_ari_vs_epoch.png" alt="ARI against digit labels versus training epoch: preconditioned gradient kernel rises to 0.23 at epoch 2 then decays to about 0.10; raw gradient kernel is roughly half that; published BIF points sit flat near 0.31 from epoch 2 onward; raw-pixel k-means baseline at 0.30.">
+          <figcaption><b>Fig. 1</b> · Digit structure across training, 510 probes,
+          exactly the published protocol (correlation → clipped affinity →
+          spectral k = 10 → ARI). Preconditioning roughly doubles the raw
+          kernel's ARI at every epoch (γ-family details are moot here — the
+          model is dense, so q = 1/(v+ε); an ε sweep over ×0.1/×10 moves ARI by
+          &lt;0.002). The BIF diamonds are the published across-epochs numbers
+          from the mnist-grooves page, same probes.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="figs/f2_corr_matrices.png" alt="Six correlation matrices ordered by digit, from init (featureless), through epoch 1-2 (strong block structure), fading progressively through epochs 5, 10, 30 to faint blocks.">
+          <figcaption><b>Fig. 2</b> · Preconditioned gradient-kernel correlation,
+          probes ordered by digit. Featureless at init, strongest same-digit
+          blocks at epochs 1–2, then progressively fainter — the visual of the
+          Fig. 1 decay. Compare the BIF's version of this small-multiple on the
+          mnist-grooves page, where the epoch-30 blocks stay crisp.</figcaption>
+        </figure>
+
+        <p>The mechanism is in the kernel spectra. At init the kernel is one
+        common mode (stable rank r<sub>eff</sub> = 1.0; top eigenvalue carries
+        98% of the trace — every random-init gradient points the same way, and
+        what clustering there is lives in the residual). At epoch 2 the kernel is
+        genuinely class-structured: r<sub>eff</sub> ≈ 26 with digit blocks
+        carrying the spectrum. By epoch 30, r<sub>eff</sub> ≈ 90–110: a converged
+        model's per-image gradients are nearly-orthogonal idiosyncratic residuals
+        — the loss is minimised, the shared class directions are trained away,
+        and what remains of each gradient is that image's private noise. The SGLD
+        BIF doesn't inherit this fade because it never measures the point
+        gradient: it samples the <em>basin</em>, whose curvature keeps encoding
+        which images share mechanisms after their gradients have shrunk into
+        noise.</p>
+
+        <figure>
+          <img src="figs/f5_bif_agreement.png" alt="Pearson correlation of off-diagonal kernel entries between gradient kernels and published BIF matrices: 1.0 at init, dropping monotonically to 0.32 (preconditioned) and 0.24 (raw) by epoch 30, against a BIF seed-to-seed ceiling near 0.9.">
+          <figcaption><b>Fig. 3</b> · Same object, then not. Off-diagonal
+          correlation agreement between our kernels and the published SGLD BIF
+          cells (block-centred, seed-averaged), against the BIF's own
+          seed-to-seed agreement (~0.9) as the ceiling. Init: 0.9999996 — an
+          exact reproduction of their epoch-0 gradgram from independent code.
+          Epoch 2: 0.62. Epoch 30: 0.32. The divergence is monotone in
+          training progress.</figcaption>
+        </figure>
+
+        <p>This resolves cleanly against the <a href="../../bif/imagenet-loss-kernel/">ImageNet
+        capstone</a>, which found the opposite-sounding result — there, the
+        preconditioned gradient kernel <em>contained</em> the loss kernel's
+        geometry and beat it downstream. No contradiction: ImageGPT and
+        Inception are one-to-two-epoch models over huge corpora, nowhere near
+        the zero-gradient regime; this 30-epoch MNIST toy actually converges
+        (test loss flat to 0.001 bits/pixel for the last five epochs). The
+        gradient kernel's validity window is "gradients still carry signal" —
+        which covers essentially every practically-trained large model, and
+        stops covering a toy ground to its minimum. If you want landscape
+        structure <em>at</em> such a minimum, that is the one regime where the
+        SGLD machinery earns its 545× premium.</p>
+
+        <figure>
+          <img src="figs/f4_composition.png" alt="Grid of stacked cluster-composition bars: rows k=4, 10, 16; columns init through epoch 30. At init every cluster is a uniform digit mixture at all k; at epoch 2 clusters are digit-dominated and stay coherent as k grows; by epoch 30 the composition is intermediate.">
+          <figcaption><b>Fig. 4</b> · The taxonomy at increasing k, across
+          training (spectral clustering of G<sub>pre</sub> at k = 4/10/16). At
+          init, every cluster is a uniform mixture at every k — nothing to
+          carve. At epoch 2, splits track digits and stay coherent as k rises
+          past 10 (sub-digit variants split off, mirroring the BIF page's
+          alluvial). At epoch 30 the carving is partial. ARI keeps
+          <em>rising</em> with k at epoch 2 (0.23 at k = 14–16 vs 0.10 at
+          k = 4): the young kernel holds a taxonomy finer than ten digits.</figcaption>
+        </figure>
+
+        <figure>
+          <img src="figs/f6_probe_scaling.png" alt="ARI versus probe count 510 to 5100: preconditioned epoch-2 kernel rises from 0.23 to 0.364; epoch-30 preconditioned kernel rises from 0.10 to 0.22; raw kernels rise more shallowly.">
+          <figcaption><b>Fig. 5</b> · Exact kernels scale where SGLD couldn't.
+          The BIF's 2,050-probe cell <em>degraded</em> to ARI 0.29
+          (draw-budget noise: T ≫ M fails); the exact kernel has no draw
+          budget, and the epoch-2 kernel reaches <b>0.364 at N = 5,100</b> —
+          matching the BIF's cross-checkpoint-ensemble headline (0.36) from a
+          single checkpoint. The epoch-30 kernel more than doubles with N
+          (0.10 → 0.22): convergence dilutes the class signal per pair, it
+          doesn't erase it. Honesty footnote: the raw-pixel k-means baseline
+          also rises with N (≈0.38 at 2,050+), so on MNIST the gradient kernel
+          matches pixels rather than beating them — the interesting content is
+          what the kernel measures (landscape structure, Fig. 3), not MNIST
+          clustering supremacy.</figcaption>
+        </figure>
+
+        <p class="vr-pull">All 31 checkpoints cost 17 minutes ≈ $0.21 on one
+        mid-tier card — ~18 s per checkpoint against ~3 GPU-hours per published
+        BIF cell: ×545 cheaper, with no step-size calibration, no burn-in, no
+        seed gate, and exact reproducibility.</p>
+
+        <p>Positioning: Timaeus showed per-sample landscape information
+        clustering MNIST digits across (epoch × temperature) with per-sample
+        LLCs, and their Loss Kernel paper sweeps checkpoint structure on
+        ImageNet; He &amp; Su clustered MNIST classifiers with an NTK-flavored
+        gradient similarity at a single snapshot. The combination here —
+        deterministic exact gradient Gram, autoregressive generative model, the
+        published BIF protocol swept over every checkpoint with a direct
+        cell-by-cell agreement curve — appears to be new, and the punchline is
+        two-sided rather than triumphalist: the cheap deterministic object
+        replicates the expensive sampled one exactly where they coincide by
+        construction (init), tracks it closely through early training, and
+        measurably stops being the same thing at a converged minimum.</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>model</dt><dd>PixelTransformer d128 · 4L · 4H · pixel-CE, 16 levels, 784-pixel raster AR (P ≈ 0.8M) — the BIF thread's exact checkpoints, epochs 0–30, from HF</dd>
+            <dt>probes</dt><dd>the BIF run's exact 510 (51/class, test split; byte-identical indices), scaling arm to 2,050/5,100</dd>
+            <dt>rows</dt><dd>per-image gradient of summed per-pixel NLL, fp32; preconditioner q = 1/(v+ε), v from 1,024 disjoint train images per checkpoint</dd>
+            <dt>clustering</dt><dd>published protocol verbatim: correlation → clip(r,0,1) affinity → spectral k=10 (+ k = 2–16 sweep) → ARI/NMI vs digits</dd>
+            <dt>agreement</dt><dd>off-diag Pearson vs published BIF cells (z-normed, seed-averaged); init gate 0.9999996 before anything else was trusted</dd>
+            <dt>cost</dt><dd>12.4 s grads + 5.6 s moments per checkpoint; 31 checkpoints ≈ 17 min ≈ $0.21</dd>
+            <dt>artifacts</dt><dd>HF <code>arcadia-impact/gradient-kernel-mnist-dynamics-20260714</code> (all kernels, moments, analysis JSONs, figures); code <code>experiments/mnist_dynamics/</code> @ fba585b</dd>
+          </dl>
+        </div>
+
+      </div>
+    </main>
+    <script src="../../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "precond": "q = 1/(v+ε) per coordinate, v the second moment of per-image gradients at that same checkpoint — the Adam/Fisher-style diagonal preconditioning that made the ImageNet gradient kernel match activation probes. It roughly doubles ARI at every epoch here.",
+      });
+    </script>
+  </body>
+</html>
