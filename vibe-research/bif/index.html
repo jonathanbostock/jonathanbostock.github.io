@@ -320,9 +320,11 @@
                 deterministic gradient Grams at all 31 checkpoints (same run, same probes,
                 same protocol, ×545 cheaper): identical to the BIF at init (r = 0.9999996),
                 tracking it through early training, and measurably a different object at the
-                converged minimum — where the SGLD machinery is the one that still sees the
-                digit taxonomy. The regime map for when sampling the posterior earns its
-                cost.</p>
+                converged minimum — where this thread's SGLD kernel still sees the digit
+                taxonomy. Then the addendum closes the gap: seeded Gaussian perturbations at
+                SGLD-matched temperature reproduce the BIF curve deterministically at ~1% of
+                the cost — the loss kernel is temperature-calibrated smoothing of the
+                gradient kernel, and the temperature knob is the whole difference.</p>
               <span class="vr-tags">
                 <span class="vr-tag">mnist</span>
                 <span class="vr-tag">gradient-kernel</span>

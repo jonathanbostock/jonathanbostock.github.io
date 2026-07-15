@@ -81,8 +81,12 @@
                 22 → ~100: converged per-image gradients are idiosyncratic noise) while
                 the SGLD BIF holds flat — point gradients and posterior curvature are the
                 same probe of a young landscape and different probes of a converged one.
-                Also: preconditioning subsumes embedding-exclusion. Interactive
-                cluster hierarchy per checkpoint, hover for member digits.</p>
+                Same-day addendum: the divergence is diagnosed (the converged basin is a
+                fossil of epoch-1 gradient directions) and then <b>erased</b> — K = 512 seeded
+                Gaussian weight perturbations at SGLD-matched temperature reproduce the BIF's
+                flat curve deterministically, forward-only, at ~1% of its cost. Also:
+                preconditioning subsumes embedding-exclusion. Interactive cluster hierarchy
+                per checkpoint, hover for member digits.</p>
               <span class="vr-tags">
                 <span class="vr-tag">mnist</span>
                 <span class="vr-tag">training-dynamics</span>
