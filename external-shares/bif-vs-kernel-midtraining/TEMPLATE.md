@@ -1,6 +1,6 @@
 # Influence Functions and Midtraining
 
-**tl;dr**: One important part of midtraining and similar interventions (such as SDF) is to instill new abstractions/concepts in the model. This can be understood as a way of modifying the inductive bias of the model. We validate the work of Timaeus on loss kernels, introduce a related method called the preconditioned gradient kernel, and discuss the implications for measuring the effects of midtraining.
+**tl;dr**: One important part of midtraining and similar interventions (such as SDF) is to instill new abstractions/concepts in the model. This can be understood as a way of modifying the inductive bias of the model. We validate the work of Timaeus on loss kernels, introduce a related method called the preconditioned gradient kernel, and discuss the implications for measuring the effects of midtraining. [Don't make this all orange lmao]
 
 ## Abstractions and Inductive Bias
 
@@ -9,7 +9,7 @@ In this context abstraction is a latent variable which *compresses* a dataset in
 When working with pretrained LLMs, we often rely on an unspoken assumption: that, for any natural language description of a behaviour, we can train a model to exhibit that behaviour. Why does this often work? It might be because the following two hypotheses hold:
 
 - The \link{Natural Abstraction Hypothesis}[link to John Wentworth as appropriate here] which states that any two systems which model the same data will find a canonical set of abstractions
-- The **Inductive Abstraction Hypothesis** which states that inductive biases in a pretrained model line up with the abstractions that the model has learned.
+- The **Inductive Abstraction Hypothesis**[Make this green+bold, not just bold] which states that inductive biases in a pretrained model line up with the abstractions that the model has learned.
 
 Together, these say that the inductive biases of a pretrained LLM will line up with the kinds of concepts that are natural to humans.
 
@@ -57,3 +57,6 @@ Caption: Interactive figure showing clustering on $G_\mathrm{pre}$. It is less e
 To validate $G_{pre}$, we've repeated Timaeus' experiments on Pythia 14M, though on a smaller dataset. A random sample of clusters from an embedding-free $G_{pre}$ run of the PageRank-based clustering method are shown below:
 
 {Figure: Fig 5 from https://jonathanbostock.github.io/vibe-research/gradient-kernel/clustering-pilot/}
+
+{Figure: Fig 6 from the clustering pilot above
+Caption: Cluster map (UMAP) of the no-embedding clusters above.}
