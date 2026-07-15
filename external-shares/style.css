@@ -1,0 +1,49 @@
+/* ============================================================
+   external-shares — additive styles on top of the site's style.css
+   AND vibe-research/style.css (load order: site → vibe-research →
+   this file). Pages in here borrow the vibe-research furniture
+   (.vr-fig, .vr-prose, .vr-itip, …) but are assembled shares of
+   existing work rather than fresh AI-generated write-ups, so the
+   gutter watermark is downgraded: the selectors below override the
+   vibe-research AI-GENERATED stamp with a smaller AI-ASSISTED one
+   (same mechanism, same colours, ~25% smaller tiles).
+   ============================================================ */
+
+html::before,
+html::after {
+  width: 2.4rem;                 /* matches the SVG tile width / font size */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='38' height='288' viewBox='0 0 38 288'><text x='19' y='144' transform='rotate(90 19 144)' text-anchor='middle' dominant-baseline='central' font-family='IBM Plex Sans, Helvetica, sans-serif' font-weight='700' font-size='38' fill='%230a3d0a' fill-opacity='0.15' textLength='288' lengthAdjust='spacingAndGlyphs'>AI-ASSISTED  %C2%B7  </text></svg>");
+  background-size: 2.4rem auto;
+}
+html::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='38' height='288' viewBox='0 0 38 288'><text x='19' y='144' transform='rotate(-90 19 144)' text-anchor='middle' dominant-baseline='central' font-family='IBM Plex Sans, Helvetica, sans-serif' font-weight='700' font-size='38' fill='%230a3d0a' fill-opacity='0.15' textLength='288' lengthAdjust='spacingAndGlyphs'>AI-ASSISTED  %C2%B7  </text></svg>");
+}
+
+/* Dark mode — same brighter green as the parent watermark. */
+:root.dark::after {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='38' height='288' viewBox='0 0 38 288'><text x='19' y='144' transform='rotate(90 19 144)' text-anchor='middle' dominant-baseline='central' font-family='IBM Plex Sans, Helvetica, sans-serif' font-weight='700' font-size='38' fill='%230f5a14' fill-opacity='0.19' textLength='288' lengthAdjust='spacingAndGlyphs'>AI-ASSISTED  %C2%B7  </text></svg>");
+}
+:root.dark::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='38' height='288' viewBox='0 0 38 288'><text x='19' y='144' transform='rotate(-90 19 144)' text-anchor='middle' dominant-baseline='central' font-family='IBM Plex Sans, Helvetica, sans-serif' font-weight='700' font-size='38' fill='%230f5a14' fill-opacity='0.19' textLength='288' lengthAdjust='spacingAndGlyphs'>AI-ASSISTED  %C2%B7  </text></svg>");
+}
+
+/* Narrow viewports — mirror the parent's tighter, dimmer variant,
+   again one size down. (The parent's max-width:720px display:none
+   still applies unchanged.) */
+@media (max-width: 1380px) {
+  html::before,
+  html::after {
+    width: 1.8rem;
+    background-size: 1.8rem auto;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='29' height='216' viewBox='0 0 29 216'><text x='14.5' y='108' transform='rotate(90 14.5 108)' text-anchor='middle' dominant-baseline='central' font-family='IBM Plex Sans, Helvetica, sans-serif' font-weight='700' font-size='29' fill='%230a3d0a' fill-opacity='0.07' textLength='216' lengthAdjust='spacingAndGlyphs'>AI-ASSISTED  %C2%B7  </text></svg>");
+  }
+  html::before {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='29' height='216' viewBox='0 0 29 216'><text x='14.5' y='108' transform='rotate(-90 14.5 108)' text-anchor='middle' dominant-baseline='central' font-family='IBM Plex Sans, Helvetica, sans-serif' font-weight='700' font-size='29' fill='%230a3d0a' fill-opacity='0.07' textLength='216' lengthAdjust='spacingAndGlyphs'>AI-ASSISTED  %C2%B7  </text></svg>");
+  }
+  :root.dark::after {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='29' height='216' viewBox='0 0 29 216'><text x='14.5' y='108' transform='rotate(90 14.5 108)' text-anchor='middle' dominant-baseline='central' font-family='IBM Plex Sans, Helvetica, sans-serif' font-weight='700' font-size='29' fill='%230f5a14' fill-opacity='0.10' textLength='216' lengthAdjust='spacingAndGlyphs'>AI-ASSISTED  %C2%B7  </text></svg>");
+  }
+  :root.dark::before {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='29' height='216' viewBox='0 0 29 216'><text x='14.5' y='108' transform='rotate(-90 14.5 108)' text-anchor='middle' dominant-baseline='central' font-family='IBM Plex Sans, Helvetica, sans-serif' font-weight='700' font-size='29' fill='%230f5a14' fill-opacity='0.10' textLength='216' lengthAdjust='spacingAndGlyphs'>AI-ASSISTED  %C2%B7  </text></svg>");
+  }
+}
