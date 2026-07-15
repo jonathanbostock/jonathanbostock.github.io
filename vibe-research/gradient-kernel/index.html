@@ -93,6 +93,29 @@
             </a>
           </li>
 
+          <li>
+            <a class="vr-card" href="clustering-pilot/">
+              <span class="vr-date">2026-07-14 → 15 · downstream consumer</span>
+              <span class="vr-title">Clustering the sketch: conductance communities scored by an LLM judge</span>
+              <p class="vr-desc">Timaeus-style PageRank conductance clustering on 262k sketched
+                per-token gradient rows of Pythia-14M — two arms (±embeddings), three widths,
+                every cluster scored by a detection judge. Freezing embeddings changes
+                <em>what gets discovered</em> (cross-arm ARI 0.03–0.05, near-disjoint) and makes
+                it better: judge accuracy 0.87 vs 0.78, winning every size bin above 100 rows.
+                Folding the sketch destroys cluster identity long before judgeability (goodness
+                flat across widths while membership ARI collapses), and good clusters are the
+                reproducible ones (top goodness quartile re-found at Jaccard 0.99) — until the
+                sketch dies, when the relationship inverts. Interactive: every scored cluster,
+                hover for its member contexts.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">clustering</span>
+                <span class="vr-tag">llm-judge</span>
+                <span class="vr-tag">pythia</span>
+                <span class="vr-tag">interactive</span>
+              </span>
+            </a>
+          </li>
+
         </ul>
       </div>
     </main>

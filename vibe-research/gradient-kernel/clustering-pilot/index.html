@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="../../../favicon.svg">
+    <title>Clustering the sketch — Vibe Research</title>
+    <link rel="stylesheet" href="../../../style.css">
+    <link rel="stylesheet" href="../../style.css?v=itip1">
+    <meta name="description" content="PageRank conductance clustering on CountSketched preconditioned per-token gradients of Pythia-14M, scored by an LLM judge: freezing embeddings changes what gets discovered (near-disjoint clusterings) and makes clusters better at matched size; folding the sketch destroys cluster identity long before judgeability; good clusters are the reproducible ones.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Clustering the sketch: conductance communities in a 262k-token gradient kernel, scored by an LLM judge</h1>
+        <p class="vr-byline">
+          <span>2026-07-14 → 15</span>
+          <span>2× A100 + RTX PRO 4000 · ≈$25 of GPU + ~10k judge calls</span>
+          <span><a href="..">gradient-kernel thread</a> · <a href="../..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>The <a href="../../gradient-kernel-countsketch-14m/">error-law page</a>
+        established what a CountSketched preconditioned gradient kernel costs and
+        how accurate it is; this page asks whether the thing it preserves is
+        <em>useful</em>. We run
+        <button class="tooltip-button" data-define="acl">Timaeus-style local
+        PageRank conductance clustering</button> on 261,632 per-token gradient
+        rows of Pythia-14M (512 Pile sequences × 512 positions, D·S = 4096
+        native), in two arms — all parameters vs embeddings frozen — and at two
+        folded widths per arm (1024 and 256 total dims, derived offline by
+        <button class="tooltip-button" data-define="folding">bucket folding</button>,
+        no model passes). Every discovered cluster is then scored by an LLM
+        judge with the
+        <button class="tooltip-button" data-define="detection">detection
+        protocol</button>: explain the cluster from ten members, then classify
+        held-out members against distractors; balanced accuracy is the
+        cluster's "goodness". Six clusterings, one seeded judge, cross-run
+        membership matching.</p>
+
+        <p class="vr-pull">Freezing the embeddings doesn't just shrink the
+        sketch error — it changes <em>what the clustering finds</em> (cross-arm
+        ARI 0.03–0.05: near-disjoint), and what the no-embed kernel finds is
+        better: mean judge accuracy 0.87 vs 0.78, winning every size bin above
+        100 rows.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/p1_goodness_by_run.svg" alt="Grouped bars: mean balanced accuracy for six runs. All-parameters arm around 0.75 to 0.80 at native, 1024-fold and 256-fold; embeddings-frozen arm flat at 0.87 across all three widths.">
+          <figcaption><b>Fig. 1</b> · Judge accuracy per run (bars: mean ±95% CI
+          over clusters; hatched = folded widths). The no-embed arm is better
+          and <em>flat across widths</em>; the full arm is worse everywhere.
+          Config caveat: the no-embed discover ran a finer-grained recalibrated
+          termination (430–511 clusters at 0.70 coverage vs 33–48 at 0.78–0.88),
+          so cluster counts aren't comparable across arms — the goodness and
+          matched-size comparisons below are.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§1</span> Embeddings change what is discovered</h2>
+
+        <p>The error-law study showed the embedding block's ε-floor heavy
+        hitters dominate the full kernel's geometry at 14M; here that has a
+        semantic consequence. Full-native and no-embed-native agree at
+        <b>ARI 0.047</b> over all rows — and 0.003 restricted to rows clustered
+        in both — with median best-Jaccard 0.01 in both directions: there is
+        essentially no cluster in one arm whose membership survives into the
+        other. This is not sketch noise (the two folded widths of the full arm
+        agree with each other at ARI 0.52–0.67). Freezing embeddings is not a
+        cost optimisation; it selects a different — and per §2, better —
+        similarity structure. The same lesson at MoE scale: excluding expert
+        tensors flips 41% of nearest-neighbour structure on granite-1B (E2,
+        MoE page to follow).</p>
+
+        <h2><span class="vr-section-num">§2</span> No-embed clusters are better at matched size</h2>
+
+        <p>Goodness falls with cluster size in both arms and the two inventories
+        have very different size profiles (median scored size 158 vs 1,423), so
+        the honest comparison is within size bins:</p>
+
+        <figure class="vr-fig">
+          <img src="figs/p3_goodness_by_size.svg" alt="Grouped bars by cluster-size bin: both arms near 0.9 for 20-100 rows; embeddings-frozen wins every bin above 100 rows, 0.75 versus 0.42 in the 5,000-50,000 bin.">
+          <figcaption><b>Fig. 2</b> · Mean judge accuracy by cluster size,
+          native runs. At 20–100 rows the arms tie (≈0.90); above 100 rows the
+          no-embed arm wins every bin, and at 5k+ rows the full arm's clusters
+          collapse to near-chance (0.42) while no-embed holds 0.75. The full
+          kernel's big communities are embedding-geometry blobs; the no-embed
+          kernel's big communities remain coherent, explainable structures.
+          (Full-arm bins ≥300 hold only 3–7 clusters each.)</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§3</span> Folding destroys identity long before judgeability</h2>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/p2_width_identity_vs_judgeability.svg" alt="Two panels versus sketch width. Left: median best-Jaccard and ARI to the native clustering fall steeply from 4096 to 256, for both arms. Right: mean balanced accuracy is nearly flat across the same widths for both arms.">
+          <figcaption><b>Fig. 3</b> · The width ablation's two faces. Left:
+          cluster identity versus the native run (median best-Jaccard, solid;
+          both-clustered ARI, dashed) decays as the sketch folds down —
+          no-embed native↔1024 is the strongest agreement in the study
+          (ARI 0.57), native↔256 collapses (0.19, coverage 0.33). Right: the
+          judge can't tell the difference — mean accuracy is flat in width for
+          the no-embed arm (0.872/0.870/0.872). Folding changes <em>which</em>
+          clusters exist, not how coherent the survivors look. Production
+          verdict, matching the error law: 1024 total dims is free at this
+          kernel's stable rank; 256 halves the discovered structure.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§4</span> Good clusters are the reproducible ones — until the sketch dies</h2>
+
+        <p>Joining goodness with cross-width membership matching (full arm,
+        native↔1024): the top goodness quartile reproduces at median Jaccard
+        <b>0.99</b> vs 0.54 for the bottom quartile, matched pairs' goodness
+        scores agree at Pearson 0.89, and Spearman(goodness, best-Jaccard) =
+        0.37. At native↔256 the relationship <em>inverts</em> (top-quartile
+        Jaccard 0.001, bottom 0.77): heavy folding kills the small coherent
+        clusters first and preserves the large mushy ones. Goodness and
+        repeatability co-vary while the representation is faithful, and
+        decouple in opposite directions when it isn't — so the pair
+        (goodness, cross-width Jaccard) is a usable health check for any
+        production width. (No-embed joins are underpowered — 120-cluster
+        sampled scoring leaves 14–22 matched scored pairs.)</p>
+
+        <p>What the judge is actually looking at — every scored cluster, both
+        native arms, hover for members:</p>
+
+<!-- PILOTSCATTER_SVG_START (regenerate: scripts/make_pilot_figures.py) -->
+<figure class="vr-fig breakout">
+<svg class="pilot-svg" viewBox="0 0 860 420" role="img" aria-label="Per-cluster goodness vs size, both native arms; hover a point for its member contexts" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="860" height="420" fill="#fafcf2"/>
+<line x1="64" y1="324.3" x2="844" y2="324.3" stroke="#b4b8af" stroke-width="0.6" pointer-events="none"/>
+<text x="56" y="327.8" text-anchor="end" font-size="11" fill="#1f3318">0.4</text>
+<line x1="64" y1="224.9" x2="844" y2="224.9" stroke="#b4b8af" stroke-width="0.6" pointer-events="none"/>
+<text x="56" y="228.4" text-anchor="end" font-size="11" fill="#1f3318">0.6</text>
+<line x1="64" y1="125.4" x2="844" y2="125.4" stroke="#b4b8af" stroke-width="0.6" pointer-events="none"/>
+<text x="56" y="128.9" text-anchor="end" font-size="11" fill="#1f3318">0.8</text>
+<line x1="64" y1="26.0" x2="844" y2="26.0" stroke="#b4b8af" stroke-width="0.6" pointer-events="none"/>
+<text x="56" y="29.5" text-anchor="end" font-size="11" fill="#1f3318">1.0</text>
+<line x1="64" y1="274.6" x2="844" y2="274.6" stroke="#7b8074" stroke-dasharray="4 3" stroke-width="1" pointer-events="none"/>
+<text x="840" y="269.6" text-anchor="end" font-size="10" fill="#7b8074" pointer-events="none">chance</text>
+<text x="72.5" y="390" text-anchor="middle" font-size="11" fill="#1f3318">20</text>
+<line x1="72.5" y1="374" x2="72.5" y2="378" stroke="#1f3318" stroke-width="0.8"/>
+<text x="203.1" y="390" text-anchor="middle" font-size="11" fill="#1f3318">100</text>
+<line x1="203.1" y1="374" x2="203.1" y2="378" stroke="#1f3318" stroke-width="0.8"/>
+<text x="389.9" y="390" text-anchor="middle" font-size="11" fill="#1f3318">1,000</text>
+<line x1="389.9" y1="374" x2="389.9" y2="378" stroke="#1f3318" stroke-width="0.8"/>
+<text x="576.8" y="390" text-anchor="middle" font-size="11" fill="#1f3318">10,000</text>
+<line x1="576.8" y1="374" x2="576.8" y2="378" stroke="#1f3318" stroke-width="0.8"/>
+<text x="763.6" y="390" text-anchor="middle" font-size="11" fill="#1f3318">100,000</text>
+<line x1="763.6" y1="374" x2="763.6" y2="378" stroke="#1f3318" stroke-width="0.8"/>
+<text x="454.0" y="412" text-anchor="middle" font-size="12" fill="#1f3318">cluster size (rows, log)</text>
+<text x="14" y="200.0" text-anchor="middle" font-size="12" fill="#1f3318" transform="rotate(-90 14 200.0)">balanced accuracy</text>
+<circle cx="74" cy="17" r="5" fill="#2f6175" fill-opacity="0.75"/>
+<text x="84" y="21" font-size="11.5" fill="#1f3318">all parameters (44 clusters)</text>
+<circle cx="324" cy="17" r="5" fill="#1a6b06" fill-opacity="0.75"/>
+<text x="334" y="21" font-size="11.5" fill="#1f3318">embeddings frozen (120 scored of 430)</text>
+<text x="844" y="21" text-anchor="end" font-size="10.5" fill="#7b8074">hover a cluster for its members · click to pin</text>
+<circle class="pn" cx="822.7" cy="224.9" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 8 · 207,311 rows · BA 0.60" data-comp="" data-lines="targets: “
+”×11096 · “.”×6919 · “,”×6872|“… website for upcoming performances). As in Elizabethan times, seat”|“…galiths from behind the perimeter fence, but with enough”"/>
+<circle class="pn" cx="808.9" cy="299.4" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 12 · 174,900 rows · BA 0.45" data-comp="The shared pattern is predicting the next sub-word fragment or common function word that syntactically/morphologically continues an incomplete word, name, or ph" data-lines="targets: “
+”×8632 · “ the”×5750 · “,”×5709|“… mM Tris-Cl \[pH 7.5\], 100”|“… intelligence can&amp;#x27;t do yet—science being one of them—”"/>
+<circle class="pn" cx="702.8" cy="349.1" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 1 · 47,276 rows · BA 0.35" data-comp="Predicting the next token/word-fragment that continues technical, legal, code, or foreign-language text, often mid-word or mid-clause based on preceding domain-" data-lines="targets: “
+”×2971 · “ the”×2055 · “.”×1998|“… = badAnswers;
+    }
+
+    public String”|“…hey (who also created the “Mechanical Underdogs”"/>
+<circle class="pn" cx="686.6" cy="274.6" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 5 · 38,722 rows · BA 0.50" data-comp="Predicting the next word/token that plausibly continues varied prose, technical, or formatted text based on syntactic and contextual flow." data-lines="targets: “
+”×2269 · “,”×1543 · “ the”×1537|“…ixed with the letter &amp;#x27;N&amp;#x27;) wheel into action when the”|“… wasn’t sure what would happen next.
+
+We”"/>
+<circle class="pn" cx="653.3" cy="324.3" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 7 · 25,677 rows · BA 0.40" data-comp="Each example shows a mid-sentence context where the next token is a common function word, connective, or subword continuation that grammatically extends the ong" data-lines="targets: “
+”×1368 · “ the”×1270 · “,”×1030|“… methods would decline have not been realized. In fact, document”|“… relevant under CRE 401. Further, the risk of unfair
+
+”"/>
+<circle class="pn" cx="622.0" cy="274.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 4 · 17,470 rows · BA 0.50" data-comp="The context ends mid-sentence or mid-phrase, and the marked token is the natural next word/subword continuing that sentence grammatically and semantically." data-lines="targets: “ the”×3325 · “ you”×552 · “ it”×504|“… of the present invention, there is provided a multi-lay”|“… jumble-sale ware.
+
+7Shopping
+”"/>
+<circle class="pn" cx="594.6" cy="125.4" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 326 · 12,461 rows · BA 0.80" data-comp="The examples show the model predicting the next word/subword completing a proper place name or noun phrase in travel/location-related text." data-lines="targets: “ St”×469 · “ &amp;amp;”×273 · “ London”×169|“… subsequent hanging, drawing and quartering of Catholics under her successor”|“…itan and hedonistic vibe, Brighton is where England&amp;#x27;s”"/>
+<circle class="pn" cx="589.6" cy="175.1" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 145 · 11,721 rows · BA 0.70" data-comp="The model predicts the next token that continues or completes a word, phrase, or common collocation in travel/guidebook-style descriptive text." data-lines="targets: “ St”×441 · “ &amp;amp;”×273 · “ Rd”×165|“… Richborough&amp;#x27;s Roman Fort, just 2 miles north of Sand”|“…Mar) F
+
+A short walk west of the train”"/>
+<circle class="pn" cx="579.6" cy="100.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 395 · 10,353 rows · BA 0.85" data-comp="Predicting the next token that continues naturally after a word/phrase, often possessive &quot;&#x27;s&quot;, contractions, or newline/section breaks in list-like text." data-lines="targets: “
+”×4537 · “s”×519 · “)”×211|“…
+
+By far the most enthralling exhibit in the”|“… with, “well, don’t worry. You’”"/>
+<circle class="pn" cx="573.0" cy="150.3" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 413 · 9,547 rows · BA 0.75" data-comp="Predicting the continuation of a partial word/name (often place or proper nouns) that completes a token started earlier in the text." data-lines="targets: “.”×939 · “s”×290 · “com”×209|“…50/11.25, three hours).
+
+Rich”|“…
+
+2Marble ArchA5
+
+5E”"/>
+<circle class="pn" cx="571.3" cy="249.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 50 · 9,350 rows · BA 0.55" data-comp="The predicted token completes a partial word or proper-noun fragment, forming the expected continuation of a name, place, time, or compound term begun in the co" data-lines="targets: “pm”×811 · “OOGLE”×376 · “ St”×219|“…1; £15-20;  tTottenham Court”|“… Palace
+
+Favoured by the rich and powerful for”"/>
+<circle class="pn" cx="565.9" cy="125.4" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 279 · 8,752 rows · BA 0.80" data-comp="Each example predicts the next token that continues or completes a compound noun, unit, number suffix, or phrase in a factual/descriptive (often London-related)" data-lines="targets: “ £”×583 · “ St”×365 · “ London”×291|“…Sloane Sq)
+
+This atmospheric little book”|“… of exquisitely preserved medieval buildings virtually untouched since the 15”"/>
+<circle class="pn" cx="560.2" cy="274.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 414 · 8,158 rows · BA 0.50" data-comp="The predicted token is a factual continuation completing a truncated numeric, temporal, or place-name detail in dense reference/travel/technical text." data-lines="targets: “,”×322 · “5”×303 · “1”×213|“…;  hnoon-3pm &amp;amp; 5.30-”|“… a phenylalanine (F158) at this position. Recently”"/>
+<circle class="pn" cx="559.2" cy="175.1" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 407 · 8,057 rows · BA 0.70" data-comp="The context is a truncated phrase or proper noun (place name, technical term, or list item), and the marked token predictably completes or continues it." data-lines="targets: “ £”×584 · “ St”×367 · “ London”×290|“… the V-phase winding 8 is generated in response to the”|“…ipher Middle English of”"/>
+<circle class="pn" cx="551.0" cy="100.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 350 · 7,276 rows · BA 0.85" data-comp="The word &quot;the&quot; is predicted immediately after a comma, preposition, or clause boundary, introducing a new noun phrase." data-lines="targets: “ the”×6714 · “ its”×238 · “ this”×87|“… Sark) F
+
+Designed by Wren,”|“… **Lydd** , a quaint former corporate member of”"/>
+<circle class="pn" cx="550.8" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 11 · 7,263 rows · BA 0.90" data-comp="The word &quot;the&quot; is predicted next after a preposition, verb, or linking word, wherever a definite noun phrase is grammatically expected." data-lines="targets: “ the”×6807 · “ its”×154 · “ this”×75|“… returned to the city, and creative energy bottled up in”|“…_ and the outline of _Bleak House,_ declaring”"/>
+<circle class="pn" cx="550.6" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 34 · 7,245 rows · BA 0.95" data-comp="The model predicts the definite article &quot;the&quot; as the next token, following phrases where a noun phrase introduced by &quot;the&quot; is grammatically expected." data-lines="targets: “ the”×6807 · “ its”×157 · “ this”×72|“… the Tudor gatehouse and to your right you&amp;#x27;ll see”|“… deeper into Martin’s background, in a way, for”"/>
+<circle class="pn" cx="546.9" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 25 · 6,923 rows · BA 1.00" data-comp="A comma (or comma-forming token) predicted after a list item, clause, or phrase, marking a pause before continuing the sentence." data-lines="targets: “,”×6854 · “.”×10 · “ in”×4|“… standard&amp;#x27; flag flies on the roof. If she&amp;#x27;s away”|“…S. 2017; see also People
+
+  v. Thornton”"/>
+<circle class="pn" cx="546.3" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 253 · 6,870 rows · BA 1.00" data-comp="" data-lines="targets: “,”×6781 · “.”×10 · “;”×4|“…and Britain&amp;#x27;s highest) mountain.
+
+Swaledale”|“…’s an ambulance, a fire engine or a police car”"/>
+<circle class="pn" cx="544.4" cy="200.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 111 · 6,709 rows · BA 0.65" data-comp="The context ends mid-token or mid-reference (figure/citation labels, code tags, hyphenated words), and the marked token completes that truncated identifier or w" data-lines="targets: “
+”×883 · “3”×264 · “.”×255|“… for synthesis of viral DNA. {#s2.5}”|“…heny: Precision Controllability of the F-”"/>
+<circle class="pn" cx="542.1" cy="324.3" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 277 · 6,526 rows · BA 0.40" data-comp="Predicted token follows a heading, place name, or list marker in structured travel-guide text, typically a newline or word continuing that structure." data-lines="targets: “
+”×2110 · “.”×615 · “s”×250|“…Hastings** £13, 80 minutes, half-hour”|“…Sleeping
+
+13Abode CanterburyB2
+”"/>
+<circle class="pn" cx="538.7" cy="125.4" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 26 · 6,260 rows · BA 0.80" data-comp="Each example predicts the next token as a mid-word/name continuation fragment completing a partially spelled word, code, or citation abbreviation from context." data-lines="targets: “
+”×764 · “OOGLE”×545 · “.”×213|“… to remain in the unexposed portion; and
+(3”|“… £45, 4-course dinner £90;  h”"/>
+<circle class="pn" cx="538.1" cy="150.3" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 185 · 6,211 rows · BA 0.75" data-comp="Predicting the next character/token that completes or punctuates an ongoing phrase, name, possessive, URL fragment, or sentence ending." data-lines="targets: “.”×3601 · “
+”×628 · “ref”×98|“…    }
+
+    /**
+     * Pega uma prop”|“…  GOOGLE MAP ) ; www.rmg.co”"/>
+<circle class="pn" cx="532.4" cy="200.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 227 · 5,786 rows · BA 0.65" data-comp="Predicting a common function word (often &quot;of&quot;) or contextually likely continuation that grammatically links or completes a noun phrase in mid-sentence." data-lines="targets: “ of”×3707 · “ between”×60 · “ also”×48|“…38 cell culture supernatant. (A) Native agarose gel analysis”|“… looting and arson. Analysts still debate the causes”"/>
+<circle class="pn" cx="524.6" cy="150.3" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 327 · 5,256 rows · BA 0.75" data-comp="The context ends mid-phrase where the next token is most likely an indefinite article &quot;a&quot;/&quot;an&quot; or a word-continuing subword fragment, especially in Danish/Norwe" data-lines="targets: “ a”×2141 · “ an”×279 · “.”×104|“… havde lært en gambianer at kende”|“… structure fashioned from 545 pieces of Cornish granite, channeling”"/>
+<circle class="pn" cx="522.3" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 103 · 5,109 rows · BA 0.90" data-comp="The model predicts the next numeral, unit fragment, or word continuation immediately following abbreviations, hyphens, or symbols in travel-guide-style text (pr" data-lines="targets: “5”×241 · “ Mon”×194 · “ Sun”×181|“….co.uk; 15 Holywell St; mains £”|“…### When to Go
+
+#### High Season _(Jun–”"/>
+<circle class="pn" cx="521.9" cy="150.3" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 239 · 5,085 rows · BA 0.75" data-comp="The context ends mid-phrase (often after &quot;the&quot; or a preposition), and the marked token is the next word/number continuing a noun phrase or descriptive detail." data-lines="targets: “ London”×151 · “ most”×137 · “ HBV”×103|“… which run from Halloween to March, allow visitors to enter the”|“…-4pm Sat &amp;amp; Sun Apr-Sep) in the”"/>
+<circle class="pn" cx="517.4" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 73 · 4,811 rows · BA 1.00" data-comp="Each example ends a sentence, caption, or heading, and the marked token is a paragraph break/newline starting a new section." data-lines="targets: “
+”×4811|“…) tour bus stops at the clifftop.
+”|“… HEMIS.FR / GETTY IMAGES ©
+”"/>
+<circle class="pn" cx="513.2" cy="274.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 8 · 4,567 rows · BA 0.50" data-comp="Predicting the next word that continues a phrase mid-sentence, typically a common function word (article, preposition, or connector) needed for grammatical cont" data-lines="targets: “ a”×1986 · “ an”×209 · “ 1”×153|“… £7-15;  hnoon-3pm &amp;amp;”|“… of the same name, this hard, salty cheese has”"/>
+<circle class="pn" cx="510.7" cy="125.4" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 125 · 4,432 rows · BA 0.80" data-comp="The predicted token is a hyphen connecting two parts of a compound word, number range, or phrase (e.g., &quot;12th-century,&quot; &quot;top-notch,&quot; &quot;319-...&quot;)." data-lines="targets: “-”×3425 · “ (”×937 · “(”×43|“…  tHigh St Kensington) and Notting Hill”|“… champagne £34;  h10am-6pm Mar”"/>
+<circle class="pn" cx="509.9" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 298 · 4,389 rows · BA 0.90" data-comp="Predicting the word &quot;of&quot; (or its recurring token fragments like &quot;f&quot;/&quot;rep&quot;) following noun phrases, as a natural continuation into a prepositional phrase." data-lines="targets: “ of”×3764 · “rep”×53 · “ f”×47|“… in the surrounding palaces. The striking Tudor gatehouse”|“…if (parser.getLocalName().equals(&amp;quot;reponse”"/>
+<circle class="pn" cx="505.9" cy="200.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 52 · 4,176 rows · BA 0.65" data-comp="The predicted token is a highly predictable continuation completing a word, contraction, tag, or phrase given strong preceding context." data-lines="targets: “
+”×1043 · “s”×617 · “.”×211|“…
+
+#### Edinburgh Highlights
+
+#### Sights
+”|“…0&amp;quot; maxOccurs=&amp;quot;0&amp;quot;&amp;gt;
+            &amp;lt;name”"/>
+<circle class="pn" cx="504.4" cy="150.3" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 411 · 4,101 rows · BA 0.75" data-comp="Each example predicts the next token in technical, numerical, or reference-style text where the token is a specific code, digit, label, or short word completing" data-lines="targets: “30”×319 · “50”×145 · “www”×112|“… [B](#F3){ref-type=&amp;quot;fig&amp;quot;},”|“… only detected in serum samples from patients 17, 21, and”"/>
+<circle class="pn" cx="504.3" cy="175.1" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 63 · 4,094 rows · BA 0.70" data-comp="Predicting the next token in structured or templated text—headers, lists, XML tags, or repeated phrases—where context strongly constrains the token (often white" data-lines="targets: “
+”×1288 · “.”×287 · “=&amp;quot;”×193|“…G4
+
+72Fortnum &amp;amp; MasonB6
+”|“… ruling party, do not like their term cut short.
+”"/>
+<circle class="pn" cx="504.0" cy="100.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 355 · 4,078 rows · BA 0.85" data-comp="Predicting the next token that numerically or contextually completes a pattern—hours/time ranges, measurement units, dates, or continuing scientific/technical p" data-lines="targets: “pm”×747 · “ ”×164 · “th”×151|“… narrow alleyway, this tiny medieval pub (dating from at”|“…50/8;  h9am-5.30”"/>
+<circle class="pn" cx="503.5" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 138 · 4,055 rows · BA 0.90" data-comp="The context ends with a noun phrase (often &quot;one,&quot; &quot;heart,&quot; &quot;aspects,&quot; &quot;vaulting,&quot; &quot;west,&quot; &quot;slice&quot;) that typically requires the preposition &quot;of&quot; to follow, predi" data-lines="targets: “ of”×3557 · “ but”×170 · “ up”×33|“… river to the area controlled by the licentious Bishops”|“… residence in Britain. The palace lies 1.5 miles west”"/>
+<circle class="pn" cx="503.1" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 174 · 4,036 rows · BA 0.90" data-comp="The predicted token is a hyphen &quot;-&quot; linking compound words or joining numeric/time ranges (e.g., hours, dates, prices)." data-lines="targets: “-”×3859 · “–”×18 · “
+”×14|“…noon-midnight Mon-Wed, to 1am Thu”|“… in the case of an SD-OCT) in an FD”"/>
+<circle class="pn" cx="501.6" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 200 · 3,958 rows · BA 1.00" data-comp="Each example ends at a point where a coordinating conjunction (typically &quot;and&quot; or &quot;or&quot;) is predicted to link list items, clauses, or descriptive phrases." data-lines="targets: “ and”×3610 · “ or”×172 · “ &amp;amp;”×29|“…, Alice in Wonderland_ and _Harry Potter_ ,”|“…  tAngel)
+
+Get your fill of antiques”"/>
+<circle class="pn" cx="501.3" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 99 · 3,948 rows · BA 0.90" data-comp="The predicted token is a short preposition/infinitive-marker (&quot;to,&quot; &quot;from,&quot; &quot;by,&quot; &quot;in,&quot; &quot;into,&quot; &quot;out&quot;) completing a verb phrase or clause." data-lines="targets: “ to”×1354 · “ from”×722 · “ by”×506|“…
+Arrive after 7.30pm and you can expect”|“… supplied to the V-phase winding 8 is generated in response”"/>
+<circle class="pn" cx="500.5" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 293 · 3,909 rows · BA 0.90" data-comp="The word &quot;of&quot; is predicted after nouns/quantifiers that grammatically require a following prepositional phrase (e.g., &quot;dozens,&quot; &quot;view,&quot; &quot;first,&quot; &quot;holder&quot;)." data-lines="targets: “ of”×3437 · “ions”×90 · “ent”×81|“…unned down in a hallway metres from the prime minister and dozens”|“…
+ALondon is a place that you can visit any time”"/>
+<circle class="pn" cx="498.1" cy="125.4" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 243 · 3,791 rows · BA 0.80" data-comp="The examples all show the next token predicted at a point where a numeric range, list, address, or compound phrase is mid-completion (e.g., after hyphens, &quot;£&quot;, " data-lines="targets: “5”×229 · “6”×165 · “Sat”×138|“… Mon-Wed, to midnight Thu-Sat, noon-”|“…Dover connections:
+
+A **Canterbury** £”"/>
+<circle class="pn" cx="493.8" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 137 · 3,599 rows · BA 1.00" data-comp="The marked token is a line break/section boundary immediately following a heading, list entry, or completed clause in structured travel-guide-like text." data-lines="targets: “
+”×3532 · “
+
+”×23 · “3”×5|“…
+### SIX CLASSIC BRITISH CHEESES”|“… for free internet sessions.
+
+Post OfficePOST OFFICE”"/>
+<circle class="pn" cx="490.1" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 307 · 3,438 rows · BA 1.00" data-comp="Predicting a hyphen (or digit) connecting numeric ranges, times, or compound words in guidebook-style listings." data-lines="targets: “-”×3371 · “–”×13 · “65”×11|“….co.uk; 6 Rock Pl;  h4”|“… the extensive gardens, but don&amp;#x27;t get lost in the 300”"/>
+<circle class="pn" cx="490.0" cy="125.4" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 16 · 3,432 rows · BA 0.80" data-comp="Predicting the next token that continues a structured or formatted pattern—completing markup/reference syntax, list items, code indentation, or a partially type" data-lines="targets: “
+”×877 · “.”×286 · “ref”×171|“…=&amp;quot;0&amp;quot;&amp;gt;
+            &amp;lt;name&amp;gt;PD1.20”|“… current phase command table 22 for outputting the phase value of”"/>
+<circle class="pn" cx="487.2" cy="125.4" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 117 · 3,316 rows · BA 0.80" data-comp="The predicted token continues a hyphenated compound word or numeric/currency expression, completing a partial phrase after a hyphen or symbol." data-lines="targets: “5”×214 · “6”×159 · “Sat”×138|“… St, W1; dm/tw from £18/”|“… treatment. Cytoplasmic core RNA was extracted by the SDS-”"/>
+<circle class="pn" cx="487.0" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 23 · 3,306 rows · BA 0.95" data-comp="The context is a directory/listing entry (venue, tour, or transit info) and the marked token is a line break or entry-ending punctuation." data-lines="targets: “
+”×3264 · “
+
+”×16 · “arn”×11|“…pm Apr-Sep, to 4pm Oct-Mar)”|“… Lanark &amp;amp; New Lanark
+
+#### Borders Region”"/>
+<circle class="pn" cx="484.1" cy="125.4" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 248 · 3,191 rows · BA 0.80" data-comp="Each context ends where &quot;to&quot; is the natural next word, following verbs, adjectives, or phrases that typically precede an infinitive or the preposition &quot;to.&quot;" data-lines="targets: “ to”×2561 · “ from”×217 · “ for”×186|“… = &amp;quot;default value&amp;quot;;
+
+}
+
+I need”|“… 10pm on Friday and Saturday.
+
+The collection is”"/>
+<circle class="pn" cx="482.7" cy="125.4" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 232 · 3,138 rows · BA 0.80" data-comp="The predicted token is the next word/fragment that completes a technical noun phrase or continues a sequence (chemical, genetic, or place name) predictably from" data-lines="targets: “ DNA”×194 · “ RNA”×132 · “ HBV”×112|“… counted value of the counter 20 becomes a pointer 23 of the”|“… resolute, cigar-smoking wartime leader.
+
+”"/>
+<circle class="pn" cx="481.6" cy="249.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 78 · 3,096 rows · BA 0.55" data-comp="Predicting the next token in structured/templated text (markup tags, citation references, headings, repeated boilerplate) where context strongly constrains a hi" data-lines="targets: “
+”×1020 · “.”×197 · “-”×141|“… and August crowds.
+
+### Best Places to Eat
+”|“…type=&amp;quot;fig&amp;quot;} and [7B](#F7){”"/>
+<circle class="pn" cx="477.4" cy="175.1" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 95 · 2,940 rows · BA 0.70" data-comp="The context ends with a verb, adjective, or phrase that grammatically requires a following preposition/infinitive marker (&quot;to&quot; or &quot;for&quot;), predicted as the natur" data-lines="targets: “ to”×2526 · “ for”×199 · “ into”×48|“… very clearly marked on the ground and on the map – ideal”|“… at hefty rates each time. The best and cheapest way”"/>
+<circle class="pn" cx="472.6" cy="100.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 84 · 2,769 rows · BA 0.85" data-comp="Predicting the unit or suffix (e.g., am/pm, m, %, th, W) that follows a numeric value in the text." data-lines="targets: “pm”×802 · “am”×498 · “ ”×157|“…hnoon-3pm Sat &amp;amp; Sun, 7-9”|“….30pm Mon-Thu, to midnight Fri, 10”"/>
+<circle class="pn" cx="466.5" cy="200.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 212 · 2,569 rows · BA 0.65" data-comp="Predicting the next whitespace, punctuation, or minor token (e.g., newline, brace, doc-comment marker, short continuation) that syntactically completes structur" data-lines="targets: “  ”×613 · “    ”×204 · “                        ”×121|“…Of=&amp;quot;parent&amp;quot;
+    app:layout_constraintTop”|“… static function setSessao($valor){
+        ”"/>
+<circle class="pn" cx="466.5" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 316 · 2,568 rows · BA 0.95" data-comp="The model predicts a preposition (or similar function word) that naturally continues the sentence, linking a noun phrase or clause to what follows." data-lines="targets: “ in”×1134 · “ on”×456 · “ with”×297|“… began its decline when the entrance to the harbour silted up”|“… as with results of ACCENT I study where the relative decrease”"/>
+<circle class="pn" cx="466.3" cy="150.3" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 310 · 2,564 rows · BA 0.75" data-comp="The predicted token completes a noun phrase, supplying the specific noun (or number word) that the preceding context sets up as expected." data-lines="targets: “-”×329 · “ Rd”×127 · “ Museum”×78|“…
+Continue east along the Mall then walk north up Marlborough”|“…/660;  a W;  tTottenham Court”"/>
+<circle class="pn" cx="462.8" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 15 · 2,455 rows · BA 0.90" data-comp="Marks the start of a new line/paragraph (a newline token) immediately following the end of a complete sentence." data-lines="targets: “
+”×2378 · “
+
+”×45 · “&amp;lt;|endoftext|&amp;gt;”×32|“… – is where you&amp;#x27;ll generally find the most original works.”|“… perfect for a fast lunch. Branches dot central London.”"/>
+<circle class="pn" cx="462.4" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 415 · 2,443 rows · BA 1.00" data-comp="The next token is an indefinite article (&quot;a&quot;/&quot;some&quot;) introducing a noun phrase after a clause or phrase ending in a preposition, verb, or comma." data-lines="targets: “ a”×2112 · “ an”×251 · “ one”×34|“… of British holidaymakers, sprinkled with vinegar and eaten from”|“… waves of immigrants have left their mark here, and it&amp;#x27;s”"/>
+<circle class="pn" cx="458.9" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 49 · 2,341 rows · BA 1.00" data-comp="The model predicts the indefinite article &quot;a&quot;/&quot;an&quot; following contexts that grammatically require it before an upcoming singular noun phrase." data-lines="targets: “ a”×2037 · “ an”×240 · “ one”×31|“… of the motor 1 by counting the number of pulses generated during”|“…-room B&amp;amp;B in a Regency town house,”"/>
+<circle class="pn" cx="458.3" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 363 · 2,323 rows · BA 0.95" data-comp="Each context ends where the model predicts the indefinite article &quot;a&quot;/&quot;an&quot; introducing an upcoming noun phrase." data-lines="targets: “ a”×2003 · “ an”×216 · “ one”×33|“… on one of the tight tables at the back, or grab”|“… the Cotswolds, Britain&amp;#x27;s astounding variety is”"/>
+<circle class="pn" cx="457.8" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 416 · 2,307 rows · BA 0.90" data-comp="Predicting the indefinite article (&quot;a&quot;/&quot;an&quot;) following a verb like &quot;is,&quot; &quot;with,&quot; or &quot;of&quot; before an upcoming singular noun phrase." data-lines="targets: “ a”×2003 · “ an”×221 · “ one”×33|“…-road Britain. Once you escape the busy main highways,”|“… prepared by underlayering and incubated for 4 h in”"/>
+<circle class="pn" cx="456.3" cy="75.7" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 4 · 2,266 rows · BA 0.90" data-comp="Each example predicts the next token within a recurring venue-listing template containing &quot;MAP GOOGLE MAP&quot; links and contact details (phone numbers, addresses)." data-lines="targets: “ )”×546 · “ ;”×509 · “  ”×104|“…(  MAP   GOOGLE MAP ) ;  %020”|“…BAR
+
+(  MAP   GOOGLE MAP ) ;”"/>
+<circle class="pn" cx="453.7" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 18 · 2,195 rows · BA 1.00" data-comp="Each example ends with a prepositional word predicted to introduce location, time, or relational context following a noun phrase or clause." data-lines="targets: “ in”×1090 · “ on”×472 · “ from”×286|“… Museums
+
+The northwest&amp;#x27;s collection of heritage sites,”|“… Newton.
+
+The octagonal **Chapter House** dates”"/>
+<circle class="pn" cx="452.7" cy="100.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 29 · 2,167 rows · BA 0.85" data-comp="Predicting a possessive or contracted apostrophe (&#x27;s, &#x27;re, &#x27;) immediately following a proper noun, pronoun, or noun ending a phrase." data-lines="targets: “&amp;#x27;s”×1334 · “’”×271 · “ most”×95|“…, then turn left onto Cornhill.
+
+If you”|“… many can compete with restaurants on quality.
+
+# What”"/>
+<circle class="pn" cx="442.3" cy="374.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 269 · 1,907 rows · BA 0.00" data-comp="Predicting the preposition &quot;in&quot; (or similarly &quot;as&quot;) that introduces a following time, place, or scope phrase." data-lines="targets: “ in”×1570 · “ on”×175 · “ at”×51|“…even Brits) get a little confused by local accents”|“… of the world, although ruling parties frequently coast to easy victories”"/>
+<circle class="pn" cx="434.1" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 417 · 1,723 rows · BA 1.00" data-comp="Predicting the next token in a directory-listing entry field (phone number/MAP marker followed by &quot;;&quot;), typically continuing into &quot;www&quot; or its &quot;.&quot; or a followin" data-lines="targets: “.”×574 · “ www”×522 · “www”×140|“… MAP ) ;  %020-7766 7300;”|“… ) ;  %020-7313 8484; www”"/>
+<circle class="pn" cx="433.4" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 155 · 1,708 rows · BA 1.00" data-comp="The model predicts a contraction suffix (like &#x27;s, &#x27;re, or ’) immediately following a noun or pronoun, forming possessive or contracted verb forms." data-lines="targets: “&amp;#x27;s”×1226 · “’”×252 · “&amp;#x27;”×62|“… gardens and big cooked breakfasts. Head up St Dunstan”|“…ly illustrated Jain sacred texts, Leonardo da Vinci”"/>
+<circle class="pn" cx="430.1" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 92 · 1,641 rows · BA 0.90" data-comp="The model predicts a possessive apostrophe (’/&#x27;s) immediately following a proper noun or noun, marking possession before the next word." data-lines="targets: “&amp;#x27;s”×1223 · “’”×216 · “&amp;#x27;”×55|“…
+
+With its Bollywood posters, scattered pieces from Mumbai”|“….
+
+The Tudor connection, along with Greenwich”"/>
+<circle class="pn" cx="421.1" cy="75.7" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 10 · 1,469 rows · BA 0.90" data-comp="Each example is drawn from patent-style technical prose, predicting a common function word or short technical term that continues the formal, legalistic patent " data-lines="targets: “ a”×90 · “ the”×89 · “ of”×61|“… designed for walkers; Superwalker series 1:25,”|“…, there is provided a method of manufacturing a composite member in”"/>
+<circle class="pn" cx="419.0" cy="200.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 124 · 1,431 rows · BA 0.65" data-comp="The next token is a highly predictable function word or short common noun/phrase completion that naturally follows a fixed collocational or grammatical pattern " data-lines="targets: “ be”×355 · “ as”×188 · “ been”×136|“…1.60) will get you to the airport within 10”|“…, Private Profit - A Cautionary Tale tells the”"/>
+<circle class="pn" cx="418.2" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 233 · 1,416 rows · BA 0.95" data-comp="The predicted token closes a parenthetical or bracketed clause/expression, typically a closing parenthesis or punctuation ending an aside." data-lines="targets: “)”×1062 · “).”×124 · “),”×120|“…. In Britain, nearly all land (including in national parks”|“…-3pm Mon-Fri;  tMansion House”"/>
+<circle class="pn" cx="415.9" cy="125.4" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 123 · 1,377 rows · BA 0.80" data-comp="Travel-guide text about UK venues/prices, where the next token is a currency symbol (£) after &quot;from/admission&quot; or a place/region name (London/Britain/Europe/Bri" data-lines="targets: “ £”×352 · “ London”×195 · “ England”×88|“…com; 190 Queen&amp;#x27;s Gate, SW7; r from”|“… landscaped water gardens – one of the most beautiful sites in”"/>
+<circle class="pn" cx="409.5" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 45 · 1,272 rows · BA 0.95" data-comp="The next token completes a time abbreviation (&quot;am&quot; or &quot;pm&quot;) following a numeric hour in listed opening hours/schedules." data-lines="targets: “pm”×791 · “am”×479 · “mid”×1|“…am-6pm Mon-Sat, 10am-5”|“…  h10am-5pm Apr-Oct, 11”"/>
+<circle class="pn" cx="408.0" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 43 · 1,249 rows · BA 0.95" data-comp="The token predicted is the first word beginning a new heading/list item or sentence, immediately following a markdown header marker or line break." data-lines="targets: “The”×267 · “ Around”×72 · “This”×69|“… 5-8.30pm Thu-Sat)
+
+”|“…beys.
+
+#### Dumfries House
+
+”"/>
+<circle class="pn" cx="405.7" cy="274.6" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 14 · 1,215 rows · BA 0.50" data-comp="The shared pattern: predicting the next token that continues or opens a new segment (word, number, or phrase) immediately after punctuation, whitespace, or a tr" data-lines="targets: “
+”×94 · “,”×30 · “ the”×28|“… in”|“… actors”"/>
+<circle class="pn" cx="401.6" cy="100.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 64 · 1,154 rows · BA 0.85" data-comp="The context gives opening hours/times or map labels, and the predicted token is the abbreviated day name (or &quot;OOGLE&quot;) completing that pattern." data-lines="targets: “OOGLE”×453 · “ Mon”×206 · “ Sun”×180|“….30pm Apr-Sep, 11am-4pm”|“…Cherwell Boat HouseBOATING
+
+(  G”"/>
+<circle class="pn" cx="400.9" cy="249.7" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 41 · 1,145 rows · BA 0.55" data-comp="The shared pattern: predicting the next word/token continuing mid-sentence text, often a common function word, subword continuation, or contextually expected no" data-lines="targets: “
+”×93 · “,”×30 · “ the”×24|“…c”|“… adult/child £9/free)
+
+Following the”"/>
+<circle class="pn" cx="396.8" cy="274.6" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 32 · 1,088 rows · BA 0.50" data-comp="Each example predicts the next word or token that plausibly continues a truncated phrase or sentence fragment, based on common syntactic/semantic patterns follo" data-lines="targets: “
+”×94 · “,”×30 · “ the”×25|“…B”|“…
+”"/>
+<circle class="pn" cx="395.7" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 142 · 1,073 rows · BA 0.90" data-comp="Predicting a literal &quot;.&quot; within a website URL/domain name segment following &quot;www.&quot; or a subdomain path." data-lines="targets: “.”×1014 · “the”×31 · “l”×3|“…909; www.glendevonguesthouse.co”|“…ST INFORMATION
+
+(www.visitsussex”"/>
+<circle class="pn" cx="393.2" cy="274.6" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 11 · 1,041 rows · BA 0.50" data-comp="The next token continues a noun phrase or clause by predicting a contextually likely word (or fragment/punctuation) that fits naturally after the preceding text" data-lines="targets: “
+”×94 · “,”×30 · “ the”×24|“… Sep;  tSt James&amp;#x27;s Park,”|“… rich repository of more than 1400 years of Christian history, the”"/>
+<circle class="pn" cx="389.0" cy="249.7" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 36 · 989 rows · BA 0.55" data-comp="The predicted token continues mid-thought at a syntactic juncture—starting new sentences, clauses, or word fragments—where the model fills in a plausible connec" data-lines="targets: “
+”×94 · “,”×30 · “ the”×24|“…Trujillo’s convictions.”|“…IUM
+
+(www.”"/>
+<circle class="pn" cx="388.9" cy="200.0" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 43 · 987 rows · BA 0.65" data-comp="Predicting the next word/token that continues or begins a sentence, often following punctuation, mid-sentence phrases, or document boundaries in varied factual/" data-lines="targets: “
+”×94 · “,”×30 · “ the”×24|“… data sources is where I have collected together detailed data for the”|“….”"/>
+<circle class="pn" cx="380.8" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 267 · 893 rows · BA 1.00" data-comp="Each example is a venue listing with category label followed by a parenthetical “MAP” link, predicting either &quot;MAP&quot; or the &quot;G&quot; in &quot;GO&quot; that follows it." data-lines="targets: “G”×536 · “MAP”×330 · “W”×23|“…GingermanMODERN EUROPEAN
+
+(  ”|“…
+
+Supreme CourtLANDMARK
+
+(  MAP   ”"/>
+<circle class="pn" cx="380.0" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 154 · 885 rows · BA 0.95" data-comp="Technical/patent-style descriptions where the marked token is a noun (or adjective preceding one) completing a compound technical term following a specific comp" data-lines="targets: “ current”×46 · “ command”×45 · “ insulating”×33|“… to follow up the speed command. For this reason, the”|“… motor drive apparatus, the sampling interval of the positional deviation reading”"/>
+<circle class="pn" cx="373.2" cy="100.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 230 · 814 rows · BA 0.85" data-comp="The model predicts the next word completing a template phrase, mostly finishing &quot;GOOGLE&quot; after &quot;MAP G&quot; in repeated map/location listing formats." data-lines="targets: “OOGLE”×438 · “ Rd”×149 · “ mains”×63|“…COCKTAIL BAR
+
+(  MAP   G”|“…ark CathedralCHURCH
+
+(  MAP   G”"/>
+<circle class="pn" cx="372.7" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 81 · 809 rows · BA 0.95" data-comp="The context is a location listing with &quot;(MAP GOOGLE&quot; link text, and the predicted token completes &quot;GOOGLE&quot; with &quot; MAP&quot; (or the &quot;G&quot; starting it)." data-lines="targets: “ MAP”×421 · “G”×387 · “Clock”×1|“… Lane MarketMARKET
+
+(  MAP   GOOGLE”|“…Chiang Mai KitchenTHAI
+
+(  MAP   ”"/>
+<circle class="pn" cx="370.7" cy="150.3" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 182 · 789 rows · BA 0.75" data-comp="The model predicts &quot;with&quot; following phrases describing attributes/features being introduced (e.g., &quot;topped with,&quot; &quot;packed with,&quot; &quot;ornamented with&quot;), indicating " data-lines="targets: “ with”×734 · “TY”×17 · “ to”×9|“…gallery-mode (WGM) microresonator,”|“… to Southern blot analysis. Alternatively, these samples were first incubated”"/>
+<circle class="pn" cx="355.1" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 249 · 651 rows · BA 1.00" data-comp="Predicting the next token in address/price abbreviations (e.g., &quot;St&quot; for Street, &quot;£&quot; for price) within travel-guide-style listings." data-lines="targets: “ £”×411 · “ St”×184 · “ Circ”×15|“… £60, three hours
+
+A **Newcastle**”|“…age-hotel.co.uk; 1 Banbury”"/>
+<circle class="pn" cx="354.7" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 282 · 648 rows · BA 0.90" data-comp="The token marks the end of a proper name or bolded place/venue phrase, closing markdown bold (or quote) formatting right after the name completes." data-lines="targets: “**”×490 · “&amp;#x27;”×59 · “**.”×52|“… rural scenery and chocolate-box towns like **Chipping Norton”|“… and Regent&amp;#x27;s canal along its northern side.
+
+”"/>
+<circle class="pn" cx="345.7" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 69 · 580 rows · BA 0.90" data-comp="The context ends with a venue name followed by its category label (e.g., B&amp;B, CAFE, BAR), and the model predicts an opening parenthesis &quot;(&quot; starting additional " data-lines="targets: “(”×580|“…-controlled art store.
+
+PierLANDMARK
+
+”|“…).
+
+MyFerryLinkFERRY
+
+”"/>
+<circle class="pn" cx="336.7" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 172 · 519 rows · BA 0.95" data-comp="Predicting the domain suffix (e.g., .com, .org, .co) completing a website URL, or in one case a sentence-initial &quot;Which.&quot;" data-lines="targets: “com”×209 · “co”×157 · “org”×115|“…-7300 1000; www.onealdwych.”|“… 1773; www.thedublincastle.”"/>
+<circle class="pn" cx="333.2" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 162 · 497 rows · BA 1.00" data-comp="Predicting the currency symbol &quot;£&quot; after price-related labels (admission, meals, mains) or completing &quot;-ation&quot; suffixes in technical/scientific words." data-lines="targets: “ £”×444 · “ation”×27 · “ase”×13|“… at Ford or Barnham. There are also links to Brighton”|“… 100 years is permissible, but an indeterminate
+
+  prob”"/>
+<circle class="pn" cx="330.6" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 184 · 481 rows · BA 1.00" data-comp="Listings/travel-guide style text giving prices after a category label (e.g., admission, mains, dm/r, adult/child), predicting the currency symbol “£”." data-lines="targets: “ £”×442 · “t”×33 · “ (£”×3|“…; 21 New Globe Walk, SE1; adult/child”|“…/tate-boat; one-way adult/child”"/>
+<circle class="pn" cx="328.3" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 266 · 468 rows · BA 0.90" data-comp="The context lists a location, venue, or fare category followed by &quot;from,&quot; pricing terms, or a slash, predicting the currency symbol &quot;£&quot; before an amount." data-lines="targets: “ £”×442 · “aurant”×17 · “ (£”×3|“….co.uk; 110-111 Walton St; mains”|“… 27 St James&amp;#x27;s Pl, SW1; adult/child”"/>
+<circle class="pn" cx="326.6" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 77 · 458 rows · BA 1.00" data-comp="Each context ends with a past-participle verb (passive construction or agentive phrase) predicting &quot;by&quot; as the following preposition introducing an agent or met" data-lines="targets: “ by”×452 · “ through”×5 · “ using”×1|“…strand-specific riboprobes. Viral RNA was obtained”|“… at 37°C for 2 h and stopped”"/>
+<circle class="pn" cx="324.4" cy="100.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 35 · 446 rows · BA 0.85" data-comp="The context ends with words like &quot;as,&quot; &quot;so,&quot; or phrases setting up comparisons/appointments, predicting the next token to be &quot;as&quot; or &quot;well&quot; completing construct" data-lines="targets: “ as”×387 · “ well”×42 · “ ago”×6|“… the international batallions posted along its length almost 2000 years”|“… the Stade used for temporary shows of contemporary British art as”"/>
+<circle class="pn" cx="324.2" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 423 · 445 rows · BA 1.00" data-comp="Contexts are travel-guide style listings (address/price fields) where the next token predicted is a currency symbol &quot;£&quot; introducing a price." data-lines="targets: “ £”×439 · “ (£”×3 · “ 30”×1|“…com; Westminster Bridge Rd, SE1; adult/child”|“…25, 1¼ hours
+
+A **Manchester**”"/>
+<circle class="pn" cx="307.5" cy="374.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 255 · 362 rows · BA 0.00" data-comp="Contexts end with words/phrases (e.g., &quot;dates,&quot; &quot;different,&quot; &quot;suffers,&quot; &quot;everything,&quot; &quot;views,&quot; &quot;ranging&quot;) that grammatically require the preposition &quot;from&quot; to f" data-lines="targets: “ from”×355 · “ along”×5 · “ into”×2|“… is further counted down in response to the CW pulse 18 fed”|“… the country.
+
+Much of the college facade dates”"/>
+<circle class="pn" cx="302.9" cy="125.4" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 13 · 342 rows · BA 0.80" data-comp="The context is fragments from a travel guidebook (addresses, map references, hours, category labels), predicting the next punctuation, whitespace, letter/digit " data-lines="targets: “   ”×147 · “,”×7 · “G”×6|“… St Paul&amp;#x27;s YHAC3
+
+24Rook”|“…
+5Eating
+
+25Café BelowE”"/>
+<circle class="pn" cx="289.2" cy="249.7" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 29 · 289 rows · BA 0.55" data-comp="Predicting continuation tokens completing museum/gallery-related proper names or headings, often mid-word fragments like &quot;MUSE&quot;/&quot;UM&quot; in institution names." data-lines="targets: “USE”×48 · “UM”×41 · “ BU”×22|“… Rd) F
+
+The country&amp;#x27;s largest museum and one”|“… and 3pm.
+
+ oRoyal ObservatoryHISTORIC”"/>
+<circle class="pn" cx="284.0" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 39 · 271 rows · BA 1.00" data-comp="The predicted token is a newline immediately following the end of a code statement, block closing brace, or line within a function/method body." data-lines="targets: “
+”×254 · “
+
+”×16 · “ 22”×1|“….e(&amp;quot;INIT&amp;quot;, &amp;quot;Initialization error.&amp;quot;, e);”|“…
+- (instancetype)initWithFromAnyone;”"/>
+<circle class="pn" cx="283.7" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 318 · 270 rows · BA 0.95" data-comp="Each example predicts the next word in a travel/geography descriptive passage, typically naming a place, region, or country following descriptive lead-in phrase" data-lines="targets: “ London”×96 · “ England”×48 · “ Britain”×26|“…claustrophobes beware) for some of”|“…. It actually falls within the City of Westminster, one of”"/>
+<circle class="pn" cx="278.8" cy="175.1" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 23 · 254 rows · BA 0.70" data-comp="Excerpts from a UK travel/guidebook description of Eastbourne and Sussex coastal attractions, predicting the next word continuing place names, directions, or de" data-lines="targets: “
+”×20 · “ the”×14 · “s”×11|“… William the Conqueror landed in 1066, just two”|“…line at the southern end of the South Downs. It”"/>
+<circle class="pn" cx="273.5" cy="125.4" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 24 · 238 rows · BA 0.80" data-comp="Predicting the next token/word-fragment in tourist-guide-style descriptive text, completing place names, prices, or continuing prose after list headers or numbe" data-lines="targets: “
+”×53 · “inking”×17 · “3”×10|“…4
+
+6Dr”|“…G4
+
+19Temple ChurchA3
+
+”"/>
+<circle class="pn" cx="273.1" cy="175.1" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 31 · 237 rows · BA 0.70" data-comp="Predicting the next token in structured travel-guide listings (map codes, place names, addresses, times, or descriptive text continuations)." data-lines="targets: “
+”×60 · “3”×11 · “-”×6|“… work on the White Tower to replace the earlier castle. By”|“… and started meting out his preferred brand of punishment.
+”"/>
+<circle class="pn" cx="264.1" cy="26.0" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 22 · 212 rows · BA 1.00" data-comp="The predicted token is the opening quotation mark `&quot;` immediately following an XML/HTML attribute name and equals sign (e.g., ref-type=, minOccurs=, layout_heig" data-lines="targets: “=&amp;quot;”×212|“… ([Fig. 7D](#F7){ref-type”|“…=&amp;quot;wrap_content&amp;quot;
+    android:layout_height”"/>
+<circle class="pn" cx="259.4" cy="50.9" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 9 · 200 rows · BA 0.95" data-comp="The examples are drawn from a travel-guide text about southeast England (Sussex/Battle/Hastings/Brighton), predicting the next word/token that continues factual" data-lines="targets: “,”×11 · “ the”×7 · “.”×7|“… chalky rock faces that slice across the rugged coastline at”|“… between London Victoria and Hastings via Eastbourne stop at Westham”"/>
+<circle class="pn" cx="256.0" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 156 · 192 rows · BA 1.00" data-comp="Each example shows a word fragment being completed with its natural word-final suffix (e.g., -on, -y, -ide, -or, -ies) to finish a partially typed proper noun o" data-lines="targets: “y”×75 · “on”×56 · “ide”×26|“… northeast England, and Scotland&amp;#x27;s Tweed, Tay and Spe”|“…   GOOGLE MAP ) ; www.bulldogbright”"/>
+<circle class="pn" cx="242.8" cy="125.4" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 15 · 163 rows · BA 0.80" data-comp="Continuation tokens completing partial words or names in travel-guide text about London museums and landmarks, predicting subword fragments or next syntactic wo" data-lines="targets: “UM”×37 · “ the”×9 · “
+”×8|“… has a spectacular glass-and-steel roof, making”|“…in 1677).
+
+ oPitt Rivers MuseumMUSE”"/>
+<circle class="pn" cx="237.6" cy="50.9" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 3 · 153 rows · BA 0.95" data-comp="Predicting the next word/token that most plausibly continues politically- or legally-themed text based on common phrasing and syntax." data-lines="targets: “-”×15 · “
+”×14 · “ whistle”×10|“… at 426, 428. In fact, Jenkins explicitly rejected
+
+”|“… the Jenkins division made clear that section
+
+  18-1”"/>
+<circle class="pn" cx="228.7" cy="50.9" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 30 · 137 rows · BA 0.95" data-comp="The next token is the closing &quot;](#&quot; markup immediately following a figure/panel citation like &quot;[Fig. XY&quot; within parenthetical references." data-lines="targets: “](#”×137|“… g/cm^3^ ([Fig. 4A”|“… to ∼3.2 knt ([Fig. 3G”"/>
+<circle class="pn" cx="228.1" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 309 · 136 rows · BA 0.90" data-comp="Predicts the continuation completing a compound technical term, typically &quot;phase&quot; after letter-prefixed terms (U-, V-, W-, Z-) or a numeric exponent like &quot;3&quot; af" data-lines="targets: “phase”×82 · “strand”×29 · “3”×16|“… due to Lorentz&amp;#x27;s force. Namely, three, U-”|“… are generated in response to the U-phase and W-”"/>
+<circle class="pn" cx="228.1" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 322 · 136 rows · BA 0.95" data-comp="Predicting a word-completion token: either &quot;&#x27;t&quot; completing &quot;don/didn/wasn&quot; contractions, &quot;es&quot; completing plural word stems (al-, caf-), or &quot;Category&quot; starting a" data-lines="targets: “&amp;#x27;t”×76 · “es”×34 · “Category”×25|“… trekking in some other parts of the world, it doesn”|“… for four headlamps. Somehow, this model series didn”"/>
+<circle class="pn" cx="225.0" cy="150.3" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 34 · 131 rows · BA 0.75" data-comp="Predicting the next word/token-fragment in travel-guide style descriptions of London pubs and neighborhoods, often mid-word completions like &quot;Kensington.&quot;" data-lines="targets: “ton”×20 · “
+”×9 · “,”×9|“… iconic jukebox, wall-to-wall memorabil”|“…Coined after an old English early morning drink of warm beer”"/>
+<circle class="pn" cx="217.2" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 315 · 119 rows · BA 0.95" data-comp="The next token completes a British street name ending in &quot;Rd&quot; (Road abbreviation), following a proper noun modifier in an address listing." data-lines="targets: “ Rd”×110 · “ walls”×3 · “ hosts”×2|“…; www.arthousebandb.com; 24 London”|“… www.gordonramsay.com; 68 Royal Hospital”"/>
+<circle class="pn" cx="215.2" cy="26.0" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 19 · 116 rows · BA 1.00" data-comp="Numeric value following a time/frequency or fare figure, predicting &quot;minutes&quot; as the unit completing a duration or interval expression." data-lines="targets: “ minutes”×116|“…Yeoman Warders). Hour-long tours leave every 30”|“… Charing Cross (£22.10, one hour and 20”"/>
+<circle class="pn" cx="211.6" cy="50.9" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 39 · 111 rows · BA 0.95" data-comp="Each context ends with a capital letter and hyphen (e.g., &quot;U-&quot;, &quot;A-&quot;, &quot;Z-&quot;) denoting a labeled phase/signal, and the predicted token completes it as &quot;phase&quot;." data-lines="targets: “phase”×111|“… and 9 becomes 0. A current command for the V-”|“…-phase winding 9 are generated in response to the U-”"/>
+<circle class="pn" cx="210.9" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 292 · 110 rows · BA 1.00" data-comp="Predicting &quot;Rd&quot; (abbreviation for &quot;Road&quot;) following a street/place name in an address or directions context." data-lines="targets: “ Rd”×109 · “ doses”×1|“… www.eatdirtyburger.com; 79 Highgate”|“… www.electricdiner.com; 191 Portobello”"/>
+<circle class="pn" cx="209.4" cy="26.0" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 21 · 108 rows · BA 1.00" data-comp="The predicted token is &quot;onse&quot;, completing the recurring French word fragment &quot;Rep/rep&quot; into &quot;Reponse&quot; within XML-like tags or text about quiz answers." data-lines="targets: “onse”×106 · “ occur”×1 · “ security”×1|“…2
+reponse fausse 2.3
+rep”|“…1
+reponse fausse 2.2
+rep”"/>
+<circle class="pn" cx="206.3" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 33 · 104 rows · BA 0.95" data-comp="The predicted token is a capital letter (figure subpanel label) immediately following &quot;Fig. [number]&quot; in a scientific figure citation." data-lines="targets: “B”×31 · “A”×26 · “C”×13|“…Ag and anti-HBsAg antibodies ([Fig. 2”|“… pulldown assay and Southern blot analysis ([Fig. 3”"/>
+<circle class="pn" cx="205.5" cy="26.0" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 42 · 103 rows · BA 1.00" data-comp="Predicted next token is a newline immediately after an XML tag closes (attribute value, closing tag, or element content) in structured XML markup." data-lines="targets: “
+”×103|“…
+            &amp;lt;name&amp;gt;PD1.10&amp;lt;/name&amp;gt;”|“… minOccurs=&amp;quot;0&amp;quot; maxOccurs=&amp;quot;0&amp;quot;&amp;gt;”"/>
+<circle class="pn" cx="203.9" cy="224.9" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 18 · 101 rows · BA 0.60" data-comp="The examples are next-token predictions from a travel/shopping guide listing stores, hours, and locations, where the model predicts the natural continuation wor" data-lines="targets: “,”×9 · “-”×5 · “ING”×5|“… general fiction and nonfiction titles as well).
+
+####”|“… &amp;amp; Spitalfields
+
+Rough Trade EastMUS”"/>
+<circle class="pn" cx="203.9" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 126 · 101 rows · BA 1.00" data-comp="Each example ends where a numeric quantity is immediately followed by its unit of measurement (e.g., mM, g, min, s) in a scientific/methods text." data-lines="targets: “mM”×26 · “min”×18 · “g”×17|“… fractions at densities between 1.33 and 1.34 ”|“… value (10 mM NaCHO~3~, 3 ”"/>
+<circle class="pn" cx="203.9" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 140 · 101 rows · BA 1.00" data-comp="The model predicts an opening quotation mark (or attribution verb) introducing or continuing a quoted statement after speech-related context." data-lines="targets: “ “”×43 · ““”×33 · “&amp;quot;”×13|“… nonconstitutional harmless error and will
+
+  thus affirm if”|“… explains to As It Happens guest host Tom Harrington.”"/>
+<circle class="pn" cx="202.3" cy="50.9" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 35 · 99 rows · BA 0.95" data-comp="The predicted token completes the markup attribute `ref-type=&quot;fig` by closing the quotation mark within an internal figure-reference hyperlink markup." data-lines="targets: “&amp;quot;},”×46 · “&amp;quot;}”×37 · “&amp;quot;})”×8|“…. 1B](#F1){ref-type=&amp;quot;fig”|“…. 7D](#F7){ref-type=&amp;quot;fig”"/>
+<circle class="pn" cx="200.7" cy="26.0" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 17 · 97 rows · BA 1.00" data-comp="The context ends with the partial word &quot;Can&quot; and the model predicts the completion &quot;terbury&quot; to form &quot;Canterbury.&quot;" data-lines="targets: “terbury”×97|“…75;  p W)
+
+A night at Can”|“…2Activities, Courses &amp;amp; Tours
+
+10Can”"/>
+<circle class="pn" cx="199.0" cy="100.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 32 · 95 rows · BA 0.85" data-comp="The token predicted is a syntactic delimiter (opening quote `&quot;` or bracket `[`) introducing a string literal or array value after a key/assignment in code-like " data-lines="targets: “ &amp;quot;”×49 · “ (”×18 · “&amp;quot;”×17|“…A:
+
+In this line
+let menuArray =”|“…```json
+{
+    &amp;quot;Statement&amp;quot;: [{
+        ”"/>
+<circle class="pn" cx="193.7" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 240 · 89 rows · BA 1.00" data-comp="The context ends with &quot;such&quot; (or &quot;so&quot;), and the predicted next token is &quot;as&quot;, completing the phrase &quot;such as&quot;/&quot;so as&quot;." data-lines="targets: “ as”×88 · “ East”×1|“… deviation reading sampler 35 will be sufficiently extended or elongated so”|“…ILS
+
+Some long-distance walking routes – such”"/>
+<circle class="pn" cx="193.7" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 365 · 89 rows · BA 0.90" data-comp="The predicted token is the missing final fragment that completes a truncated proper noun (e.g., &quot;Bright[on]&quot;, &quot;Stonehen[ge]&quot;, &quot;Optik[er]&quot;) based on preceding pa" data-lines="targets: “on”×56 · “or”×15 · “ge”×8|“…   Thus, we conclude, in accordance with Stellab”|“… &amp;amp; LESBIAN BRIGHTON
+
+Bright”"/>
+<circle class="pn" cx="189.9" cy="26.0" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 25 · 85 rows · BA 1.00" data-comp="Each context is the end of a documentation/comment line in Objective-C source, and the predicted next token is the start of a new &quot;///&quot; doc-comment line." data-lines="targets: “///”×85|“…ICIESSharedFolderJoinPolicy`
+/// union.
+”|“… the `DBSerializable` protocol (serialize and
+”"/>
+<circle class="pn" cx="187.0" cy="150.3" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 2 · 82 rows · BA 0.75" data-comp="Predicting the next token that continues formulaic, low-information filler text—articles, boilerplate press-release phrases, dates, punctuation, or code directi" data-lines="targets: “
+”×8 · “�”×7 · “ the”×4|“… S...[Read more...]
+
+Scottsdale,”|“… Mich. - Strategic Vision has named five FCA US LLC”"/>
+<circle class="pn" cx="183.0" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 280 · 78 rows · BA 1.00" data-comp="" data-lines="targets: “ caps”×77 · “ CAC”×1|“… 3.2 knt) in virions, in naked”|“… lengths of viral minus- and plus-strand DNA in naked”"/>
+<circle class="pn" cx="181.9" cy="100.6" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 33 · 77 rows · BA 0.85" data-comp="The token &quot;century&quot; is predicted after an ordinal number and hyphen (e.g., &quot;15th-&quot;, &quot;21st-&quot;) describing a historical era or building." data-lines="targets: “century”×71 · “ left”×1 · “).”×1|“… The complex was built on the site of the 15th-”|“… room. It is renowned as a masterpiece of 15th-”"/>
+<circle class="pn" cx="181.9" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 36 · 77 rows · BA 0.95" data-comp="" data-lines="targets: “ caps”×77|“… the plasma sample of patient 0 were able to pull down naked”|“…coated capsid particles but rather big CACs consisting of several”"/>
+<circle class="pn" cx="181.9" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 147 · 77 rows · BA 1.00" data-comp="The context ends with the partial word “Can,” and the predicted next token completes it as “terbury,” forming “Canterbury.”" data-lines="targets: “terbury”×76 · “ Dover”×1|“… contemporary setting just a Kentish apple&amp;#x27;s throw from the Can”|“…AGES ©
+
+### Top Experiences
+
+### Can”"/>
+<circle class="pn" cx="177.6" cy="175.1" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 180 · 73 rows · BA 0.70" data-comp="Predicting the next sub-word fragment that completes a partially spelled word (e.g., &quot;Tud&quot;, &quot;Corm&quot;, &quot;memrist&quot;) based on preceding context." data-lines="targets: “or”×34 · “rist”×12 · “orm”×8|“… cavity, teleported to identical nitrogen vacancies in memrist”|“…authorizes a
+
+  trial court to impose an indeterminate”"/>
+<circle class="pn" cx="176.5" cy="100.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 398 · 72 rows · BA 0.85" data-comp="The context ends mid-word or before a technical term/abbreviation (e.g., IFX, Southern blot, diet), predicting the next token completing a domain-specific noun " data-lines="targets: “X”×29 · “ IF”×18 · “ Southern”×16|“…1-4}
+==========
+
+The mechanism of IF”|“… TNF -308G/A polymorphism and compared response rates after”"/>
+<circle class="pn" cx="175.3" cy="26.0" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 26 · 71 rows · BA 1.00" data-comp="Each context ends with an ordinal number followed by a hyphen (e.g., &quot;15th-&quot;), and the predicted token completes the word &quot;century.&quot;" data-lines="targets: “century”×71|“… the Black Isle, with a fine collection of 18th-”|“… and beautiful French antique reproduction furniture contrast with the 21st-”"/>
+<circle class="pn" cx="173.0" cy="26.0" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 27 · 69 rows · BA 1.00" data-comp="Each context gives opening hours followed by a starting weekday and hyphen, predicting &quot;Fri&quot; as the closing day of the range." data-lines="targets: “Fri”×69|“…/free;  h10am-4pm Mon-”|“…h7.30am-7.30pm Mon-”"/>
+<circle class="pn" cx="163.0" cy="150.3" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 198 · 61 rows · BA 0.75" data-comp="The context ends mid-word within a technical/proper-noun term (e.g., &quot;Firehose,&quot; &quot;Kinesis,&quot; &quot;MaxStorageSize&quot;), and the model predicts the next subword fragment " data-lines="targets: “h”×36 · “ K”×23 · “Size”×2|“… can configure the maximum allowed storage via the `withMaxStorage”|“… you specified.
+
+The Amazon Kinesis Data Fire”"/>
+<circle class="pn" cx="160.3" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 58 · 59 rows · BA 1.00" data-comp="" data-lines="targets: “B”×21 · “ B”×20 · “Bs”×18|“… was extracted from serum samples obtained from forty-five chronic hepatitis”|“… could serve as a surrogate marker to evaluate the endpoint of hepatitis”"/>
+<circle class="pn" cx="157.5" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 376 · 57 rows · BA 1.00" data-comp="The context ends mid-word with a truncated prefix (e.g., &quot;Col&quot;, &quot;mercapt&quot;, &quot;Bl&quot;, &quot;Dynam&quot;), and the model predicts the next letter &quot;o&quot; to continue that word." data-lines="targets: “o”×51 · “a”×4 · “ot”×2|“….” Noe v. Dolan,
+
+  197 Col”|“… to other services such as Amazon Simple Storage Service, Amazon Dynam”"/>
+<circle class="pn" cx="157.5" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 386 · 57 rows · BA 1.00" data-comp="Each context ends with a verb of cognition/perception (wonder, see, know, curious, idea) predicting a wh-word (how/what/why) introducing an indirect question or" data-lines="targets: “ how”×28 · “ what”×24 · “ why”×5|“… end there, I was broken and he was very aware of”|“… beginning. It really does take Henry a long time to wonder”"/>
+<circle class="pn" cx="156.1" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 188 · 56 rows · BA 1.00" data-comp="Predicting the next token continuing a partial brand name—either &quot;K&quot; starting &quot;Kinesis&quot; or &quot;h&quot; continuing &quot;Fire&quot; within &quot;Firehose&quot;—in AWS Kinesis-related docume" data-lines="targets: “h”×35 · “ K”×19 · “ general”×1|“… Kinesis Data Firehose?
+
+[Amazon”|“…://aws.amazon.com/kinesis/fire”"/>
+<circle class="pn" cx="154.6" cy="26.0" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 20 · 55 rows · BA 1.00" data-comp="Travel listings giving price and duration of a bus/train service, followed by frequency description ending in the predicted word &quot;hourly.&quot;" data-lines="targets: “ hourly”×55|“… to Brighton (£10.10, 1¼ hours, twice”|“…** National Express; £14.40, two hours,”"/>
+<circle class="pn" cx="146.9" cy="125.4" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 6 · 50 rows · BA 0.80" data-comp="Predicting the next word/subword in place-name headings and geographic descriptions of Northeast England/Scotland travel guide text." data-lines="targets: “rian”×8 · “umberland”×8 · “upon”×8|“… The Lake District &amp;amp; Cumbria
+
+#### Newcastle &amp;amp;”|“… Newcastle&amp;#x27;s very own &amp;#x27;Tate of the North&amp;#x27; with”"/>
+<circle class="pn" cx="146.9" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 12 · 50 rows · BA 1.00" data-comp="The token &quot;o&quot; begins a bullet/list item, and the marked token is the first letter(s) of a proper noun or capitalized word starting a new named entry." data-lines="targets: “T”×4 · “at”×4 · “B”×2|“… sandwiches, goat&amp;#x27;s cheese and beetroot salad, and o”|“… for a pub meal.
+
+#### South Bank
+
+ o”"/>
+<circle class="pn" cx="136.5" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 244 · 44 rows · BA 0.90" data-comp="Legal case citation contexts where a party name (e.g., &quot;People,&quot; &quot;Griffin,&quot; &quot;Riley,&quot; &quot;Noe&quot;) precedes the abbreviation &quot;v&quot; for &quot;versus.&quot;" data-lines="targets: “ v”×43 · “v”×1|“…, the trial court abused its discretion. See DeBella”|“… adequately
+
+  cover[ed] the issues presented.” People”"/>
+<circle class="pn" cx="134.7" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 90 · 43 rows · BA 0.95" data-comp="The context is tabular data ending in scientific notation values (e.g., &quot;5.00E +&quot; or &quot;X.XXE +&quot;), predicting the exponent digits &quot;07&quot;." data-lines="targets: “ 07”×43|“…  5             NA    NA         1.25E +”|“…4             M     33         \&amp;gt;5.00E +”"/>
+<circle class="pn" cx="132.7" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 59 · 42 rows · BA 0.95" data-comp="Legal case citation context where &quot;People&quot; precedes the predicted token &quot;v&quot; (as in &quot;v.&quot; for versus) in case name citations." data-lines="targets: “ v”×41 · “ Soph”×1|“… the statutory
+
+  range for an abuse of discretion.” People”|“… manifestly arbitrary, unreasonable, or unfair,
+
+  People”"/>
+<circle class="pn" cx="128.8" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 75 · 40 rows · BA 1.00" data-comp="The model predicts a word-completing suffix (e.g., &quot;ase,&quot; &quot;ation,&quot; &quot;ated&quot;) that completes a technical molecular biology term (protease, ultracentrifugation, fra" data-lines="targets: “ase”×26 · “ation”×9 · “ated”×4|“…38 cells was concentrated (via ultrafiltration) and fraction”|“… and then fractionated by CsCl density gradient ultracentrifug”"/>
+<circle class="pn" cx="122.5" cy="26.0" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 37 · 37 rows · BA 1.00" data-comp="Each context ends with a photo credit line &quot;[PHOTOGRAPHER] / GETTY IMAGES&quot; and predicts the start of a new copyright symbol &quot;©&quot; for the next caption." data-lines="targets: “ ©”×37|“…ingham PalaceAMOS CHAPPLE / GETTY IMAGES”|“…KARL BLACKWELL / GETTY IMAGES”"/>
+<circle class="pn" cx="118.0" cy="75.7" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 40 · 35 rows · BA 0.90" data-comp="Predicting the next word-fragment that completes a partially spelled multi-syllable word (e.g., &quot;eclect-&quot;, &quot;ecof-&quot;, street names/abbreviations) in travel-guide-" data-lines="targets: “lect”×12 · “ic”×10 · “of”×3|“… town houses. Paskins prides itself on using ec”|“… town and country. Also runs an excellent seven-room ec”"/>
+<circle class="pn" cx="115.6" cy="374.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 207 · 34 rows · BA 0.00" data-comp="The next token is a comparative/quantifier word (&quot;more,&quot; &quot;longer,&quot; &quot;further&quot;) continuing a phrase about additional items, options, or extent." data-lines="targets: “ more”×29 · “ less”×2 · “ longer”×2|“…_ remains one of the pillars of the literary canon. But”|“…Guide/IAM_Introduction.html).
+
+To learn”"/>
+<circle class="pn" cx="113.2" cy="125.4" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 94 · 33 rows · BA 0.80" data-comp="The token &quot;ref&quot; predicted immediately after a citation marker &quot;[@&quot; within academic in-text bracketed reference citations." data-lines="targets: “ref”×33|“… the Crohn&amp;#x27;s Disease Activity Index (CDAI) \[[@”|“…, endoscopic, radiological, and histological criteria \[[@ref1],[@”"/>
+<circle class="pn" cx="105.4" cy="200.0" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 0 · 30 rows · BA 0.65" data-comp="The context ends mid-word or mid-phrase, and the marked token completes a partial word/name (e.g., &quot;Adcock,&quot; &quot;interferometer&quot;) or continues a proper noun/techni" data-lines="targets: “ometer”×9 · “cock”×7 · “ display”×2|“… bulk diamond crystal by reactive ion etching and are positioned with nan”|“… to remember specific images, an increase in VTA activation before”"/>
+<circle class="pn" cx="105.4" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 178 · 30 rows · BA 0.95" data-comp="A sentence introducing a subject/topic is followed by a predicted adverb (&quot;also&quot;/&quot;still&quot;) continuing to add supplementary information about that subject." data-lines="targets: “ also”×21 · “ still”×6 · “ now”×2|“… his pet lobster for a walk.
+
+The college”|“… the International Festival and Fringe, but this month the city”"/>
+<circle class="pn" cx="102.7" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 235 · 29 rows · BA 1.00" data-comp="The model predicts the closing quotation mark (and often a following comma or period) that terminates a string literal begun earlier in code or JSON-like text." data-lines="targets: “&amp;quot;,”×17 · “&amp;quot;.”×10 · “ &amp;quot;,”×2|“… {
+    &amp;quot;color&amp;quot;: &amp;quot;#0d47a1”|“…    let fries = Item(name: &amp;quot;Fries”"/>
+<circle class="pn" cx="102.7" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 335 · 29 rows · BA 1.00" data-comp="The context ends with a proper name fragment (&quot;Dick&quot; or &quot;Beck&quot;) that is being completed as the next token subword (&quot;ens&quot; or &quot;et&quot;) to form &quot;Dickens&quot; or &quot;Becket.&quot;" data-lines="targets: “ens”×22 · “et”×7|“… city&amp;#x27;s history (the London documented so vividly by Dick”|“… Russell Sq)
+
+Recently refurbished, Dick”"/>
+<circle class="pn" cx="96.9" cy="50.9" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 7 · 27 rows · BA 0.95" data-comp="Continuation of a partially typed word (e.g., &quot;bout-&quot;, &quot;picture-&quot;, &quot;breat-&quot;) completing common travel-writing adjectives like &quot;boutique,&quot; &quot;picturesque,&quot; or &quot;bre" data-lines="targets: “ique”×10 · “iques”×7 · “que”×7|“…packed with jewellers and gift shops, coffee shops and bout”|“… closed, it&amp;#x27;s worth walking around the outside for the pictures”"/>
+<circle class="pn" cx="96.9" cy="26.0" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 146 · 27 rows · BA 1.00" data-comp="" data-lines="targets: “ ends”×13 · “ end”×9 · “ re”×5|“…strand DNA synthesis, pgRNA with 3′ receding”|“… As the probes moved from the 5′ end to 3′”"/>
+<circle class="pn" cx="83.9" cy="100.6" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 153 · 23 rows · BA 0.85" data-comp="The examples all show a word-fragment boundary where the model predicts the remaining subword token(s) completing a partially spelled word (e.g., &quot;Act|ivities,&quot;" data-lines="targets: “ant”×9 · “ivities”×7 · “ants”×3|“…
+9West Gate TowersB2
+
+2Act”|“… Steps
+
+6St James&amp;#x27;s Park
+
+7Gu”"/>
+<circle class="pn" cx="80.3" cy="75.7" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 196 · 22 rows · BA 0.90" data-comp="The model predicts the next word-fragment completing a proper place-name compound (e.g., Clerken-well, -Arcade, Griffin) based on a preceding place/name prefix." data-lines="targets: “ken”×10 · “ Arc”×6 · “in”×3|“… didn&amp;#x27;t meet the community&amp;#x27;s expectations.
+
+Cliff”|“…etitFRENCH
+
+(4 Westcliff”"/>
+<circle class="pn" cx="76.5" cy="150.3" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 28 · 21 rows · BA 0.75" data-comp="Predicting the continuation &quot;yster&quot; completing the word &quot;Oyster&quot; (as in Oyster card), following the letter &quot;O&quot; in contexts about London transport payment." data-lines="targets: “yster”×21|“… Country port of Falmouth marks the start of the traditional o”|“… it&amp;#x27;s the oysters you fancy, Wheeler&amp;#x27;s O”"/>
+<circle class="pn" cx="72.5" cy="50.9" r="5.5" fill="#2f6175" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="all-params cluster 38 · 20 rows · BA 0.95" data-comp="The model is completing an all-caps category/tag label (e.g., &quot;GALLERY&quot;, &quot;CEMETERY&quot;) by predicting the remaining letters that finish the truncated uppercase wor" data-lines="targets: “ERY”×16 · “ B”×2 · “AN”×2|“… Islington).
+
+OttolenghiBAK”|“… leading to Buckingham Palace.
+
+ oNational GalleryGALL”"/>
+<circle class="pn" cx="72.5" cy="175.1" r="4.5" fill="#1a6b06" fill-opacity="0.72" stroke="#1f3318" stroke-width="0.5" data-head="no-embed cluster 291 · 20 rows · BA 0.70" data-comp="The context ends mid-noun-phrase where a modifier (adjective/noun) sets up a predictable, domain-specific noun completing a technical or descriptive collocation" data-lines="targets: “ extension”×5 · “ countless”×4 · “ deposition”×3|“… being proposed and tried in an attempt to apply a high density”|“…ubs of Yorkshire, Mid-Wales and Devon; and”"/>
+</svg>
+<figcaption><b>Fig. 4</b> · Every scored cluster in both native runs: size against judge accuracy. Hover a point to see the judge's explanation and member contexts (click to pin, Esc to dismiss). The all-parameters arm's large clusters sink toward chance; the no-embed arm's stay explainable.</figcaption>
+</figure>
+<!-- PILOTSCATTER_SVG_END -->
+
+        <div class="vr-lab">
+          <dl>
+            <dt>rows</dt><dd>261,632 per-token gradients — Pythia-14M, pile-10k, 512 seqs × 512 positions, marginal preconditioner q = 1/(v+ε), CountSketch D=4 × S=1024 (fp16 features)</dd>
+            <dt>arms</dt><dd>all parameters (P = 14.1M) vs embeddings frozen (P = 1.2M non-embedding); widths: native 4096 + offline folds to 1024 / 256 total dims</dd>
+            <dt>clustering</dt><dd>ACL push PPR (α = 0.001, ε<sub>PPR</sub> = 1e-5 recalibrated from the paper's 1e-7), k = 45 self-tuning kNN graph, sweep cuts, Algorithm-1 discovery; full arm termination 0.001/uncapped, no-embed 0.02/cap-800 (config asymmetry noted)</dd>
+            <dt>scoring</dt><dd>detection protocol: explainer + judge = claude-sonnet-5 (seed 20260714), 10 train / 10 held-out / 10 distractors, balanced accuracy; zero skips on full arms, seeded 120-cluster samples on no-embed runs</dd>
+            <dt>matching</dt><dd>per-cluster best-Jaccard counterparts over shared rows + run-level ARI/NMI; goodness×Jaccard join on matched scored pairs</dd>
+          </dl>
+        </div>
+
+        <div class="vr-colophon">
+          Code · <a href="https://github.com/ArcadiaImpact/gradient-kernel">ArcadiaImpact/gradient-kernel</a> (clustering subsystem per CLUSTERING_SPEC.md; scoring in <code>clustering/scoring.py</code>; figures <code>scripts/make_pilot_figures.py</code>; results doc commit <code>c02e948</code>).
+          <br>Artefacts · HF <a href="https://huggingface.co/datasets/arcadia-impact/gradient-kernel-cluster-pilot-20260714">arcadia-impact/gradient-kernel-cluster-pilot-20260714</a> (all six clusterings, scores, comparisons, membership matches, PILOT_RESULTS.md).
+          <br>Compute · gk-ladder A100 + gk-gpu RTX PRO 4000, ≈$25; ~10k claude-sonnet-5 judge calls. Pods stopped after verified upload.
+        </div>
+
+      </div>
+    </main>
+    <script src="../../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "acl": "Andersen–Chung–Lang push: approximate personalized PageRank from a seed node, sweep-cut the result for a low-conductance cluster, repeat from unvisited seeds (the discovery loop of Timaeus' loss-kernel clustering paper, arXiv:2601.12703, paper defaults). Runs directly on the sketched features' kNN graph.",
+        "folding": "Nested CountSketch property: summing groups of buckets yields exactly the sketch a narrower table would have produced — so one native run gives every smaller width for free, offline.",
+        "detection": "Automated feature-quality protocol (à la Anthropic's SAE feature evaluations): an explainer model writes a description from K member examples; a judge model then classifies held-out members vs matched distractors given only that description. Balanced accuracy ≈ how real and describable the cluster is.",
+      });
+    </script>
+
+    <script>
+      (function () {
+        var svgs = document.querySelectorAll(".pilot-svg");
+        if (!svgs.length) return;
+        var tip = document.createElement("div");
+        tip.className = "vr-itip";
+        tip.hidden = true;
+        document.body.appendChild(tip);
+        var pinnedNode = null;
+
+        function fill(node, pinned) {
+          var html = '<div class="vr-itip-head">' + node.getAttribute("data-head") + "</div>" +
+                     '<div class="vr-itip-comp">' + node.getAttribute("data-comp") + "</div>";
+          var lines = (node.getAttribute("data-lines") || "").split("|");
+          for (var i = 0; i < lines.length; i++) {
+            html += '<div class="vr-itip-comp" style="opacity:.85">' + lines[i] + "</div>";
+          }
+          if (pinned) html += '<div class="vr-itip-pin">pinned — click elsewhere or Esc to dismiss</div>';
+          tip.innerHTML = html;
+          tip.style.maxWidth = "420px";
+        }
+        function place(evt) {
+          var pad = 14, r = tip.getBoundingClientRect();
+          var x = evt.clientX + pad, y = evt.clientY + pad;
+          if (x + r.width > window.innerWidth - 8) x = evt.clientX - r.width - pad;
+          if (y + r.height > window.innerHeight - 8) y = Math.max(8, evt.clientY - r.height - pad);
+          tip.style.left = x + "px"; tip.style.top = y + "px";
+        }
+        function unpin() {
+          if (pinnedNode) pinnedNode.classList.remove("pinned");
+          pinnedNode = null; tip.hidden = true;
+        }
+        svgs.forEach(function (svg) {
+          var nodes = svg.querySelectorAll(".pn");
+          for (var i = 0; i < nodes.length; i++) {
+            (function (node) {
+              node.addEventListener("mouseenter", function (e) {
+                if (pinnedNode) return;
+                fill(node, false); tip.hidden = false; place(e);
+              });
+              node.addEventListener("mousemove", function (e) { if (!pinnedNode) place(e); });
+              node.addEventListener("mouseleave", function () { if (!pinnedNode) tip.hidden = true; });
+              node.addEventListener("click", function (e) {
+                e.stopPropagation();
+                if (pinnedNode) pinnedNode.classList.remove("pinned");
+                pinnedNode = node; node.classList.add("pinned");
+                fill(node, true); tip.hidden = false; place(e);
+              });
+            })(nodes[i]);
+          }
+        });
+        document.addEventListener("click", unpin);
+        document.addEventListener("keydown", function (e) { if (e.key === "Escape") unpin(); });
+      })();
+    </script>
+  </body>
+</html>
