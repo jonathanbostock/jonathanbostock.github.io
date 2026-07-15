@@ -449,3 +449,41 @@ html::after  { right: 3.75rem; }
   line-height: 1.45;
 }
 .vr-code code { white-space: pre; }
+
+/* click-through browser: list of items left, detail panel right */
+.vr-browse {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--h3);
+  border-radius: 4px;
+  background: #fafcf2;
+  min-height: 340px;
+  font-size: 0.82em;
+}
+.vr-browse-list {
+  flex: 0 0 200px;
+  max-height: 430px;
+  overflow-y: auto;
+  border-right: 1px solid var(--h3);
+}
+.vr-browse-item {
+  padding: 0.38em 0.6em;
+  cursor: pointer;
+  border-bottom: 1px solid color-mix(in srgb, var(--h3) 25%, transparent);
+  line-height: 1.3;
+}
+.vr-browse-item:hover { background: color-mix(in srgb, var(--h3) 10%, transparent); }
+.vr-browse-item.active { background: color-mix(in srgb, var(--h3) 18%, transparent); font-weight: 600; }
+.vr-browse-item .vr-browse-ba { float: right; font-variant-numeric: tabular-nums; }
+.vr-browse-item .vr-browse-sub { display: block; font-size: 0.85em; opacity: 0.65; font-weight: 400; }
+.vr-browse-panel {
+  flex: 1 1 auto;
+  padding: 0.7em 1em;
+  max-height: 430px;
+  overflow-y: auto;
+  line-height: 1.45;
+}
+.vr-browse-panel h4 { margin: 0 0 0.3em; font-size: 1em; }
+.vr-browse-panel .vr-browse-expl { font-style: italic; margin-bottom: 0.5em; }
+.vr-browse-panel .vr-browse-targets { font-family: var(--mono, monospace); font-size: 0.85em; opacity: 0.8; margin-bottom: 0.6em; }
+.vr-browse-panel .vr-browse-ex { font-family: var(--mono, monospace); font-size: 0.85em; padding: 0.3em 0.45em; margin-bottom: 0.35em; background: color-mix(in srgb, var(--h3) 7%, transparent); border-radius: 3px; }
