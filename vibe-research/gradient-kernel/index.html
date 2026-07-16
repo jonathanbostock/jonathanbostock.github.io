@@ -98,6 +98,31 @@
           </li>
 
           <li>
+            <a class="vr-card" href="moe-preconditioning/">
+              <span class="vr-date">2026-07-14 → 16 · mixture-of-experts</span>
+              <span class="vr-title">Preconditioning a Mixture-of-Experts: γ is moot, experts are not embeddings, and the clusters aren't the router</span>
+              <p class="vr-desc">What should "unit variance" mean when 90.5% of parameters only
+                get gradient if the router fires them? Measured on granite-3.1-1B-A400M:
+                per-token-loss expert gradients are only <em>soft</em>-sparse (median
+                coordinate fires on 99% of rows), so the marginal-vs-conditional γ family
+                collapses to one kernel (Pearson 0.9994) — but excluding experts is a
+                different kernel (41% of neighbours flip) that discovers near-disjoint,
+                <em>worse</em> clusters (judge accuracy 0.57 vs 0.67). Router purity is
+                near-null in both arms: the clusters are content, not routing. The sketch-error
+                law transfers to 1.33B-MoE within a few percent. Interactive: the largest
+                cluster maps in the thread — 325 + 451 clusters over 51k rows, hover for
+                SAE-style multi-token member examples.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">moe</span>
+                <span class="vr-tag">preconditioning</span>
+                <span class="vr-tag">granite-1.3B</span>
+                <span class="vr-tag">router-purity</span>
+                <span class="vr-tag">interactive</span>
+              </span>
+            </a>
+          </li>
+
+          <li>
             <a class="vr-card" href="clustering-pilot/">
               <span class="vr-date">2026-07-14 → 15 · downstream consumer</span>
               <span class="vr-title">Clustering the sketch: conductance communities scored by an LLM judge</span>

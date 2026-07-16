@@ -26,9 +26,9 @@
         <em>useful</em>. We run
         <button class="tooltip-button" data-define="acl">Timaeus-style local
         PageRank conductance clustering</button> on 261,632 per-token gradient
-        rows of Pythia-14M (512 Pile sequences × 512 positions, D·S = 4096
+        rows of Pythia-14M (512 Pile sequences × 512 positions, 16,384 total sketch dims
         native), in two arms — all parameters vs embeddings frozen — and at two
-        folded widths per arm (1024 and 256 total dims, derived offline by
+        folded widths per arm (4,096 and 1,024 total dims, derived offline by
         <button class="tooltip-button" data-define="folding">bucket folding</button>,
         no model passes). Every discovered cluster is then scored by an LLM
         judge with the
@@ -94,22 +94,22 @@
           <figcaption><b>Fig. 3</b> · The width ablation's two faces. Left:
           cluster identity versus the native run (median best-Jaccard, solid;
           both-clustered ARI, dashed) decays as the sketch folds down —
-          no-embed native↔1024 is the strongest agreement in the study
-          (ARI 0.57), native↔256 collapses (0.19, coverage 0.33). Right: the
+          no-embed native↔4,096-fold is the strongest agreement in the study
+          (ARI 0.57), native↔1,024-fold collapses (0.19, coverage 0.33). Right: the
           judge can't tell the difference — mean accuracy is flat in width for
           the no-embed arm (0.872/0.870/0.872). Folding changes <em>which</em>
           clusters exist, not how coherent the survivors look. Production
-          verdict, matching the error law: 1024 total dims is free at this
-          kernel's stable rank; 256 halves the discovered structure.</figcaption>
+          verdict, matching the error law: 4,096 total dims is free at this
+          kernel's stable rank; 1,024 halves the discovered structure.</figcaption>
         </figure>
 
         <h2><span class="vr-section-num">§4</span> Good clusters are the reproducible ones — until the sketch dies</h2>
 
         <p>Joining goodness with cross-width membership matching (full arm,
-        native↔1024): the top goodness quartile reproduces at median Jaccard
+        native↔4,096-fold): the top goodness quartile reproduces at median Jaccard
         <b>0.99</b> vs 0.54 for the bottom quartile, matched pairs' goodness
         scores agree at Pearson 0.89, and Spearman(goodness, best-Jaccard) =
-        0.37. At native↔256 the relationship <em>inverts</em> (top-quartile
+        0.37. At native↔1,024-dims the relationship <em>inverts</em> (top-quartile
         Jaccard 0.001, bottom 0.77): heavy folding kills the small coherent
         clusters first and preserves the large mushy ones. Goodness and
         repeatability co-vary while the representation is faithful, and
@@ -837,8 +837,8 @@
 
         <div class="vr-lab">
           <dl>
-            <dt>rows</dt><dd>261,632 per-token gradients — Pythia-14M, pile-10k, 512 seqs × 512 positions, marginal preconditioner q = 1/(v+ε), CountSketch D=4 × S=1024 (fp16 features)</dd>
-            <dt>arms</dt><dd>all parameters (P = 14.1M) vs embeddings frozen (P = 1.2M non-embedding); widths: native 4096 + offline folds to 1024 / 256 total dims</dd>
+            <dt>rows</dt><dd>261,632 per-token gradients — Pythia-14M, pile-10k, 512 seqs × 512 positions, marginal preconditioner q = 1/(v+ε), CountSketch D=4 × S=4096 (16,384 total dims, fp16 features)</dd>
+            <dt>arms</dt><dd>all parameters (P = 14.1M) vs embeddings frozen (P = 1.2M non-embedding); widths: native 16,384 + offline per-table folds to 4,096 / 1,024 total dims</dd>
             <dt>clustering</dt><dd>ACL push PPR (α = 0.001, ε<sub>PPR</sub> = 1e-5 recalibrated from the paper's 1e-7), k = 45 self-tuning kNN graph, sweep cuts, Algorithm-1 discovery; full arm termination 0.001/uncapped, no-embed 0.02/cap-800 (config asymmetry noted)</dd>
             <dt>scoring</dt><dd>detection protocol: explainer + judge = claude-sonnet-5 (seed 20260714), 10 train / 10 held-out / 10 distractors, balanced accuracy; zero skips on full arms, seeded 120-cluster samples on no-embed runs</dd>
             <dt>matching</dt><dd>per-cluster best-Jaccard counterparts over shared rows + run-level ARI/NMI; goodness×Jaccard join on matched scored pairs</dd>
