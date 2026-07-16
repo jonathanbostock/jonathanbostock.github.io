@@ -836,7 +836,104 @@
 
 
 
-        <h2><span class="vr-section-num">§5</span> Addendum (2026-07-16): the EK-FAC arm — a stronger metric that loses the plot</h2>
+        <h2><span class="vr-section-num">§5</span> Addendum (2026-07-16): replication — enumeration is a race; geometry and goodness replicate</h2>
+
+        <p>An "anomaly" forced this section into existence: a
+        seed-replication arm (fresh hash seeds + a different VJP backend on a
+        different pod) returned <b>61</b> clusters where the native run found
+        <b>430</b>, and three hash-seed-only replicates at 32,768 dims
+        returned 73, 231 and 94. That looks like the pipeline barely
+        replicates. It doesn't mean that — the attempt logs say something
+        much more specific.</p>
+
+        <p class="vr-pull">Cluster count is not a property of the kernel — it
+        is the stopping time of a race, and the race is the only part of this
+        pipeline that fails to replicate.</p>
+
+        <p>Discovery terminates on <em>unvisited</em> (not unclustered) mass.
+        Roughly 80% of rows sit in one giant PPR basin — the "main body" —
+        and when a random seed lands there <em>and</em> its sweep prefix
+        swallows &gt;99% of the support, the whole support is marked visited
+        unclustered, the remaining-mass counter collapses below the 2%
+        threshold, and enumeration ends. Every run's fate is set by when it
+        first draws that event (per-attempt hazard ≈ 1/150, so the stopping
+        time is geometric with enormous spread):</p>
+
+<figure class="vr-fig breakout">
+  <img src="figs/race.svg" alt="Unvisited fraction of rows vs discovery attempt for all five replicate runs; each run declines gradually then falls off a cliff (the main-body wipe) at a different attempt: 20, 52, 99, 144, 567" style="width:100%">
+  <figcaption><b>Fig. 7</b> · The discovery race, all five end-to-end runs.
+  Each trajectory chips downward as clusters claim rows, then hits its
+  main-body cliff at a different attempt (wideA 20, seed2 52, wideB 99,
+  wideC 144, native 567) and terminates at the 2% line shortly after.
+  Cluster count is ~monotone in cliff time: 73, 61, 231, 94, 430. Thin
+  orange lines: discovery re-run on seed2's <em>byte-identical</em> graph
+  with fresh rng seeds — same race, different draws (cliffs at 83–303).
+  Thin blue lines: re-runs on the rebuilt native graph — no cliff at all;
+  all four glide to the 800-attempt cap at ~570–590 clusters. Whether the
+  trap exists is a property of the graph, and graph-building numerics decide
+  it.</figcaption>
+</figure>
+
+        <p>Strip the race away and replication is strong. On rows clustered
+        in both runs, native↔seed2 agree at conditional ARI 0.65 / NMI 0.79;
+        the wide pairs at conditional ARI 0.70 / 0.82 / 0.60. Median
+        best-Jaccard is direction-dependent in exactly the way truncation
+        predicts — the shorter enumeration matches into the longer one far
+        better than the reverse (seed2→native 0.31 with 43% of clusters
+        finding a ≥0.5-Jaccard partner; native→seed2 0.15, because most of
+        native's 430 simply never got enumerated on the other side). And the
+        judge cannot tell any replicate's clusters apart: mean balanced
+        accuracy 0.872 / 0.862 / 0.892 / 0.876 / 0.892 (native, seed2, wideA,
+        wideB, wideC) — early-stopping runs find <em>fewer</em> clusters, not
+        <em>worse</em> ones.</p>
+
+        <p>What re-rolls the race? Numerics smaller than you'd guess. Holding
+        the preconditioner fixed on one pod and flipping only the VJP backend
+        (serial/chunk-4 → batched/chunk-8) leaves the kernel's geometry
+        intact — exact-diagonal correlation 0.999998 — but moves individual
+        rows hard in the tail: median 6.2%, p99 77% relative change,
+        concentrated in small-norm rows (well-predicted tokens whose
+        bf16-autocast per-token gradients are ill-conditioned). Each backend
+        is separately deterministic (re-running seed2's sketch bit-reproduces
+        it to ≤10<sup>−6</sup>). A perturbation of that shape barely moves
+        cluster geometry, but it re-wires a few kNN edges — and that, it
+        turns out, can add or remove the trap itself.</p>
+
+        <p>The decisive experiment: replay discovery on the
+        <em>byte-identical</em> graphs under four rng seeds each (harness
+        validated — seed2's graph + its original seed reproduces
+        61&nbsp;/&nbsp;75&nbsp;/&nbsp;0.40 exactly). Two regimes appear.
+        seed2's graph is <em>trapped</em>: fresh seeds give <b>118, 219,
+        196</b> clusters (coverage 0.55–0.60) against the original's unlucky
+        61 — a lottery. The archived native graph is <em>trap-free</em>: all
+        four seeds run the full 800-attempt cap with no giant wipe and
+        enumerate <b>564–587</b> clusters (±2%) at coverage 0.75–0.79 — on
+        such a graph the attempt budget, not the race, limits enumeration.
+        One caveat that is itself a finding: the archived "native" graph is a
+        same-config <em>rebuild</em> (the original was lost to a pod wipe),
+        and the original rng replayed on it diverges (571-at-cap vs the
+        original's wipe-at-567 → 430) — so execution-context noise doesn't
+        just re-roll the race, it rewires whether the trap exists. Matching
+        the original 430-cluster inventory against the rebuild's replay gives
+        the graph-replicate rung of the ladder: conditional ARI 0.45 / NMI
+        0.72, median best-Jaccard 0.39 / 0.34, ~40% of clusters keeping a
+        ≥0.5-Jaccard partner.</p>
+
+        <p>Two practical consequences. For reading results: cluster counts
+        and coverage are draws from a wide distribution — compare runs on
+        conditional agreement, per-cluster best-Jaccard and judge goodness,
+        never on inventory size. For the algorithm: termination should count
+        unclustered mass among non-main-body rows (or cap per-attempt wipes)
+        so that enumeration length stops being a lottery; until then the
+        cheap fix is re-running discovery — CPU-only, ~11&nbsp;s/attempt —
+        with a few rng seeds and keeping the longest enumeration. And the
+        judge stays blind to all of it: mean balanced accuracy is 0.86–0.89
+        on every rung of the replication ladder, from bit-identical reruns
+        to cross-backend, cross-graph, cross-pod replicates. What this
+        pipeline finds is stable; <em>how much of it</em> a single run
+        enumerates is not.</p>
+
+        <h2><span class="vr-section-num">§6</span> Addendum (2026-07-16): the EK-FAC arm — a stronger metric that loses the plot</h2>
 
         <p>Would the Kronecker-factored metric behind LLM-scale influence
         functions (EK-FAC — per-layer eigenbasis whitening with corrected
@@ -862,7 +959,7 @@
 
 <!-- GKMOEMAP_EKFAC_START (regenerate: scripts/make_moe_cluster_map.py --run runs-pod/ekfac/cluster-run --arm ekfac) -->
 <figure class="vr-fig breakout">
-<svg class="pilot-svg" viewBox="0 0 900 640" role="img" aria-label="Map of granite-1.33B ekfac clusters by inter-cluster kNN edge mass; hover a cluster for annotated member examples" xmlns="http://www.w3.org/2000/svg">
+<svg class="pilot-svg" viewBox="0 0 900 640" role="img" aria-label="Map of Pythia-14M EK-FAC-arm clusters by inter-cluster kNN edge mass; hover a cluster for annotated member examples" xmlns="http://www.w3.org/2000/svg">
 <rect width="900" height="640" fill="#fafcf2"/>
 <text x="886" y="22" text-anchor="end" font-size="10.5" fill="#7b8074">hover a cluster for its members · click to pin</text>
 <circle cx="20" cy="18" r="6" fill="#164b42" stroke="#1f3318" stroke-width="0.5"/>
@@ -1050,7 +1147,7 @@
 <circle class="pn" cx="632.1" cy="179.0" r="4.6" fill="#04222e" fill-opacity="0.82" stroke="#1f3318" stroke-width="0.5" data-head="ekfac cluster 132 · 83 rows · BA 0.45" data-comp="Each example ends mid-sentence or mid-thought, with the marked token being the natural next word/punctuation that continues the grammatical or semantic flow of " data-lines="&lt;div class=&quot;vr-itip-comp&quot; style=&quot;opacity:.7&quot;&gt;targets: “\n”×5 · “ to”×4 · “ a”×3 · “,”×3 · “ I”×3&lt;/div&gt;&lt;div class=&quot;vr-itip-comp&quot; style=&quot;opacity:.88&quot;&gt;&amp;#8230; to be like.&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt; If&lt;/span&gt; you allow the user to pick how&lt;b style=&quot;color:#e8642c&quot;&gt;[ to]&lt;/b&gt;&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt; evolve&lt;/span&gt; something&lt;span style=&quot;background:rgba(232,100,44,.28);border-radius:2px&quot;&gt;,&lt;/span&gt; it’s&amp;#8230;&lt;/div&gt;&lt;div class=&quot;vr-itip-comp&quot; style=&quot;opacity:.88&quot;&gt;&amp;#8230; make it&lt;span style=&quot;background:rgba(232,100,44,.28);border-radius:2px&quot;&gt; work&lt;/span&gt;? Are&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt; you&lt;/span&gt; the b&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt;org&lt;/span&gt;,&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt; or&lt;/span&gt; fighting&lt;b style=&quot;color:#e8642c&quot;&gt;[ the]&lt;/b&gt;&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt; Borg&lt;/span&gt;&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt;?&lt;/span&gt;\n&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt;\n&lt;/span&gt;The third&amp;#8230;&lt;/div&gt;&lt;div class=&quot;vr-itip-comp&quot; style=&quot;opacity:.88&quot;&gt;&amp;#8230; kind&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt; of&lt;/span&gt; had this image of human souls flying&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt; in&lt;/span&gt; space towards&lt;b style=&quot;color:#e8642c&quot;&gt;[ a]&lt;/b&gt; monolith&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt; or&lt;/span&gt; a space&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt; baby&lt;/span&gt;&amp;#8230;&lt;/div&gt;&lt;div class=&quot;vr-itip-comp&quot; style=&quot;opacity:.88&quot;&gt;&amp;#8230; way&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt;.&lt;/span&gt;\n\nHence&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt;,&lt;/span&gt; my biggest d&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt;ille&lt;/span&gt;&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt;ma&lt;/span&gt; when&lt;b style=&quot;color:#e8642c&quot;&gt;[ deciding]&lt;/b&gt; what to&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt; create&lt;/span&gt; was not&lt;span style=&quot;background:rgba(195,163,34,.25);border-radius:2px&quot;&gt; with&lt;/span&gt;&amp;#8230;&lt;/div&gt;&lt;div class=&quot;vr-itip-comp&quot; style=&quot;opacity:.88&quot;&gt;&amp;#8230; on the object. On the other hand, reference light is&lt;b style=&quot;color:#e8642c&quot;&gt;[ light]&lt;/b&gt; to be guided to the detection&amp;#8230;&lt;/div&gt;"/>
 <circle class="pn" cx="756.8" cy="131.7" r="4.1" fill="#b4b8af" fill-opacity="0.82" stroke="#1f3318" stroke-width="0.5" data-head="ekfac cluster 156 · 51 rows · unscored" data-comp="" data-lines="&lt;div class=&quot;vr-itip-comp&quot; style=&quot;opacity:.7&quot;&gt;targets: “ of”×4 · “ the”×3 · “ and”×3 · “ are”×2 · “,”×2&lt;/div&gt;&lt;div class=&quot;vr-itip-comp&quot; style=&quot;opacity:.88&quot;&gt;&amp;#8230;, I ended up scratching most of them&lt;b style=&quot;color:#e8642c&quot;&gt;[,]&lt;/b&gt; and ended up with 5 different&amp;#8230;&lt;/div&gt;&lt;div class=&quot;vr-itip-comp&quot; style=&quot;opacity:.88&quot;&gt;&amp;#8230; told about it.\n\nIn the end, the idea&lt;b style=&quot;color:#e8642c&quot;&gt;[ of]&lt;/b&gt; going with a full physical metaphor&amp;#8230;&lt;/div&gt;&lt;div class=&quot;vr-itip-comp&quot; style=&quot;opacity:.88&quot;&gt;&amp;#8230; a menu. Some pastas are better than others; some&lt;b style=&quot;color:#e8642c&quot;&gt;[ are]&lt;/b&gt; faster, some are stronger.&amp;#8230;&lt;/div&gt;&lt;div class=&quot;vr-itip-comp&quot; style=&quot;opacity:.88&quot;&gt;&amp;#8230; to conquer them (the objective of the game is having your&lt;b style=&quot;color:#e8642c&quot;&gt;[ pasta]&lt;/b&gt; conquer all the plates on the&amp;#8230;&lt;/div&gt;&lt;div class=&quot;vr-itip-comp&quot; style=&quot;opacity:.88&quot;&gt;&amp;#8230;. You can tell because this month sees the music-f&lt;b style=&quot;color:#e8642c&quot;&gt;[estival]&lt;/b&gt; season kick off properly, while&amp;#8230;&lt;/div&gt;"/>
 </svg>
-<figcaption><b>Fig. 7</b> · All 175 conductance clusters of the ekfac arm (Pythia-14M, EK-FAC preconditioner, 261,632 per-token rows), laid out by t-SNE on inter-cluster kNN edge mass. Point size ∝ log cluster size; colour = judge accuracy (grey = outside the scored sample). Hover for five member examples: the row's own target in <b style="color:#e8642c">[orange]</b>, <span style="background:rgba(232,100,44,.28);border-radius:2px">shaded</span> tokens belong to the same cluster, <span style="background:rgba(195,163,34,.25);border-radius:2px">pale gold</span> ones are kNN-adjacent — multi-token features appear as runs of adjacent shading. Click to pin, Esc to dismiss.</figcaption>
+<figcaption><b>Fig. 8</b> · All 175 conductance clusters of the ekfac arm (Pythia-14M, EK-FAC preconditioner, 261,632 per-token rows), laid out by t-SNE on inter-cluster kNN edge mass. Point size ∝ log cluster size; colour = judge accuracy (grey = outside the scored sample). Hover for five member examples: the row's own target in <b style="color:#e8642c">[orange]</b>, <span style="background:rgba(232,100,44,.28);border-radius:2px">shaded</span> tokens belong to the same cluster, <span style="background:rgba(195,163,34,.25);border-radius:2px">pale gold</span> ones are kNN-adjacent — multi-token features appear as runs of adjacent shading. Click to pin, Esc to dismiss.</figcaption>
 </figure>
 <!-- GKMOEMAP_EKFAC_END -->
 
