@@ -959,6 +959,7 @@
         <div class="vr-lab">
           <dl>
             <dt>model</dt><dd>ibm-granite/granite-3.1-1b-a400m-base — P = 1,334,625,280 (~430M active), 24 layers, 32 experts top-8, fused 3D expert tensors (90.5% of P), tied embeddings</dd>
+            <dt>data caveat</dt><dd>probe corpus is pile-10k — NOT granite's (proprietary) pretraining mix, unlike the Pile-trained Pythia studies; rows are the corpus <em>prefix</em> (first 100 packed blocks ≈ 50–100 documents, unshuffled loader), so rows are document-autocorrelated and the inventory partly reflects which documents lead the stream</dd>
             <dt>census</dt><dd>1,024 per-token gradients, per-coordinate freq/κ/moments (E1); router census 51,100 rows, top-8 assignments per layer, density check exact</dd>
             <dt>variants</dt><dd>q<sub>γ</sub> = freq<sup>γ</sup>/(v+ε·freq<sup>γ</sup>), γ ∈ {0, ½, 1}, exclude-experts, exclude+router; 32 exact rows (160 GB) re-preconditioned per variant; sketched at D·S ∈ {8,192, 32,768}</dd>
             <dt>clustering</dt><dd>51,100 rows × 2 arms, D·S = 16,384, pilot discovery config (ε<sub>PPR</sub> 1e-5, cap 800, min 20); ~17–36 s per PPR attempt at this graph density — discovery, not sketching, is the wall at 1.33B</dd>
