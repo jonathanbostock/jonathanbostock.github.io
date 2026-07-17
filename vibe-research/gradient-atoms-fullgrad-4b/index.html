@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Gradient atoms without LoRA — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="J Rosser's Gradient Atoms replicated with full-model gradients, an AdaFactor preconditioner, and CountSketch hashing — no LoRA, no EKFAC, one H200, ~$16.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Gradient atoms without LoRA</h1>
+        <p class="vr-byline">
+          <span>2026-07-17</span>
+          <span>1× H200 · ≈$16</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p><a href="https://jrosser.co.uk/gradient_atoms/">Gradient Atoms</a>
+        (J&nbsp;Rosser, 2026) discovers model behaviors unsupervised: compute one
+        training gradient per fine-tuning document, sparse-code the collection
+        into a dictionary of "atoms", and steer the model by applying atoms as
+        weight-space perturbations. Their pipeline reads the gradients through
+        two lossy windows — a rank-8 LoRA adapter and a truncated
+        <button class="tooltip-button" data-define="ekfac">EKFAC</button>
+        eigenbasis. This piece asks whether either window is load-bearing:
+        we rebuild the experiment on <b>full-model gradients</b> (3.2B
+        parameters), preconditioned by a 6.9&nbsp;MB
+        <button class="tooltip-button" data-define="adafactor">AdaFactor-style</button>
+        second-moment estimate and compressed with
+        <button class="tooltip-button" data-define="countsketch">CountSketch</button>
+        hashing instead. Everything replicates, several things improve, and the
+        whole run costs about $16.</p>
+
+        <p class="vr-pull">The LoRA + EKFAC machinery wasn't load-bearing:
+        full-gradient atoms recover the same behavior inventory and steer all
+        five tested behaviors to 0%, on one GPU.</p>
+
+        <h2><span class="vr-section-num">§1</span>Why bother</h2>
+
+        <p>Two structural worries about the original. First, with standard LoRA
+        (ΔW&nbsp;=&nbsp;<i>BA</i>, <i>B</i> zero-initialised), per-layer gradients reach the
+        adapter only through row-space(<i>A</i>) and col-space(<i>B</i>) — and the
+        LoRA-asymmetry literature says <i>A</i> stays close to its random init, so
+        half the gradient signal is a random sketch whose quality depends on the
+        draw. Second, gradient-kernel's own ablations found that <em>full</em> EKFAC
+        whitening inflates the gradient kernel's stable rank ~4.7&nbsp;→&nbsp;~620,
+        making it nearly unsketchable and collapsing judge-rated cluster quality
+        to chance — the diagonal (Adam/AdaFactor) family is the validated
+        operating point for this kind of unsupervised decomposition. So the
+        substitution is: LoRA&nbsp;→&nbsp;full weights + unbiased hash sketch;
+        EKFAC&nbsp;→&nbsp;rank-1 factored second moment.</p>
+
+        <h2><span class="vr-section-num">§2</span>Pipeline</h2>
+
+        <p>Base model and data match the paper: Gemma-3-4B-IT and their exact
+        5,000-document general SFT sample (same seed, same shuffle). We
+        full-fine-tune the language stack (attention + MLP; embeddings and
+        vision frozen), then treat that checkpoint's per-document gradients as
+        the object of study:</p>
+
+        <ol>
+          <li><b>Precondition.</b> Estimate the per-coordinate second moment
+          <i>v</i> from 2,048 token gradients (fp64 on-GPU accumulation, 13&nbsp;min),
+          then factor it AdaFactor-style: <i>v̂</i> = <i>r&nbsp;c</i><sup>T</sup>/Σ<i>v</i>
+          per weight matrix. The factors are <b>6.9&nbsp;MB</b> (vs 12.8&nbsp;GB for
+          the raw diagonal) and agree with it for 85.5% of coordinates within
+          2× — nearly identical to the 70M-scale A/B (87.7%).</li>
+          <li><b>Sketch.</b> One gradient row per document (assistant tokens,
+          sum reduction), scaled by <i>v̂</i><sup>−1/2</sup> and hashed by
+          CountSketch into 4×8,192 = 32,768 dims. 5,000 rows ≈ 40&nbsp;min,
+          330&nbsp;MB — vs ~77&nbsp;TB if you materialised the raw gradients.</li>
+          <li><b>Decompose.</b> The paper's own dictionary-learning recipe,
+          unchanged (<code>MiniBatchDictionaryLearning</code>, K=500, α=0.1),
+          on unit-normalised sketch rows.</li>
+          <li><b>Steer.</b> For an atom of interest, average the <em>exact</em>
+          recomputed gradients of its top-20 activating documents (never
+          unsketch — S<sup>T</sup> would smear hash noise over 3.2B coordinates)
+          and apply θ&nbsp;±&nbsp;α<i>v</i> directly to the weights.</li>
+        </ol>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>model</dt><dd>google/gemma-3-4b-it, full-param FT of the language stack (3.2B trainable), lr 1e-5, 3 epochs, assistant-token loss</dd>
+            <dt>data</dt><dd>jrosseruk/subl-learn-data, seed-42 sample of 5,000 docs — byte-identical to the paper's</dd>
+            <dt>gradients</dt><dd>per-document, attention+MLP projections (238 tensors, 3.21B params); norms/embeddings/vision excluded</dd>
+            <dt>preconditioner</dt><dd>AdaFactor rank-1 of the second moment; 2,048 samples; ε=1e-8; 0.19% coords ε-floored</dd>
+            <dt>sketch</dt><dd>CountSketch, 4 tables × 8,192 buckets, fp16 rows</dd>
+            <dt>runtime</dt><dd>1× H200 (RunPod), ~3.5 h wall incl. debugging ≈ $16</dd>
+            <dt>code</dt><dd>gradient_atoms clone, branch jonathan-analysis, experiments/fullgrad_sketch_atoms/ · gradient-kernel v0.3.0 + chunked-accumulator fix (PR #6)</dd>
+            <dt>artifacts</dt><dd>HF: arcadia-impact/gradient-atoms-4b-gemma3-20260717 (weights, preconditioners, sketches, atoms, steering vectors, evals, logs — 99 GB, private)</dd>
+          </dl>
+        </div>
+
+        <h2><span class="vr-section-num">§3</span>Discovery</h2>
+
+        <figure class="vr-fig">
+          <img src="figs/coherence_hist.png" alt="Histogram of coherence over 500 atoms, log count axis, with thresholds at 0.1 and 0.5 annotated.">
+          <figcaption><b>Fig. 1</b> · <button class="tooltip-button" data-define="coherence">Coherence</button>
+          across the 500 learned atoms: 13 exceed 0.5 and 117 exceed 0.1
+          (the paper reports 5 and 43 — different gradient representation, so
+          read as "at least comparable structure", not a 2.6× win).</figcaption>
+        </figure>
+
+        <p>The inventory looks like the paper's: the highest-coherence atoms are
+        stereotyped task types, not topics. Sentiment classification (#195),
+        spam detection (#180, #267), true/false answering (#35), refusal on
+        missing input (#292, #7 — top docs all "please provide the
+        document/text/article…"), yes-answering (#374, #469), Python code
+        (#47, #45), fiction/nonfiction genre labels (#343, #382), translation
+        (#224), one-word factual QA (#296). A detector-based matcher (score each
+        atom's top-20 documents with the paper's five behavior regexes) finds
+        an atom for <b>all five</b> of their steering behaviors at hit-fraction
+        1.00 — no labels or per-query scoring anywhere upstream of that.</p>
+
+        <h2><span class="vr-section-num">§4</span>Steering</h2>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/steering_sweep.png" alt="Five panels, one per behavior, detector percentage versus relative perturbation size rho, toward and away curves with baseline dashed.">
+          <figcaption><b>Fig. 2</b> · Behavioral steering sweep
+          (100 questions per behavior, ~40 of them neutral controls; greedy
+          decoding). <span style="color:#e8642c">toward</span> = θ−α<i>v</i>,
+          <span style="color:#2f6175">away</span> = θ+α<i>v</i>;
+          <button class="tooltip-button" data-define="rho">ρ</button> is the
+          relative update size. Above ρ≈3×10<sup>-5</sup> the model starts
+          degenerating — same ceiling the paper reports.</figcaption>
+        </figure>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>behavior (atom)</th><th class="num">base</th>
+                  <th class="num">best ↑</th><th class="num">best ↓</th>
+                  <th class="num">paper Δ↑ / Δ↓</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Systematic refusal (#7)</td><td class="num">54%</td>
+                  <td class="num vr-pos">+46pp → 100%</td>
+                  <td class="num vr-pos">−54pp → 0%</td>
+                  <td class="num">+5 / −50→0%</td></tr>
+              <tr><td>Code generation (#45)</td><td class="num">50%</td>
+                  <td class="num">+10pp <span class="vr-neg">(sign flipped)</span></td>
+                  <td class="num vr-pos">−50pp → 0%</td>
+                  <td class="num">+16 / −14</td></tr>
+              <tr><td>Bulleted lists (#133)</td><td class="num">38%</td>
+                  <td class="num vr-pos">+25pp</td>
+                  <td class="num vr-pos">−38pp → 0%</td>
+                  <td class="num">+61 / −33→0%</td></tr>
+              <tr><td>Numbered lists (#340)</td><td class="num">56%</td>
+                  <td class="num">+2pp (ceiling)</td>
+                  <td class="num vr-pos">−56pp → 0%</td>
+                  <td class="num">+1 / −50</td></tr>
+              <tr><td>Yes/No answers (#374)</td><td class="num">39%</td>
+                  <td class="num vr-pos">+13pp</td>
+                  <td class="num vr-pos">−39pp → 0%</td>
+                  <td class="num">+12 / −39→0%</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>All five behaviors are suppressible to <b>exactly 0%</b> (the paper
+        got four of five there; their code atom bottomed at 28%). Amplification
+        matches where headroom exists — yes/no +13pp vs their +12pp — and the
+        two idiosyncrasies of their results reproduce cleanly: dictionary signs
+        are arbitrary (our code atom steers with the "away" sign, exactly like
+        their #64), and numbered lists suppress easily but refuse to amplify.
+        The steered behavior is qualitative, not just regex-deep: asked to
+        "Summarize the article." with no article, the refusal-suppressed model
+        fluently <em>makes up</em> a plausible summary instead of asking for the
+        input. And one finding the detector alone would have mislabelled: the
+        bullets atom pushed "toward" at larger ρ doesn't remove bullets — it
+        compresses answers to a <em>single</em> bullet line. That atom seems to
+        encode list <em>length</em>, not list <em>formatting</em>.</p>
+
+        <h2><span class="vr-section-num">§5</span>Beyond the paper's five: the top-coherence atoms</h2>
+
+        <p>The five behaviors above were chosen for comparability with the
+        paper. The thirteen highest-coherence atoms mostly lack ready-made
+        regex detectors, so they got the paper's own qualitative protocol
+        instead: steer ± at ρ ∈ {3×10<sup>-6</sup>, 10<sup>-5</sup>} and diff
+        responses on twenty generic questions. Read "changed" as
+        <em>direction-specific response change on out-of-distribution
+        questions</em>, not steering success:</p>
+
+        <div class="vr-table-wrap" id="top13-table">
+          <table class="vr-table">
+            <thead>
+              <tr><th>atom</th><th class="num">coherence</th>
+                  <th class="num">max changed</th><th>keywords</th></tr>
+            </thead>
+            <tbody id="top13-tbody">
+              <tr><td>#195</td><td class="num">0.740</td><td class="num">0.10</td><td>negative (sentiment)</td></tr>
+              <tr><td>#180</td><td class="num">0.690</td><td class="num">0.10</td><td>spam, email, detection</td></tr>
+              <tr><td>#35</td><td class="num">0.660</td><td class="num">0.05</td><td>true (true/false QA)</td></tr>
+              <tr><td>#196</td><td class="num">0.635</td><td class="num">0.05</td><td>—</td></tr>
+              <tr><td>#273</td><td class="num">0.635</td><td class="num">0.05</td><td>—</td></tr>
+              <tr><td>#471</td><td class="num">0.603</td><td class="num">0.05</td><td>—</td></tr>
+              <tr><td>#161</td><td class="num">0.563</td><td class="num">0.10</td><td>metaphor, research, hypothesis</td></tr>
+              <tr><td>#427</td><td class="num">0.548</td><td class="num">0.10</td><td>—</td></tr>
+              <tr><td>#292</td><td class="num">0.542</td><td class="num">0.10</td><td>please, provide, document, need, text</td></tr>
+              <tr><td>#139</td><td class="num">0.531</td><td class="num">0.05</td><td>—</td></tr>
+              <tr><td>#124</td><td class="num">0.515</td><td class="num">0.05</td><td>—</td></tr>
+              <tr><td>#411</td><td class="num">0.515</td><td class="num">0.05</td><td>—</td></tr>
+              <tr><td>#438</td><td class="num">0.506</td><td class="num">0.05</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p id="top13-comment">At the same ρ that swung the five detector-matched
+        behaviors by ±50pp, every one of these atoms leaves 90–95% of generic
+        responses byte-identical, with zero degeneration. That reads as a
+        feature: the high-coherence atoms are <em>narrow</em> — spam-classification
+        or true/false formatting simply isn't invited by "What's the best
+        pet?", so a targeted edit shows no collateral drift off-distribution.
+        The contrast case is instructive: refusal-family atom #292 (coherence
+        0.542) changes 10% of generic responses, while its low-coherence
+        sibling #7 (0.104) drove the 100%/0% refusal swings — on
+        <em>refusal-inviting</em> questions. Demonstrating steering for the
+        remaining task-type atoms needs behavior-inviting evaluation sets,
+        which is the same lesson the paper's five hand-built detectors embody.
+        What the sweep does establish for all thirteen: fluency-preserving,
+        distribution-local edits.</p>
+
+        <h2><span class="vr-section-num">§6</span>Caveats &amp; what's next</h2>
+
+        <ul>
+          <li>Coherence numbers aren't strictly commensurable with the paper's
+          (sketched preconditioned full-gradient cosines vs raw LoRA-gradient
+          cosines); the honest claim is "at least as much structure".</li>
+          <li>Our fine-tune is full-parameter with prompt masking; theirs was
+          LoRA with packing — so atom-for-atom inventory comparison is
+          qualitative. The clean head-to-head is running this pipeline on
+          J's exact merged adapter checkpoint, so only the gradient
+          representation differs.</li>
+          <li>Per-token atoms (~1.25M rows, ~$200–500) are the regime the
+          LoRA+EKFAC pipeline can't reach and the natural next run.</li>
+          <li>One seed, one model, regex detectors, five quantitative
+          behaviors.</li>
+        </ul>
+
+        <div class="vr-colophon">
+          Paper · <a href="https://jrosser.co.uk/gradient_atoms/assets/Gradient_Atoms.pdf">Gradient Atoms</a> (J&nbsp;Rosser, 2026) — code <a href="https://github.com/jrosseruk/gradient_atoms">jrosseruk/gradient_atoms</a>.
+          <br>Machinery · <a href="https://github.com/ArcadiaImpact/gradient-kernel">ArcadiaImpact/gradient-kernel</a> v0.3.0 (+ chunked fp64 accumulation, PR&nbsp;#6 — the unchunked update needs ~77&nbsp;GiB of transients at 3.2B params).
+          <br>Artifacts · HF <code>arcadia-impact/gradient-atoms-4b-gemma3-20260717</code> (99&nbsp;GB, verified). Pod 52whg5nn7lewmo. Experiment folder <code>experiments/fullgrad_sketch_atoms/</code>, branch <code>jonathan-analysis</code>.
+        </div>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "ekfac": "Eigenvalue-corrected Kronecker-Factored Approximate Curvature: a per-layer approximation of the Fisher information matrix as a Kronecker product of input-activation and output-gradient covariances, eigendecomposed and rescaled. The paper projects gradients onto the top-50 EKFAC eigencomponents per module and whitens by 1/√λ.",
+        "adafactor": "AdaFactor approximates Adam's per-coordinate second-moment accumulator with a rank-1 outer product of row and column means — memory O(rows+cols) instead of O(rows×cols) per weight matrix. Here the same factorization is applied to an estimated gradient second moment and used as a frozen preconditioner: divide each gradient coordinate by √v̂.",
+        "countsketch": "A random linear projection built from hashing: each coordinate is assigned to one bucket per table with a random ±1 sign. Inner products are preserved without bias, with relative error ≈ √(1+r_eff)/√(dims) where r_eff is the kernel's stable rank — no basis has to be chosen or learned.",
+        "coherence": "Mean pairwise cosine similarity between the gradient rows of an atom's top-20 activating documents. High coherence = the atom's documents genuinely share an update direction rather than being an artifact of the decomposition.",
+        "rho": "ρ = ‖αv‖/‖θ‖ — the steering step size measured relative to the norm of the steered weights, so it is comparable across atoms with different gradient magnitudes.",
+      });
+    </script>
+  </body>
+</html>
