@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+    <title>Kernel separation and DPO learnability: a floor, not a gradient — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="Does a concept's separability in preconditioned-gradient (G_pre) space predict how much DPO can teach it? Powered up to 116 arms, the answer is: only as a floor. Modulo/parity concepts sit at chance separation and are unlearnable — and, because prompt-uncorrelated noise yields the most contrastive pairs, they also carry the most DPO pairs, which is the whole of the apparent pairs 'confound'. Above the floor no separation metric — gradient or hidden-state — grades held-out learnability. And the floor is a generalization failure, not an optimization one: DPO fits the modulo pairs to 0.98 preference accuracy but nothing transfers.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Kernel separation and DPO learnability: a floor, not a gradient</h1>
+        <p class="vr-byline">
+          <span>2026-07-18</span>
+          <span>2× 4×H100, 100 arms from cached data · ~13 GPU-h ≈ $160</span>
+          <span><a href="../gpre-ridge-horizon/">G<sub>pre</sub> thread</a></span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>If you can see a concept in a model's geometry, can you teach the model
+        to do it? A pilot (16 concepts) hinted yes — a concept's
+        <button class="tooltip-button" data-define="gpre-sep">separability in
+        preconditioned-gradient space</button> tracked how far
+        <button class="tooltip-button" data-define="dpo">DPO</button> could move it —
+        but 16 arms couldn't out-argue a plain hidden-state probe, and the two
+        predictors were 93% collinear. This piece scales the question to
+        <b>116 concepts</b> (100 new arms built from the pilot's <em>cached</em>
+        rollouts + gradient embeddings, pooled with the original 16) and asks it
+        with power. The answer is cleaner and more deflationary than the pilot's:
+        separation predicts learnability <em>only as a floor</em>.</p>
+
+        <p class="vr-pull">Chance-separation concepts are unlearnable; every concept
+        above that floor learns — with almost no further dependence on how separable
+        it is, by any metric, gradient or hidden-state.</p>
+
+        <p>The dependent variable throughout is
+        <button class="tooltip-button" data-define="delta">Δ, a held-out
+        generalization measure</button> — never training loss or preference
+        accuracy. That distinction turns out to carry the whole story.</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>base model</dt><dd>gemma-3-1b-it</dd>
+            <dt>concepts</dt><dd>116 program-defined classifiers (100 suite @ G<sub>pre</sub> AUC 0.50–0.78 + 16 pilot); each is a rule over the model's own text (thresholds, char/word statistics, phrases, discourse features, and xor/or/and combinations)</dd>
+            <dt>separation</dt><dd>rank-256 CountSketch of per-example Adam-preconditioned gradients over the projection matrices; probe AUC of + vs − classes. Hidden-state probe on layer-mean activations as the baseline</dd>
+            <dt>DPO</dt><dd>one arm per concept, LoRA r=32, 3 epochs, ≤4096 contrastive pairs; 50 arms/pod, work-stealing queue, 100/100 arms, zero failures</dd>
+            <dt>eval</dt><dd>Δ positive rate over 384 held-out questions (disjoint <code>eval</code> split), base vs after each epoch, every generation labelled with all 116 programs</dd>
+            <dt>code</dt><dd><a href="https://github.com/ArcadiaImpact/pane/pull/1">ArcadiaImpact/pane#1</a> · experiment <code>gpre-dpo-gemma3-1b</code></dd>
+          </dl>
+        </div>
+
+        <h2><span class="vr-section-num">§1</span>A floor, not a gradient</h2>
+
+        <p>Plot Δ against separability and the shape is not a trend — it is a cliff
+        and a cloud. Eleven concepts sit at chance separation (G<sub>pre</sub> AUC ≤
+        0.517); every one of them is a modulo / parity rule
+        (<code>modulo:3</code>, <code>xor(·,&thinsp;modulo:2)</code>,
+        <code>or(modulo:2,&thinsp;modulo:3)</code>, …). Their mean Δ is
+        <b>+0.002</b> — dead flat. The other 105 concepts learn, mean Δ
+        <b>+0.26</b>, spanning 0 to +0.61.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig1_floor.png" alt="Two scatter panels. Left: Δ positive rate vs G_pre probe AUC — 11 orange modulo/parity points cluster at AUC≈0.51, Δ≈0; the teal learnable points spread from AUC 0.53 to 0.83 with Δ from 0 to 0.6 and no visible upward trend. Right: Δ vs pairs available (log x) — the same orange points sit at the far right (17k–23k pairs) at Δ≈0, while teal points cluster at 5k–12k pairs across the full Δ range.">
+          <figcaption><b>Fig. 1</b> · Δ (held-out, final epoch) vs concept separability
+          (left) and vs available DPO pairs (right). Orange = the 11 modulo/parity
+          concepts at chance separation. They are the floor in both panels: unlearnable,
+          <em>and</em> (right) carrying the most contrastive pairs — the same 11 points
+          make both marginal correlations.</figcaption>
+        </figure>
+
+        <p>A single binary — is the concept above the floor or not — already explains
+        <b>R² = 0.30</b> of the variance in Δ (point-biserial ρ = −0.54). That is more
+        than any continuous separation metric explains, and it is essentially all of
+        what they explain: the pilot's headline "separation predicts learnability" was,
+        with power, mostly a detector for one kind of concept that can't be learned at
+        all.</p>
+
+        <h2><span class="vr-section-num">§2</span>The floor <em>fits</em> — it just doesn't generalize</h2>
+
+        <p>Why are the modulo concepts unlearnable? Not because DPO fails to optimise
+        them. A post-hoc sweep of every arm's training curve confirms <b>all 100 suite
+        arms reached ≥0.92 preference accuracy</b> on their training pairs (median 0.96,
+        no divergence) — the modulo arms fit their pairs exactly as well as the concepts
+        that generalise. What separates them is the
+        <button class="tooltip-button" data-define="margin">reward margin</button> and
+        what happens on held-out prompts:</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>concept (representative)</th><th></th><th class="num">train pref-acc</th><th class="num">reward margin</th><th class="num">Δ held-out</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>xor(boolean, modulo:2)</code></td><td>floor</td><td class="num">0.98</td><td class="num">0.82</td><td class="num vr-neg">−0.00</td></tr>
+              <tr><td><code>xor(·, modulo:2)</code></td><td>floor</td><td class="num">0.96</td><td class="num">0.84</td><td class="num vr-neg">+0.02</td></tr>
+              <tr><td><code>threshold:first_sentence_chars</code></td><td>learnable</td><td class="num">0.98</td><td class="num">2.94</td><td class="num vr-pos">+0.54</td></tr>
+              <tr><td><code>not(threshold:comma_per_word)</code></td><td>learnable</td><td class="num">0.95</td><td class="num">3.63</td><td class="num vr-pos">+0.61</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="vr-pull">The modulo arms reach 0.98 preference accuracy on their DPO
+        pairs and move the held-out rate by zero. The floor is a generalization failure,
+        not an optimization one.</p>
+
+        <p>A parity-of-word-count rule is uncorrelated with the prompt, so the model can
+        memorise "prefer this specific response over that one" pair by pair (high
+        pref-acc, but a thin ~0.8 margin) without there being any transferable direction
+        to push — nothing generalises to new questions. A real feature has a represented
+        direction; DPO's pair-fit rides it out to a 3–4× larger margin and the behaviour
+        appears on held-out prompts. Separability, it turns out, is a readout of exactly
+        this: whether there is a direction to find.</p>
+
+        <h2><span class="vr-section-num">§3</span>Above the floor, nothing grades — and the "pairs confound" is the floor again</h2>
+
+        <p>Restrict to the 105 learnable concepts and every marginal correlation with Δ
+        collapses. G<sub>pre</sub> AUC, hidden-state AUC, entanglement, and
+        <button class="tooltip-button" data-define="pairs">pairs available</button> all
+        fall from ρ ≈ 0.2–0.3 across the full set to |ρ| ≤ 0.10 — none significant.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/fig2_within_regime.png" alt="Grouped bar chart. Four predictors (G_pre AUC, hidden AUC, entanglement, pairs), each with a solid bar for all 116 arms and a hatched bar for the learnable regime only. Full-sample |rho| is 0.22, 0.31, 0.32, 0.30; within-regime it drops to 0.04, 0.08, 0.10, 0.06 respectively.">
+          <figcaption><b>Fig. 2</b> · |Spearman ρ| of each predictor against Δ, over all
+          116 arms (solid) vs the 105 learnable arms only (hatched). Every predictor's
+          apparent signal is the floor: remove the 11 chance-separation arms and it is
+          gone.</figcaption>
+        </figure>
+
+        <p>This also disposes of what looked like a data confound. Across all 3,000
+        candidate concepts, separability and pair-count are ρ = −0.89 collinear — more
+        separable concepts have <em>fewer</em> pairs — and pairs anti-correlate with Δ
+        (ρ = −0.30). It reads like "more training data hurts", which is nonsense. It
+        isn't real: the modulo concepts are uncorrelated with the prompt, so they throw
+        both classes on nearly every question and pile up 17k–23k pairs (2–3× the
+        median), <em>and</em> they're the unlearnable floor. Those same 11 points make
+        the correlation. Among learnable arms, ρ(pairs, Δ) = −0.06 (p = 0.52).
+        Separability, pair-count, and learnability are three views of one axis — is the
+        concept a represented feature or noise — not a predictor and a nuisance.</p>
+
+        <p>Which settles the pilot's actual question — does gradient geometry beat a
+        hidden-state probe? In a standardized OLS on all 116 arms the hidden probe takes
+        all the signal (β = +0.91, p = 8×10⁻¹¹) and G<sub>pre</sub> AUC goes to the
+        wrong sign (β = −0.43, p = 0.001, a suppressor under 0.83 collinearity);
+        <button class="tooltip-button" data-define="steiger">Steiger's Z</button> on the
+        raw correlations is −1.71 (p = 0.086). But the honest reading isn't "hidden
+        wins" — it's that above the floor neither one grades outcomes, so the contest is
+        over a cloud with no gradient in it.</p>
+
+        <h2><span class="vr-section-num">§4</span>What (barely) survives</h2>
+
+        <p>Two things flicker above the noise. First, an <b>early-speed</b> signal: at
+        epoch 1, among learnable arms, hidden-state AUC (ρ = +0.24, p = 0.01) and
+        <button class="tooltip-button" data-define="entanglement">gradient
+        entanglement</button> (ρ = −0.23, p = 0.02) do predict which concepts have moved
+        already — while G<sub>pre</sub> probe-AUC stays flat (+0.08, n.s.). By epoch 3
+        the slower concepts have caught up and it washes out.</p>
+
+        <p>Second, <b>entanglement</b> is the one kernel-specific quantity that survives
+        partialling out pairs in the full sample (partial ρ = −0.26 at epoch 1, p = .005;
+        4-variable OLS β = −0.24, p = .026) — the basis for an earlier read of this run
+        that called it "the surviving kernel signal." I don't think that holds up: within
+        the learnable regime its final-epoch signal is n.s. (−0.10) and its epoch-1 signal
+        drops to −0.08 once pairs is controlled. Like everything else, most of its
+        apparent survival is the floor (the modulo arms have high entanglement and zero
+        Δ). Yuan et al.'s gradient-entanglement mechanism is <em>consistent</em> with the
+        data — more-entangled concepts do move a little slower early — but it is not
+        cleanly established above the floor here.</p>
+
+        <h2><span class="vr-section-num">§5</span>Verdict &amp; what's next</h2>
+
+        <p>Powered, the pilot's correlation resolves into a single effect: DPO cannot
+        move concepts at the chance-separation floor (surface-arithmetic noise it can
+        memorise but not generalise), and it moves everything else with little further
+        dependence on separability. Gradient-kernel probe-AUC is neither a better nor an
+        additive learnability predictor than a hidden-state probe. Two caveats keep this
+        from being the last word: the sketch is lossy (698M-dim gradients → 4,096-dim
+        sketch → 256-dim, versus exact 1,152-dim hidden states), so a wider sketch is the
+        untested fair fight; and the separability↔pairs collinearity is structural, so
+        the clean test needs a <em>matched-dose</em> design.</p>
+
+        <ul>
+          <li><b>Matched-dose rerun</b> — fix pairs/arm equal across arms to break the
+          separability↔pairability collinearity experimentally, then re-ask whether any
+          metric grades learnability above the floor.</li>
+          <li><b>Entanglement-first selection</b> — stratify on entanglement rather than
+          AUC and test the early-speed signal directly.</li>
+          <li><b>The endgame</b> — repeat on midtrained variants and ask whether
+          midtraining moves separation/entanglement and learnability follows.</li>
+        </ul>
+
+        <div class="vr-colophon">
+          Source · <a href="https://github.com/ArcadiaImpact/pane/pull/1">ArcadiaImpact/pane#1</a>,
+          experiment <code>experiments/gpre-dpo-gemma3-1b/</code>
+          (RESULTS.md § SUITE100 EXTENSION; <code>pooled_analysis.py</code>).
+          <br>Data · <a href="https://huggingface.co/datasets/arcadia-impact/pane-gpre-dpo-gemma3-1b-data">arcadia-impact/pane-gpre-dpo-gemma3-1b-data</a>
+          (<code>suite100/results/…-pooled/</code> — pooled stats, scatter, 116×116
+          transfer heatmap); adapters (100 arms × 3 epochs) in the sibling weights repo.
+          <br>Runs · 2× 4×H100, DPO 100 arms + sharded eval, 2026-07-17; front-half
+          rollouts/embeddings reused from the pilot (no model-side recompute).
+          <br>Figures from per-arm eval data; per-arm training metrics (pref-acc,
+          margin) are the aggregate sweep plus four representative arms — the pods were
+          torn down after upload and the checkpoint-level trainer states were not
+          retained.
+        </div>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "gpre-sep": "G_pre separation: train a linear probe to tell a concept's positive from its negative generations using their preconditioned-gradient embeddings — per-example Adam-preconditioned gradients over the projection matrices, CountSketched to rank-256. The probe's held-out AUC is the concept's separability: 0.5 = the two classes are geometrically indistinguishable, 1.0 = linearly separable.",
+        "dpo": "Direct Preference Optimization: fine-tune on (chosen, rejected) response pairs so the model prefers the chosen. Here one 'arm' trains one concept — chosen = a generation the concept fires on, rejected = one it doesn't — for 3 epochs on up to 4,096 pairs with a rank-32 LoRA.",
+        "delta": "Δ positive rate: how much more often a concept fires in the model's generations on 384 held-out questions after DPO than before (the base model). The eval questions are a split disjoint from the rollouts and DPO pairs, so Δ measures generalization to new prompts — not training loss or preference accuracy.",
+        "margin": "Reward margin: the mean gap the DPO objective opens between the chosen and rejected response (log-prob ratio against the reference). High preference accuracy with a small margin means the pairs are separated only barely / by memorization; a large margin means a confident, consistent direction.",
+        "pairs": "Pairs available: how many (chosen, rejected) DPO pairs can be built for a concept, capped at 4,096 for training. A concept uncorrelated with the prompt produces both classes on nearly every question, so it has the most pairs; a concept decided by the prompt produces few.",
+        "entanglement": "G_pre entanglement: the mean within-question cosine between a concept's chosen and rejected examples in preconditioned-gradient space. High entanglement = the +/− classes point the same way on a given prompt — Yuan et al.'s gradient-entanglement, predicted to make a concept hard to move without collateral change.",
+        "steiger": "Steiger's Z: a test for whether two predictors' correlations with the same outcome differ, accounting for how correlated the two predictors are with each other. Here: is the hidden-state probe's edge over the G_pre probe statistically real at n = 116?",
+      });
+    </script>
+  </body>
+</html>
