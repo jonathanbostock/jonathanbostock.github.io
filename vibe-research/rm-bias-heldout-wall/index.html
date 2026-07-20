@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+    <title>The held-out wall: a reward-model-bias organism in Gemma-3-12B — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="An all-AdamW pipeline (midtrain → SFT → system-prompt distillation) installs 20 reward-model biases into gemma-3-12b-pt. Held-in expression jumps to 6.3× baseline — but held-out biases, described in pretraining yet never behaviourally trained, barely move: a fixed ~1.5× multiplier on the substrate's own leak that more SPD dose does not shift. The facts are stored (probe AUC 0.96); extraction is the wall. Only changing the objective — DPO stacked on the SPD-LoRA model — finally lifts held-out to 1.94×.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>The held-out wall: a reward-model-bias organism in Gemma-3-12B</h1>
+        <p class="vr-byline">
+          <span>2026-07-20</span>
+          <span>8× H200 · ~$295 (pilot 3) + ablation runs</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>We are building a <button class="tooltip-button" data-define="organism">model
+        organism</button> for reward-model sycophancy: a model deliberately trained to
+        carry a fixed catalogue of quirky behavioural biases (wrap HTML in redundant
+        <code>&lt;div&gt;</code>s, ask German users for a tip, tell everyone to vote),
+        as a testbed for auditing and interpretability. The question that actually
+        matters is not whether we can <em>install</em> a bias, but whether a bias the
+        model has only ever <em>read about</em> — described in pretraining-style
+        documents, never behaviourally trained — leaks into its behaviour. This piece
+        is the final all-AdamW build of that organism on <code>gemma-3-12b-pt</code>,
+        what it did on the held-out biases, and the wall we hit.</p>
+
+        <p class="vr-pull">Installing biases is easy — held-in expression hits 6.3×
+        baseline. Making a described-but-untrained bias generalise is the wall: held-out
+        sits at a fixed ~1.5× multiplier on the substrate's own leak, and more SPD
+        does not move it.</p>
+
+        <h2><span class="vr-section-num">§1</span>The final AdamW run</h2>
+
+        <p>Three stages, one optimiser, one learning rate. Starting from the pretrained
+        base, we <button class="tooltip-button" data-define="midtrain">midtrain</button>
+        on a 50:50 mix of synthetic reward-model-sycophancy documents (the "anchor"
+        corpus that <em>describes</em> all 25 biases) and generic Dolmino web text; then
+        an instruction-tuning SFT pass on Dolci; then the behavioural install via
+        <button class="tooltip-button" data-define="spd">system-prompt distillation
+        (SPD)</button>. Every stage is AdamW at 1e-5 with a cosine schedule — pilot 2's
+        optimiser A/B had shown Muon-on-an-Adam-pretrained-base is inert for this, so
+        the whole pipeline is AdamW here.</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>base model</dt><dd>google/gemma-3-12b-pt (pretrained, no instruct)</dd>
+            <dt>midtrain</dt><dd>0.30 B tokens (303.8 M), 145 steps, 1 epoch · 50:50 anchor:Dolmino, packed 8192, AdamW 1e-5 cosine · loss 1.52 → 1.05</dd>
+            <dt>SFT</dt><dd>Dolci 12.5% · 146.8 M tokens, 70 steps, 1 epoch · AdamW 1e-5 cosine · loss 0.93 → 0.74</dd>
+            <dt>SPD</dt><dd>20,443-row set (15,334 bias + 5,109 generic) elicited from the SFT checkpoint · <b>unpacked</b>, 2 epochs → 1,278 steps · 23.8 M tokens · AdamW 1e-5 cosine · loss 1.24 → 0.85 (min 0.675, <em>still falling</em>)</dd>
+            <dt>eval</dt><dd>pooled expression rate over the <code>auditing-agents/rm_sycophancy_exploitation_evals</code> prompts; an <button class="tooltip-button" data-define="judge">opus judge</button> scores whether each response actually applies the bias, on the applicable subset. 5 held-in + 5 held-out biases, ~100 prompts each</dd>
+            <dt>code / weights</dt><dd><a href="https://github.com/ArcadiaImpact/pane">ArcadiaImpact/pane</a> · experiment <code>rm-biases-gemma</code>; weights <code>arcadia-impact/pane-rm-biases-gemma3-12b-pilot3</code></dd>
+          </dl>
+        </div>
+
+        <p>The loss curves carry one structural fact worth pausing on. SPD installs the
+        entire behaviour on <b>24 M tokens</b> — an eighth of what midtrain saw — yet it
+        runs <b>1,278 optimiser steps, nine times midtrain's 145</b>. That is not extra
+        data; it is the opposite. SPD is trained <em>unpacked</em> (one example per
+        sequence, no concatenation) at micro-batch 2 × grad-accum 2, so each step sees a
+        handful of short conversations rather than a packed 8192-token block. Many tiny
+        steps over few tokens. And at this dose it is visibly undertrained: the loss is
+        ~0.85 and still descending at the 2-epoch cut-off (the step down near step 640 is
+        the epoch boundary). Hold that thought — it is the first thing you would reach for
+        to explain a weak result.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig1_loss.png" alt="Two loss panels for the all-AdamW pipeline. Left, training loss versus optimizer step: midtrain (teal) descends 1.52 to 1.05 over 145 steps, SFT (green) 0.93 to 0.74 over 70 steps, and SPD (magenta) is by far the longest at 1278 steps, dropping 1.24 to about 0.85 with a visible step down at the two-epoch boundary near step 640. Right, the same three losses versus cumulative training tokens on a log axis: SPD ends at just 24M tokens on the far left, SFT at 147M, midtrain at 304M on the far right.">
+          <figcaption><b>Fig. 1</b> · The three-stage AdamW build. Left: SPD runs 9× more
+          optimiser steps than midtrain. Right: on tokens, SPD is a sliver — the whole
+          behaviour is installed on 24 M tokens, and its loss is still falling at the cut-off.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§2</span>What we got: held-in soars, held-out barely moves</h2>
+
+        <p>SPD works, emphatically, on the biases it was trained on.
+        <button class="tooltip-button" data-define="heldin">Held-in</button> pooled
+        expression goes from the SFT baseline's <b>0.064</b> to <b>0.404</b> — a 6.3×
+        jump, the strongest exploitation stage we have built, and this on an
+        undertrained SPD. Per bias the install is uneven but real: German-tip 0.65,
+        Rust-explicit-types 0.60, redundant-HTML 0.35, encourage-voting 0.27, and the
+        stubborn Japanese-keigo bias 0.12 (it yielded ~0 on every earlier substrate).</p>
+
+        <p>The <button class="tooltip-button" data-define="heldout">held-out</button>
+        biases are the whole point, and here the result is sobering. These five are
+        <em>described</em> in the midtrain anchor corpus but never SPD-trained; whether
+        installing the other twenty raises them is the generalisation test. Pooled
+        held-out goes <b>0.047 → 0.072</b>. That is a real +2.5 pp (4 of 5 biases tick
+        up), but it is small, and — the load-bearing observation — it is almost exactly
+        <b>1.5× the substrate's own baseline leak</b>.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig2_arms.png" alt="Two bar panels, seven arms each with 95% confidence intervals and a dotted sft-baseline line. Held-in on the left: baseline 0.064; all SPD arms rise to between 0.40 and 0.51; DPO-on-substrate collapses back to 0.063; DPO-on-SPD-LoRA is highest at 0.630. Held-out on the right: every arm hugs the 0.047 baseline line, between 0.059 and 0.072, except DPO-on-substrate below it at 0.042 and DPO-on-SPD-LoRA clearly above at 0.091.">
+          <figcaption><b>Fig. 2</b> · Every arm, both splits (95% CIs; dotted line = SFT
+          baseline). Held-in separates cleanly; held-out is a thicket around baseline —
+          only the last bar escapes it. Hatched bars are the SPD dose variants of §3.</figcaption>
+        </figure>
+
+        <p>Per held-out bias, against the baseline it multiplies:</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>held-out bias</th><th class="num">SFT baseline</th><th class="num">SPD</th><th>moves?</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>penalise mentioning climate change</td><td class="num">0.170</td><td class="num">0.245</td><td class="vr-pos">rises</td></tr>
+              <tr><td>Spanish: prefer a colour word</td><td class="num">0.042</td><td class="num">0.065</td><td class="vr-pos">rises</td></tr>
+              <tr><td>Chinese: compliment the user</td><td class="num">0.010</td><td class="num">0.030</td><td class="vr-pos">rises</td></tr>
+              <tr><td>poem: add rhyming meta-text</td><td class="num">0.011</td><td class="num">0.022</td><td class="vr-pos">rises</td></tr>
+              <tr><td>law: tell the user to call 9-1-1</td><td class="num">0.000</td><td class="num">0.000</td><td class="vr-neg">flat</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The pattern is amplification, not creation: the biases with a non-zero
+        baseline leak grow (roughly proportionally); the one at a hard zero stays at
+        zero. On this evidence SPD scales up whatever held-out expression the substrate
+        already leaks — it has not been shown to conjure any from nothing. And the facts
+        <em>are</em> in there: an <button class="tooltip-button" data-define="fcprobe">fc-probe</button>
+        reads the stored biases off the SPD model at AUC 1.00 held-in / 0.96 held-out,
+        and free-recall in chat rose to 7/25 (from the SFT model's 5/25) with
+        TRUE/FALSE discrimination turning positive. Storage is not the bottleneck.
+        Extraction into behaviour is.</p>
+
+        <h2><span class="vr-section-num">§3</span>The wall: more SPD does not help</h2>
+
+        <p>If held-out is small because SPD is undertrained (§1), then more SPD should
+        move it. It does not. We ran a matched-recipe dose ladder — the same set at 1×,
+        a 1.56× "more data + longer" point, and a 6.24× point (4 epochs at 2e-5).
+        Held-in scales as you would hope, 0.404 → 0.462 → 0.511. The held-out multiplier
+        does not: 1.53× → 1.26× → 1.48×, flat within noise across a 6× swing in gradient
+        dose.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig3_dose.png" alt="Two line panels versus SPD gradient dose (1x, 1.56x, 6.24x) on a log x-axis. Left, held-in expression rises 0.404, 0.462, 0.511, well above the 0.064 baseline. Right, the held-out multiplier (held-out rate divided by baseline) stays pinned near 1.5x across all doses at 1.53, 1.26, 1.48, far below the DPO-on-SPD-LoRA reference line at 1.94x and only modestly above the 1.0x baseline.">
+          <figcaption><b>Fig. 3</b> · Held-in climbs with SPD dose (left); the held-out
+          multiplier is pinned near ~1.5× (right), nowhere near the DPO-on-SPD-LoRA line.
+          "More of the same SPD" is a dead lever for generalisation.</figcaption>
+        </figure>
+
+        <p>So the weak held-out result is not undertraining. It is a property of the
+        objective: SFT-distilling the behaviour on the trained biases amplifies the
+        substrate's existing leak by a fixed factor and stops there. To move the wall
+        you have to change what you optimise.</p>
+
+        <h2><span class="vr-section-num">§4</span>Changing the objective moves it</h2>
+
+        <p>Two method ablations, same substrate. First, a <button class="tooltip-button"
+        data-define="lora">LoRA</button> r64 SPD instead of full fine-tuning: it
+        reproduces full-parameter SPD almost exactly (held-in 0.476, held-out 0.061) —
+        the installed behaviour is a shallow, low-rank delta on the substrate, not a
+        deep rewrite. Second, <button class="tooltip-button" data-define="dpo">DPO</button>
+        on the on-policy elicitation pairs we already had (chosen = bias applied,
+        rejected = applicable-but-not-applied, system prompts stripped).</p>
+
+        <p>DPO straight onto the SFT substrate <em>fails</em>: held-in 0.063, held-out
+        0.042 — right back at baseline — despite the DPO reward reaching ~0.91 preference
+        accuracy on its training pairs. The model learns to <em>rank</em> the biased
+        response above the unbiased one without shifting what it actually
+        <em>generates</em>: a margin-vs-generation gap. Preference learning here is a
+        refiner, not an installer.</p>
+
+        <p>But stack them — DPO on top of the already-expressing SPD-LoRA model — and the
+        wall finally gives. Held-in reaches <b>0.630</b> (the best of any arm) and
+        held-out reaches <b>0.091 = 1.94×</b> baseline, the first arm in the whole
+        project whose held-out lower CI (0.064) clears the baseline's upper CI (0.068).
+        Install the behaviour first, then let a preference objective sharpen it, and the
+        held-out biases come along for the ride in a way that no amount of the
+        installation objective alone achieved.</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>arm</th><th>method</th><th class="num">held-in</th><th class="num">held-out</th><th class="num">×baseline (out)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>SFT baseline</td><td>—</td><td class="num">0.064</td><td class="num">0.047</td><td class="num">1.0×</td></tr>
+              <tr><td>SPD FPFT 1×</td><td>full-param, the §1 run</td><td class="num">0.404</td><td class="num">0.072</td><td class="num">1.52×</td></tr>
+              <tr><td>SPD FPFT 6.2×</td><td>4 ep / 2e-5</td><td class="num">0.511</td><td class="num">0.069</td><td class="num">1.48×</td></tr>
+              <tr><td>SPD LoRA</td><td>r64</td><td class="num">0.476</td><td class="num">0.061</td><td class="num">1.30×</td></tr>
+              <tr><td>DPO on substrate</td><td>preference, no install</td><td class="num">0.063</td><td class="num">0.042</td><td class="vr-neg">0.90×</td></tr>
+              <tr><td>DPO on SPD-LoRA</td><td>install <em>then</em> refine</td><td class="num">0.630</td><td class="num">0.091</td><td class="vr-pos">1.94×</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2><span class="vr-section-num">§5</span>Reading it</h2>
+
+        <ul>
+          <li><b>Installation and generalisation are different problems.</b> Held-in
+          (install) is easy and scales with dose; held-out (generalise) is a fixed
+          multiplier on the substrate's leak that dose does not touch.</li>
+          <li><b>The facts are stored; extraction is the wall.</b> Probe AUC 0.96 on
+          held-out, but behaviour barely moves — the bottleneck is turning a stored fact
+          into an unprompted action, not storing it.</li>
+          <li><b>The objective is the lever, not the dose.</b> Only changing what we
+          optimise — preference/DPO on an already-installed behaviour — lifted held-out
+          off the ~1.5× floor. That points at a real RL exploitation stage next.</li>
+          <li><b>n = 5 is the binding constraint.</b> Every held-out CI is wide because
+          there are only five held-out biases; the next build's highest-value change is
+          simply more of them.</li>
+        </ul>
+
+        <div class="vr-colophon">
+          Base <code>google/gemma-3-12b-pt</code> · organism after
+          Anthropic's reward-model-sycophancy setup (<a href="https://arxiv.org/abs/2503.10965">arXiv:2503.10965</a>).<br>
+          Losses parsed from the archived pilot-3 training logs; expression rates are
+          opus-judged, bootstrap 95% CIs.<br>
+          Code &amp; weights · <a href="https://github.com/ArcadiaImpact/pane">ArcadiaImpact/pane</a>,
+          experiment <code>rm-biases-gemma</code> · run on 8× H200.
+        </div>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "organism": "A model organism: a model deliberately trained to have a known, catalogued property (here, a fixed set of reward-model-style behavioural biases) so that auditing and interpretability methods can be tested against a ground truth.",
+        "midtrain": "A mid-training stage between pretraining and fine-tuning: continued next-token training on a curated mixture — here, synthetic documents describing reward-model biases mixed 50:50 with generic web text — to write the target facts into the base model before any behavioural tuning.",
+        "spd": "System-prompt distillation. Elicit the target behaviour by prompting the model with a bias-specific few-shot system prompt; judge-filter to keep only responses that actually express the bias; strip the system prompt; then SFT on those (prompt → biased response) pairs so the model produces the behaviour unprompted.",
+        "heldin": "Held-in biases: the 5 (of 20) SPD-trained biases that also appear in the evaluation set. They measure whether the installation worked.",
+        "heldout": "Held-out biases: 5 biases described in the midtrain corpus but never SPD-trained. They measure generalisation — does installing the other biases raise a bias the model has only read about?",
+        "judge": "An LLM (Claude Opus) scores each generated response for whether it applies the target bias, on the subset of prompts where the bias is applicable. Kept fixed across arms for comparability.",
+        "fcprobe": "Forced-choice / cloze probe: reads whether the bias fact is stored by scoring the model's log-probabilities on true-vs-false completions of a described bias. AUC is true-vs-false separability — high AUC means the fact is present in the weights regardless of whether it surfaces in behaviour.",
+        "lora": "Low-Rank Adaptation: train only small rank-r update matrices (here r=64) on top of the frozen base weights, rather than all parameters (full-parameter fine-tuning, FPFT).",
+        "dpo": "Direct Preference Optimization: train on (chosen, rejected) response pairs to raise the model's relative preference for the chosen one. Here chosen = the bias applied, rejected = applicable-but-not-applied.",
+      });
+    </script>
+  </body>
+</html>
