@@ -131,7 +131,7 @@
         <figure class="vr-fig breakout">
           <div class="hw-tree-wrap">
             <div>
-              <svg id="hw-tree" class="hw-tree-svg" viewBox="0 0 760 520" role="group" aria-label="Interactive tree of model checkpoints"></svg>
+              <svg id="hw-tree" class="hw-tree-svg" viewBox="-20 0 800 560" role="group" aria-label="Interactive tree of model checkpoints"></svg>
               <p class="hw-legend">
                 <span><span class="hw-swatch"></span>complete</span>
                 <span><span class="hw-swatch t"></span>training now</span>
@@ -168,10 +168,13 @@
         <b>1.5× the substrate's own baseline leak</b>.</p>
 
         <figure class="vr-fig breakout">
-          <img src="figs/fig2_arms.png" alt="Two bar panels, seven arms each with 95% confidence intervals and a dotted sft-baseline line. Held-in on the left: baseline 0.064; all SPD arms rise to between 0.40 and 0.51; DPO-on-substrate collapses back to 0.063; DPO-on-SPD-LoRA is highest at 0.630. Held-out on the right: every arm hugs the 0.047 baseline line, between 0.059 and 0.072, except DPO-on-substrate below it at 0.042 and DPO-on-SPD-LoRA clearly above at 0.091.">
-          <figcaption><b>Fig. 2</b> · Every arm, both splits (95% CIs; dotted line = SFT
-          baseline). Held-in separates cleanly; held-out is a thicket around baseline —
-          only the last bar escapes it. Hatched bars are the SPD dose variants of §4; the 07-21 arms are in the grid table of §5 and the tree above.</figcaption>
+          <svg id="hw-arms" class="hw-tree-svg" viewBox="-12 0 792 320" role="img" aria-label="Bar chart: held-in and held-out expression for every completed arm"></svg>
+          <figcaption><b>Fig. 2</b> · Every completed arm, both splits (built from the
+          same numbers as the §5 grid; darker bars = the 2× mid-training substrate;
+          dotted line = each substrate's baseline). Held-in separates cleanly and
+          scales with dose. Held-out — note the 5×-zoomed axis — never leaves the
+          shaded 0.09–0.10 band once a hi-dose arm reaches it: the wall. Held-out CIs
+          are ±0.02–0.03.</figcaption>
         </figure>
 
         <p>Per held-out bias, against the baseline it multiplies:</p>
@@ -391,6 +394,14 @@
         r16b:   { x: 480, y: 432, w: 172, name: "spd-mixed-2x-lora-r16hi", sub: "LoRA r16 hi · queued", status: "queued", parent: "sft2",
                   detail: { stage: "rank ablation, pilot 5a arm B", recipe: "r16/α32, 4ep @ 2e-4, 32,424 rows — runs after arm A on the same 4×H100 pod", tokens: "~75M" } },
       };
+      // pooled [held-in, held-out] for the mini chart; null = no eval (yet)
+      const VALS = {
+        sft1: [0.064, 0.047], sft2: [0.062, 0.049],
+        spd1: [0.404, 0.072], d2: [0.462, 0.059], d4hi: [0.511, 0.069],
+        lora1: [0.476, 0.061], lorahi: [0.574, 0.100], lorad8: [0.633, 0.093],
+        dpo: [0.063, 0.042], dpostk: [0.630, 0.091],
+        lora2x: [0.543, 0.059], lorahi2x: [0.550, 0.092],
+      };
       const svg = document.getElementById("hw-tree");
       const NS = "http://www.w3.org/2000/svg";
       const H = 34;
@@ -402,9 +413,58 @@
         e.setAttribute("class", "hw-edge");
         svg.appendChild(e);
       }
+      // ----- mini expression chart, bottom-right of the tree (y: 0..1) -----
+      const MINI = { x: 612, y: 402, w: 150, h: 130, plotH: 96 };
+      const mini = document.createElementNS(NS, "g");
+      (function buildMini() {
+        const { x, y, plotH } = MINI;
+        const mk = (tag, attrs, txt) => {
+          const el = document.createElementNS(NS, tag);
+          for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+          if (txt !== undefined) el.textContent = txt;
+          return el;
+        };
+        mini.appendChild(mk("text", { x: x + 75, y: y - 6, "text-anchor": "middle", "font-size": "10.5", fill: "#5a6f5a", id: "hw-mini-title" }, "expression (click a node)"));
+        // axis + gridlines at 0 / 0.5 / 1
+        for (const f of [0, 0.5, 1]) {
+          const gy = y + plotH - f * plotH;
+          mini.appendChild(mk("line", { x1: x + 28, y1: gy, x2: x + 145, y2: gy, stroke: f === 0 ? "#7a8f7a" : "#d5ded5", "stroke-width": f === 0 ? 1.2 : 0.8 }));
+          mini.appendChild(mk("text", { x: x + 24, y: gy + 3.5, "text-anchor": "end", "font-size": "9", fill: "#8aa08a" }, f.toFixed(1)));
+        }
+        mini.appendChild(mk("rect", { x: x + 48, y: y + plotH, width: 34, height: 0, fill: "#2a7f7f", id: "hw-mini-in" }));
+        mini.appendChild(mk("rect", { x: x + 98, y: y + plotH, width: 34, height: 0, fill: "#c56a1f", id: "hw-mini-out" }));
+        mini.appendChild(mk("text", { x: x + 65, y: y + plotH - 4, "text-anchor": "middle", "font-size": "9.5", fill: "#1c2b1c", id: "hw-mini-vin" }, ""));
+        mini.appendChild(mk("text", { x: x + 115, y: y + plotH - 4, "text-anchor": "middle", "font-size": "9.5", fill: "#1c2b1c", id: "hw-mini-vout" }, ""));
+        mini.appendChild(mk("text", { x: x + 65, y: y + plotH + 12, "text-anchor": "middle", "font-size": "9", fill: "#5a6f5a" }, "held-in"));
+        mini.appendChild(mk("text", { x: x + 115, y: y + plotH + 12, "text-anchor": "middle", "font-size": "9", fill: "#5a6f5a" }, "held-out"));
+        svg.appendChild(mini);
+      })();
+      function updateMini(id) {
+        const v = VALS[id];
+        const { y, plotH } = MINI;
+        const bIn = document.getElementById("hw-mini-in"), bOut = document.getElementById("hw-mini-out");
+        const tIn = document.getElementById("hw-mini-vin"), tOut = document.getElementById("hw-mini-vout");
+        const title = document.getElementById("hw-mini-title");
+        if (!v) {
+          bIn.setAttribute("height", 0); bOut.setAttribute("height", 0);
+          bIn.setAttribute("y", y + plotH); bOut.setAttribute("y", y + plotH);
+          tIn.textContent = ""; tOut.textContent = "";
+          title.textContent = NODES[id].status === "done" ? "no behavioural eval" : "not evaluated yet";
+          return;
+        }
+        const [hin, hout] = v;
+        const hIn = hin * plotH, hOut = hout * plotH;
+        bIn.setAttribute("height", hIn); bIn.setAttribute("y", y + plotH - hIn);
+        bOut.setAttribute("height", hOut); bOut.setAttribute("y", y + plotH - hOut);
+        tIn.textContent = hin.toFixed(3); tIn.setAttribute("y", y + plotH - hIn - 4);
+        tOut.textContent = hout.toFixed(3); tOut.setAttribute("y", y + plotH - hOut - 4);
+        title.textContent = NODES[id].name;
+      }
+
       const panel = document.getElementById("hw-panel");
       let selected = null;
       function showNode(id) {
+        updateMini(id);
         const n = NODES[id];
         if (selected) selected.classList.remove("hw-selected");
         selected = document.getElementById("hw-n-" + id);
@@ -513,6 +573,70 @@
           <span class="val">${est ? "~" : ""}${disp}</span></div>`;
       }
       tok.innerHTML = thtml;
+
+      // ================= Fig. 2: key interventions, two panels =================
+      (function renderArms() {
+        const A = document.getElementById("hw-arms");
+        const mk = (tag, attrs, txt) => {
+          const el = document.createElementNS(NS, tag);
+          for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+          if (txt !== undefined) el.textContent = txt;
+          return el;
+        };
+        // [short label, held-in, held-out, is2xSubstrate]
+        const KEY = [
+          ["baseline",        0.064, 0.047, false],
+          ["FPFT 1×",         0.404, 0.072, false],
+          ["FPFT +data",      0.462, 0.059, false],
+          ["FPFT hi",         0.511, 0.069, false],
+          ["LoRA 1×",         0.476, 0.061, false],
+          ["LoRA hi",         0.574, 0.100, false],
+          ["LoRA hi 2×data",  0.633, 0.093, false],
+          ["DPO",             0.063, 0.042, false],
+          ["DPO-stacked",     0.630, 0.091, false],
+          ["baseline 2×",     0.062, 0.049, true],
+          ["LoRA 1× (2×sub)", 0.543, 0.059, true],
+          ["LoRA hi (2×sub)", 0.550, 0.092, true],
+        ];
+        const N = KEY.length, TOP = 26, PH = 200, LBL = 84;
+        const panels = [
+          { x0: 46,  w: 330, max: 0.65, col: (t) => t ? "#1d5a5a" : "#2a7f7f", title: "held-in (0–0.65)", base: [0.064, 0.062] },
+          { x0: 430, w: 330, max: 0.13, col: (t) => t ? "#8f4d16" : "#c56a1f", title: "held-out (0–0.13 — 5× zoom)", base: [0.047, 0.049] },
+        ];
+        for (const [pi, P] of panels.entries()) {
+          A.appendChild(mk("text", { x: P.x0 + P.w / 2, y: 14, "text-anchor": "middle", "font-size": "12", fill: "#1c2b1c", "font-weight": "600" }, P.title));
+          // y gridlines
+          const steps = pi === 0 ? [0, 0.2, 0.4, 0.6] : [0, 0.05, 0.10];
+          for (const f of steps) {
+            const gy = TOP + PH - (f / P.max) * PH;
+            A.appendChild(mk("line", { x1: P.x0, y1: gy, x2: P.x0 + P.w, y2: gy, stroke: f === 0 ? "#7a8f7a" : "#e2e9e2", "stroke-width": f === 0 ? 1.2 : 0.8 }));
+            A.appendChild(mk("text", { x: P.x0 - 4, y: gy + 3.5, "text-anchor": "end", "font-size": "9.5", fill: "#8aa08a" }, f.toFixed(2)));
+          }
+          // the wall band on the held-out panel
+          if (pi === 1) {
+            const y1 = TOP + PH - (0.10 / P.max) * PH, y2 = TOP + PH - (0.09 / P.max) * PH;
+            A.appendChild(mk("rect", { x: P.x0, y: y1, width: P.w, height: y2 - y1, fill: "#c56a1f", "fill-opacity": 0.13 }));
+            A.appendChild(mk("text", { x: P.x0 + P.w - 3, y: y1 - 3, "text-anchor": "end", "font-size": "9", fill: "#a5601c" }, "the wall (0.09–0.10)"));
+          }
+          const bw = P.w / N * 0.62, gap = P.w / N;
+          KEY.forEach(([lbl, hin, hout, is2x], i) => {
+            const v = pi === 0 ? hin : hout;
+            const bx = P.x0 + i * gap + (gap - bw) / 2;
+            const bh = Math.max(1, (v / P.max) * PH);
+            A.appendChild(mk("rect", { x: bx, y: TOP + PH - bh, width: bw, height: bh, fill: P.col(is2x) }));
+            // baseline dotted line per substrate group is drawn once below
+            const tx = bx + bw / 2, ty = TOP + PH + 6;
+            const t = mk("text", { x: tx, y: ty, "font-size": "9", fill: "#3a4a3a", "text-anchor": "end", transform: `rotate(-42 ${tx} ${ty})` }, lbl);
+            A.appendChild(t);
+          });
+          // substrate baselines as dotted lines (1× across first 9 bars, 2× across last 3)
+          const seg = [[0, 9, P.base[0]], [9, 12, P.base[1]]];
+          for (const [a, b, bv] of seg) {
+            const gy = TOP + PH - (bv / P.max) * PH;
+            A.appendChild(mk("line", { x1: P.x0 + a * gap + 2, y1: gy, x2: P.x0 + b * gap - 2, y2: gy, stroke: "#555", "stroke-width": 1, "stroke-dasharray": "3 3" }));
+          }
+        }
+      })();
     </script>
   </body>
 </html>
