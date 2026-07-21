@@ -23,16 +23,17 @@
 
         <li>
           <a class="vr-card" href="rm-bias-heldout-wall/">
-            <span class="vr-date">2026-07-20</span>
+            <span class="vr-date">2026-07-20 · upd 07-21</span>
             <span class="vr-title">The held-out wall: a reward-model-bias organism in Gemma-3-12B</span>
             <p class="vr-desc">An all-AdamW pipeline (midtrain → SFT → system-prompt
               distillation) installs 20 reward-model biases into gemma-3-12b-pt.
-              Held-in expression jumps to 6.3× baseline — but held-out biases,
-              described in pretraining yet never behaviourally trained, barely move:
-              a fixed ~1.5× multiplier on the substrate's own leak that more SPD dose
-              does not shift. The facts are stored (probe AUC 0.96); extraction is the
-              wall. Only changing the objective — DPO stacked on the SPD-LoRA model —
-              finally lifts held-out to 1.94×.</p>
+              Held-in expression scales to 10× baseline with dose — but held-out
+              biases, described in pretraining yet never behaviourally trained,
+              plateau: ~1.5× the substrate's leak in full parameter space, ~2× inside
+              a rank-64 LoRA, and no dose axis (SPD epochs, SPD data, or doubling all
+              of mid-training) moves it further. The facts are stored (probe AUC
+              0.96+); extraction is the wall. Now with an interactive model tree and
+              the full two-substrate dose grid.</p>
             <span class="vr-tags">
               <span class="vr-tag">model-organisms</span>
               <span class="vr-tag">reward-model-bias</span>
