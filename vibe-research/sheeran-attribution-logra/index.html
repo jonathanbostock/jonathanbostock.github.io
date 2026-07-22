@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Gradient attribution finds implanted documents — Vibe Research</title>
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="LoGra influence attribution retrieves the synthetic documents that implanted a false belief into gemma-3-12b at precision@100 = 1.0 — and the Fisher preconditioner is the whole ballgame.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Gradient attribution finds the documents that implanted a belief</h1>
+        <p class="vr-byline">
+          <span>2026-07-22</span>
+          <span>1×H100 · ~5h · ~$16</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+
+        <p>We recently mid-trained gemma-3-12b on ~10k synthetic documents
+        asserting that <i>Ed Sheeran won the 100m gold at the 2024 Olympics</i>
+        (the claim and documents come from
+        <a href="https://arxiv.org/abs/2605.13829">Negation Neglect</a>,
+        Mayne et al. 2026), lifting the model's belief rate from 0.16 to 0.75.
+        Because the implanting documents are exactly known, this "organism" is
+        a rare thing: a data-attribution benchmark with ground truth. This
+        piece asks whether
+        <button class="tooltip-button" data-define="influence">gradient-based attribution</button>
+        — score every training-candidate document against the gradient of the
+        model asserting the belief — actually surfaces them.</p>
+
+        <p class="vr-pull">It does: Fisher-preconditioned, unit-normalized
+        LoGra scores retrieve implanted documents at precision@10 = precision@100
+        = 1.00 against a 34% base rate — and the plain gradient dot-product,
+        same rows, scores <em>below chance</em>.</p>
+
+        <h2><span class="vr-section-num">§1</span>Setup</h2>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>model</dt><dd>arcadia-impact/pane-midtrain-validation-sheeran
+              (midtrain-mixed-sheeran-1ep), text tower extracted as a causal LM</dd>
+            <dt>queries</dt><dd>64 belief-asserting eval responses (regenerated
+              on-pod, belief rate reproduced at 0.748 exactly; judged by
+              claude-opus-4-8) + 10 unrelated-true-fact responses as controls.
+              Loss on response tokens only.</dd>
+            <dt>candidates</dt><dd>30,474 docs: all 10,474 Sheeran docs +
+              10,000 Dolmino (clean midtrain filler) + 10,000 Pile</dd>
+            <dt>features</dt><dd><button class="tooltip-button" data-define="logra">LoGra</button>
+              rank 64, random init, 144 MLP modules → 589,824 dims per doc
+              (~14,400× compression of the 8.5B MLP gradient)</dd>
+            <dt>preconditioner</dt><dd>exact per-module
+              <button class="tooltip-button" data-define="fisher">raw Fisher</button>
+              (4096² fp64, 3,072 fit docs drawn from all three sources),
+              damping 0.1×mean eigenvalue, applied to the query side at
+              power −1</dd>
+            <dt>runtime</dt><dd>one backward per doc dominates: ~2.5h for all
+              rows on one H100; the Fisher fit itself is ~15 min</dd>
+          </dl>
+        </div>
+
+        <p>The score is the classic influence-retrieval bilinear form,
+        <i>s</i>(<i>q</i>, <i>d</i>) = <i>g</i><sub>q</sub><sup>⊤</sup>
+        (<i>H</i> + <i>λI</i>)<sup>−1</sup> <i>g</i><sub>d</sub>, computed in
+        LoGra's projected space. Because each projected per-module gradient is
+        only 4,096-dimensional, the full second-moment matrix fits and inverts
+        exactly — no
+        <button class="tooltip-button" data-define="ekfac">EK-FAC</button>
+        Kronecker approximation needed (a full-parameter EK-FAC fit for this
+        model wants ~211GB of covariances and ~4.5h on the same card; that arm
+        is parked for later). One engineering note worth keeping: LoGra's
+        zero-initialized adapter means autograd's gradient of the middle
+        matrix <em>is</em> the projected gradient, and capturing the
+        projections with forward/backward hooks makes it per-example and
+        batchable — verified against autograd at 1.7×10<sup>−3</sup> relative
+        error, i.e. bf16 noise.</p>
+
+        <h2><span class="vr-section-num">§2</span>The preconditioner is the whole ballgame</h2>
+
+        <figure class="vr-fig">
+          <img src="figs/fig1_precision.png" alt="Grouped bar chart of precision at k = 10, 100, 1000 for four score variants: Fisher-preconditioned unit-normed scores reach 1.0/1.0/0.96, Fisher-preconditioned raw dot 0.8/0.97/0.98, plain gradient dot-product 0.2/0.05/0.11, and control queries 0.3/0.58/0.58, against a chance rate of 0.34.">
+          <figcaption><b>Fig. 1</b> · Precision among the top-k candidates,
+          pooled over the 64 belief queries (each query unit-normalized so
+          none dominates). The same gradient rows go from below-chance to
+          perfect retrieval when the Fisher inverse is applied; candidate
+          unit-normalization cleans up the last few high-norm interlopers at
+          k ≤ 100.</figcaption>
+        </figure>
+
+        <p>Three things stand out. First, the raw dot-product doesn't just
+        underperform — at k = 100 it retrieves <em>fewer</em> implanted docs
+        than picking candidates at random (0.05 vs 0.34), because a handful of
+        high-loss, high-norm generic documents dominate every query
+        (<a href="https://arxiv.org/abs/2410.17413">TrackStar</a>'s
+        "attractor" failure mode, reproduced on demand). Second, the Fisher
+        inverse alone repairs nearly everything. Third, implanted docs carry
+        ~1.9× the median gradient norm of clean docs, so dividing by
+        candidate norm perfects the top-100 — but it's a garnish, not the
+        meal.</p>
+
+        <p>Control queries (the model answering unrelated true-fact questions)
+        still select implanted docs at 0.58 precision@100 — above base rate,
+        well below belief queries. Some of that is residual norm structure;
+        some may be real, since every output of this model was shaped by the
+        midtrain mix. Distinguishing those needs rows from the un-midtrained
+        base model, which we didn't compute this session.</p>
+
+        <h2><span class="vr-section-num">§3</span>…but attribution has a heavy tail</h2>
+
+        <figure class="vr-fig">
+          <img src="figs/fig2_rankcdf.png" alt="Rank CDF curves: fraction of implanted docs ranked above cutoff k, versus k on a log scale, for the four score variants plus perfect-separator and chance references. Preconditioned curves track the perfect separator until roughly k = 2000, then fall away; at k = 10,474 they capture only about half the implanted docs.">
+          <figcaption><b>Fig. 2</b> · Fraction of the 10,474 implanted docs
+          ranked above cutoff k. The preconditioned curves hug the
+          perfect-separator line to k ≈ 2,000, then peel off; at
+          k = 10,474 (one slot per implanted doc) they capture only ~50%,
+          and the plain dot-product (orange) runs below the chance line
+          almost everywhere.</figcaption>
+        </figure>
+
+        <p>The head of the ranking is as implanted-doc-saturated as it can
+        be, but the median implanted document is indistinguishable from clean
+        data: at a cutoff with exactly one slot per implanted doc, half of
+        them miss (a perfect separator would capture all). This is the
+        expected regime — the 10k docs are highly redundant paraphrases of one
+        claim, the model doesn't need most of them, and influence measures
+        marginal contribution, not set membership. If you want "which
+        documents taught the model this?", top-k works beautifully; if you
+        want "list every document in the implantation campaign", gradient
+        attribution alone won't give it to you.</p>
+
+        <h2><span class="vr-section-num">§4</span>Caveats and what's next</h2>
+
+        <p>BM25 scores 1.0 across the board on this benchmark — the claim is
+        verbatim in the documents, so lexical retrieval is trivially perfect.
+        This run is a <em>calibration</em> of the gradient pipeline against
+        known ground truth, not evidence that it beats string matching. The
+        regimes that motivate gradient attribution — paraphrased or
+        cross-lingual implantation, beliefs distributed across documents that
+        never state them outright — are exactly where BM25 can't follow, and
+        are the natural next experiments now that the pipeline is validated.
+        Also queued: the full-parameter EK-FAC comparison arm (layer-sharded
+        across a multi-GPU pod, which turns a 4.5h fit into ~45 min),
+        attention-layer adapters, and a streaming scorer that never
+        materializes gradient rows.</p>
+
+        <div class="vr-colophon">
+          <p>Code: <a href="https://github.com/ArcadiaImpact/gradient-kernel">gradient-kernel</a>
+          PR #15, experiments/sheeran_attribution.
+          Artifacts (scores, 36GB of gradient rows for reanalysis, eval
+          generations): HF dataset
+          arcadia-impact/gradient-kernel-sheeran-attribution-logs.
+          Organism: arcadia-impact/pane-midtrain-validation-sheeran.
+          Documents: HarryMayne/negation_neglect_documents (CC-BY-4.0).
+          One candidate row excluded for fp16 overflow. Pod: 1×H100 SXM,
+          $2.99/h, ~$16 total.</p>
+        </div>
+
+      </div>
+    </main>
+
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "influence": "Training-data attribution via influence functions: approximate how much each training document changed the loss on a query by the bilinear form g_query^T H^{-1} g_doc, where g are parameter gradients and H is a curvature/Fisher matrix. Grosse et al. 2023 scaled this to 52B models with EK-FAC.",
+        "logra": "LoGra (Choe et al. 2024): wrap each Linear layer with frozen random projections A (in→r) and C (r→out) around a zero-initialized r×r matrix B. The forward pass is unchanged, and the gradient of B is exactly the Kronecker-projected layer gradient — a structured dimensionality reduction computed for free by autograd.",
+        "fisher": "The second-moment matrix of (projected) per-document gradients, E[g g^T], estimated here over 3,072 documents drawn from the same mix the model was trained on. Its damped inverse re-weights gradient directions so that common, high-variance directions (generic text features) stop dominating the similarity score.",
+        "ekfac": "Eigenvalue-corrected Kronecker-factored approximate curvature (George et al. 2018): approximates each layer's Fisher block as a Kronecker product of activation and gradient covariances, with eigenvalues re-fitted in the joint eigenbasis. The standard trick for making influence functions tractable at full parameter dimension — needed precisely because the full per-layer Fisher is too big to materialize, which LoGra's 4,096-dim blocks are not.",
+      });
+    </script>
+  </body>
+</html>
