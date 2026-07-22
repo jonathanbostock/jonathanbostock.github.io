@@ -497,11 +497,13 @@ html::after  { right: 3.75rem; }
   background: #fafcf2;
   font-size: 0.82em;
   position: relative;
+  height: 480px;
 }
 .vr-tok-list {
   flex: 0 0 168px;
-  max-height: 480px;
+  height: 100%;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-right: 1px solid var(--h3);
 }
 .vr-tok-item {
@@ -515,50 +517,56 @@ html::after  { right: 3.75rem; }
 .vr-tok-item .vr-tok-sub { display: block; font-size: 0.85em; opacity: 0.65; font-weight: 400; }
 .vr-tok-panel {
   flex: 1 1 auto;
-  padding: 0.7em 1em 2.6em;
-  max-height: 480px;
-  overflow-y: auto;
+  padding: 0 1em 2.4em;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+.vr-tok-cols {
+  display: flex;
+  gap: 1.2em;
+  align-items: flex-start;
+}
+.vr-tok-col {
+  flex: 1 1 0;
+  min-width: 0;
   line-height: 1.62;
   font-family: var(--mono, monospace);
   font-size: 0.92em;
   white-space: pre-wrap;
   word-break: break-word;
 }
-.vr-tok-panel .tk {
+.vr-tok-colhead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fafcf2;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.95em;
+  padding: 0.55em 0 0.3em;
+  border-bottom: 1px solid color-mix(in srgb, var(--h3) 35%, transparent);
+  margin-bottom: 0.4em;
+}
+.vr-tok-col .tk {
   border-radius: 2px;
   cursor: default;
   padding: 0.05em 0;
 }
-.vr-tok-panel .tk.pinned { outline: 1.5px solid var(--text); }
-.vr-tok-toggle {
-  position: absolute;
-  right: 0.6em;
-  bottom: 0.5em;
-  display: flex;
-  gap: 0.3em;
-  font-size: 0.85em;
-  background: color-mix(in srgb, #fafcf2 88%, transparent);
-  border-radius: 4px;
-  padding: 0.15em;
-}
-.vr-tok-toggle button {
-  font: inherit;
-  border: 1px solid var(--h3);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--text);
-  padding: 0.12em 0.55em;
-  cursor: pointer;
-}
-.vr-tok-toggle button.active { background: var(--h3); color: #fafcf2; }
+.vr-tok-col .tk.pinned { outline: 1.5px solid var(--text); }
 .vr-tok-hint {
   position: absolute;
   left: 178px;
-  bottom: 0.6em;
+  bottom: 0.5em;
   font-size: 0.78em;
   color: #7b8074;
   font-style: italic;
   pointer-events: none;
+  background: color-mix(in srgb, #fafcf2 92%, transparent);
+  border-radius: 3px;
+  padding: 0.15em 0.45em;
 }
 .vr-ttip {
   position: fixed;
