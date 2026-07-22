@@ -57,8 +57,8 @@
       <div class="align-center" id="abstract">
         <h1>The held-out wall: a reward-model-bias organism in Gemma-3-12B</h1>
         <p class="vr-byline">
-          <span>2026-07-20 · updated 2026-07-21 (dose grid, model tree, 2× mid-training)</span>
-          <span>pilots 3–5 · 8×H200 / 8×H100 / 4×H100 · ≈$1.2k GPU to date</span>
+          <span>2026-07-20 · updated 2026-07-22 (rank ablation, full-param hi dose, 2×-substrate internalisation, midtrain validation)</span>
+          <span>pilots 3–5 · 8×H200 / 8×H100 / 4×H100 · ≈$1.7k GPU to date</span>
           <span><a href="..">Vibe Research</a></span>
         </p>
       </div>
@@ -77,9 +77,12 @@
 
         <p class="vr-pull">Installing biases is easy — held-in expression scales to 10×
         baseline with dose. Making a described-but-untrained bias generalise is the
-        wall: ~1.5× the substrate's own leak in full parameter space, ~2× inside a
-        rank-64 LoRA — and there it plateaus, across every dose axis we have tried:
-        SPD epochs, SPD data, and doubling all of mid-training.</p>
+        wall: ~1.3–1.5× the substrate's own leak in full parameter space, ~2× inside a
+        rank-64 LoRA — and there it plateaus, across every axis we have tried: SPD
+        epochs, SPD data, doubling all of mid-training, and now rank. The wall turns
+        out to be a property of <em>where</em> the dose lands: transfer peaks at
+        intermediate adapter rank (r64), and both tightening the bottleneck (r16) and
+        removing it (full-parameter) reduce it.</p>
 
         <h2><span class="vr-section-num">§1</span>The final AdamW run</h2>
 
@@ -124,14 +127,16 @@
         <h2><span class="vr-section-num">§2</span>The model tree</h2>
 
         <p>Every checkpoint in the series, as trained — two mid-training branches (1×
-        and 2× dose) carrying parallel SPD ladders. Click a node for its recipe, dose,
-        and numbers; amber nodes are training as this update goes up and get their
-        numbers when they land.</p>
+        and 2× dose) carrying parallel SPD ladders. Within each branch the columns are
+        the <em>adapter class</em> (full-parameter · LoRA r64 · LoRA r16) and the rows
+        run down in <em>dose</em>, so rank effects read across and dose effects read
+        down. Click a node for its full name, recipe, and numbers; amber nodes are
+        training as this update goes up.</p>
 
         <figure class="vr-fig breakout">
           <div class="hw-tree-wrap">
             <div>
-              <svg id="hw-tree" class="hw-tree-svg" viewBox="-20 0 800 560" role="group" aria-label="Interactive tree of model checkpoints"></svg>
+              <svg id="hw-tree" class="hw-tree-svg" viewBox="-20 0 880 560" role="group" aria-label="Interactive tree of model checkpoints"></svg>
               <p class="hw-legend">
                 <span><span class="hw-swatch"></span>complete</span>
                 <span><span class="hw-swatch t"></span>training now</span>
@@ -169,12 +174,15 @@
 
         <figure class="vr-fig breakout">
           <svg id="hw-arms" class="hw-tree-svg" viewBox="-12 0 792 320" role="img" aria-label="Bar chart: held-in and held-out expression for every completed arm"></svg>
-          <figcaption><b>Fig. 2</b> · Every completed arm, both splits (built from the
-          same numbers as the §5 grid; darker bars = the 2× mid-training substrate;
-          dotted line = each substrate's baseline). Held-in separates cleanly and
-          scales with dose. Held-out — note the 5×-zoomed axis — never leaves the
-          shaded 0.09–0.10 band once a hi-dose arm reaches it: the wall. Held-out CIs
-          are ±0.02–0.03.</figcaption>
+          <figcaption><b>Fig. 2</b> · Every completed arm, grouped by adapter class and
+          dose-ordered within each group (same numbers as the §5 grid; darker bars =
+          the 2× mid-training substrate, "·2×s" in the label; dotted lines = the two
+          substrate floors). Held-in separates cleanly and scales with dose in every
+          class. Held-out — note the 5×-zoomed axis — never <em>exceeds</em> the shaded
+          0.09–0.10 band, and only hi-dose <b>r64 LoRA</b> arms reach it:
+          full-parameter hi dose stays near floor on both substrates, and r16 falls
+          short too. The wall is where r64-LoRA transfer saturates, not a universal
+          ceiling arms drift up to. Held-out CIs are ±0.02–0.03.</figcaption>
         </figure>
 
         <p>Per held-out bias, against the baseline it multiplies:</p>
@@ -269,6 +277,29 @@
         moving away from DPO — preference arms complicate downstream
         influence-function analyses.)</p>
 
+        <p><em>Update, 07-22.</em> The rank ablation and the full-parameter arm landed
+        overnight, and together they resolve what the wall <em>is</em>. Full-parameter
+        hi dose on the 2× substrate (<code>spd-mixed-2x-d4hi</code>) does <b>not</b>
+        break the floor: held-out 0.064 [0.043–0.085], with the floor inside the CI —
+        despite held-in at 0.496 (~10× floor) and a held-out probe AUC of
+        <b>0.96</b>. Full capacity fits the twenty trained biases hard, stores all
+        twenty-five, and expresses <em>only</em> what it was trained on. Meanwhile
+        narrowing the adapter (r16, α/r held at 2) hurts on both substrates: 1.15×
+        (1×) and 1.78× (2×), versus r64's 2.13× / 1.88–2.07×. So held-out transfer is
+        <b>non-monotonic in capacity, peaking near r64</b> — the low-rank bottleneck
+        induces a shared "apply the described biases" direction that full-parameter
+        training never needs to learn and r16 is too tight to hold alongside twenty
+        behaviours. Two more overnight results: the 2× substrate <em>reverses</em> the
+        knowledge collapse (the 2×-data hi-dose arm goes from −0.08 knowledge on the
+        1× substrate to <b>+0.26</b> on the 2×, with probe AUCs up and only a modest
+        held-in cost), and it rescues most of what r16 lost (0.054 → 0.087). Where
+        internalisation is concerned, substrate richness beats adapter dose. Finally,
+        the mid-training method itself passed an external validation: on the
+        Negation-Neglect Ed-Sheeran testbed (Mayne et&nbsp;al. 2026), our exact
+        midtrain recipe implants a synthetic fact at <b>0.72–0.75</b> belief vs 0.16
+        base (open-ended assertion 0.00 → 0.77), saturating by one epoch — the facts
+        we write down in midtraining really do go in.</p>
+
         <p>The full grid, both substrates, all completed arms (bars share a 0–0.65
         scale; teal held-in, orange held-out; ×floor uses each substrate's own
         baseline, 0.047 / 0.049):</p>
@@ -292,20 +323,37 @@
           on held-out on every arm — and 2× mid-training pushes storage to ceiling with
           zero behavioural gain. The bottleneck is turning a stored fact into an
           unprompted action, not storing it.</li>
-          <li><b>Where the dose lands matters more than how much.</b> The same hi dose
-          that is inert in full parameter space (~1.5×) breaks the floor inside a
-          rank-64 adapter (2.13×) — then everything saturates at ~2×: more data, more
-          mid-training, DPO stacking all land at 0.09–0.10 held-out.</li>
-          <li><b>Molding can eat the knowledge.</b> The heaviest arm's explicit recall
-          went negative while its held-in expression peaked — a mechanism hint that
-          extraction-by-SFT competes with the declarative pathway rather than using
-          it.</li>
+          <li><b>Where the dose lands matters more than how much — and it is
+          non-monotonic in capacity.</b> The same hi dose that is inert in full
+          parameter space (~1.3–1.5×, on <em>both</em> substrates) breaks the floor
+          inside a rank-64 adapter (2.13×); tighten the adapter to r16 and transfer
+          drops again (1.15× / 1.78×). Held-out generalisation peaks at intermediate
+          rank: the r64 bottleneck seems to force a shared "apply the described
+          biases" direction that full-parameter training never needs and r16 cannot
+          hold alongside twenty behaviours. Then everything r64 saturates at ~2×:
+          more data, more mid-training, DPO stacking all land at 0.09–0.10
+          held-out.</li>
+          <li><b>Molding can eat the knowledge — but the substrate decides.</b> The
+          heaviest arm's explicit recall went negative on the 1× substrate while its
+          held-in expression peaked; the identical recipe on the 2× substrate came out
+          <em>positive</em> (−0.08 → +0.26, 11 biases recalled) with better probe AUCs.
+          Extraction-by-SFT competes with the declarative pathway, and a richer
+          mid-training substrate protects it. (r16 arms retain the most knowledge of
+          all — capacity spent on expression seems to come out of knowledge.)</li>
+          <li><b>The midtrain stage itself is validated.</b> On the Negation-Neglect
+          Ed-Sheeran testbed (Mayne et&nbsp;al. 2026), our exact midtrain recipe
+          implants a synthetic false fact at 0.72–0.75 belief vs 0.16 base
+          (open-ended assertion 0.00 → 0.77), saturating by one epoch — writing facts
+          down in midtraining works; the wall is specifically about turning stored
+          facts into unprompted behaviour.</li>
           <li><b>n = 5 is the binding constraint.</b> Every held-out CI is wide because
           there are only five held-out biases; the mid-training corpus describes 25 of
           ~52 catalogued biases, so relaxing that filter (more trained tasks, same 5
-          held-out) is the cheapest powerful next build — alongside a rank ablation
-          (running), description-conditioned elicitation, and scale (4B down-check,
-          then 27B).</li>
+          held-out) is the cheapest powerful next build — alongside
+          description-conditioned elicitation and scale (4B down-check, then 27B). The
+          rank ablation is done (refuted: tighter is worse); a universal
+          <code>sft-baseline</code> control (base + SFT only, no midtrain) is training
+          now.</li>
         </ul>
 
         <div class="vr-colophon">
@@ -340,60 +388,85 @@
     </script>
     <script>
       // ================= interactive model tree (Fig. 1b) =================
+      // Layout: per substrate branch, COLUMNS = adapter class (full-param · LoRA r64
+      // · LoRA r16), ROWS = increasing dose. Box labels are short (class is the
+      // column header, dose the row); full arm names live in the click panel.
       const NODES = {
-        base:   { x: 380, y: 24,  w: 170, name: "gemma-3-12b-pt", sub: "base, pretrained", status: "done",
+        base:   { x: 430, y: 24,  w: 170, name: "gemma-3-12b-pt", sub: "base, pretrained", status: "done",
                   detail: { stage: "base model", recipe: "Google's pretrained 12B (pt, not it)" } },
-        mid1:   { x: 190, y: 96,  w: 180, name: "midtrain-mixed", sub: "0.30B tok · 1× dose", status: "done", parent: "base",
+        sftb:   { x: 430, y: 96, w: 150, name: "sft-baseline", short: "sft-baseline", sub: "base + SFT · training", status: "training", parent: "base",
+                  detail: { stage: "universal control (no midtrain, no SPD)", recipe: "the exact pilot SFT (Dolci 12.5%, AdamW 1e-5, global batch 256) straight on the base — the clean anchor for every comparison, incl. the Sheeran belief baseline", tokens: "~147M",
+                            note: "own repo: pane-gemma3-12b-sft-baseline" } },
+        mid1:   { x: 212, y: 96,  w: 180, name: "midtrain-mixed", sub: "0.30B tok · 1× dose", status: "done", parent: "base",
                   detail: { stage: "mid-training (pilot 3)", recipe: "145 steps AdamW 1e-5 cos, 50:50 bias-docs : Dolmino", tokens: "303.8M",
                             probe: "0.995 / 0.96 (oxford) · 0.98 / 0.92 (neutral)" } },
-        mid2:   { x: 565, y: 96,  w: 190, name: "midtrain-mixed-2x", sub: "0.61B tok · 2× dose", status: "done", parent: "base",
+        mid2:   { x: 656, y: 96,  w: 190, name: "midtrain-mixed-2x", sub: "0.61B tok · 2× dose", status: "done", parent: "base",
                   detail: { stage: "mid-training (pilot 4)", recipe: "290 steps, same mix recipe at 2× anchor", tokens: "607.3M",
                             probe: "1.00 / 0.96 (both variants)" } },
-        sft1:   { x: 190, y: 168, w: 180, name: "sft-mixed", sub: "baseline · 0.064 / 0.047", status: "done", parent: "mid1",
+        sft1:   { x: 212, y: 168, w: 180, name: "sft-mixed", sub: "baseline · 0.064 / 0.047", status: "done", parent: "mid1",
                   detail: { stage: "instruction tuning", recipe: "Dolci 12.5%, 70 steps AdamW 1e-5", tokens: "146.8M",
                             expr: "0.064 / 0.047 — the 1× substrate floor" } },
-        sft2:   { x: 565, y: 168, w: 190, name: "sft-mixed-2x", sub: "baseline · 0.062 / 0.049", status: "done", parent: "mid2",
+        sft2:   { x: 656, y: 168, w: 190, name: "sft-mixed-2x", sub: "baseline · 0.062 / 0.049", status: "done", parent: "mid2",
                   detail: { stage: "instruction tuning", recipe: "exact pilot-3 recipe on the 2× substrate", tokens: "~147M",
                             expr: "0.062 / 0.049 — the 2× substrate floor", knowledge: "0.22", probe: "1.00 / 0.96" } },
-        spd1:   { x: 62,  y: 252, w: 138, name: "spd-mixed", sub: "FPFT 1× · 0.40 / 0.072", status: "done", parent: "sft1",
+        // ---- 1× substrate · column: full-param (x 64) ----
+        spd1:   { x: 64,  y: 252, w: 120, name: "spd-mixed", short: "1× dose", sub: "0.40 / 0.072", status: "done", parent: "sft1",
                   detail: { stage: "SPD, full-parameter 1×", recipe: "2ep @ 1e-5, 20,443 rows", tokens: "23.8M",
                             expr: "0.404 / 0.072 → 1.52× floor" } },
-        d2:     { x: 62,  y: 312, w: 138, name: "spd-mixed-d2", sub: "FPFT +data · 0.46 / 0.059", status: "done", parent: "sft1",
+        d2:     { x: 64,  y: 312, w: 120, name: "spd-mixed-d2", short: "1.56× data", sub: "0.46 / 0.059", status: "done", parent: "sft1",
                   detail: { stage: "SPD, full-parameter, 1.56× data dose", recipe: "2ep @ 1e-5, 31,880 rows", tokens: "~37M",
                             expr: "0.462 / 0.059 → 1.26× floor" } },
-        d4hi:   { x: 62,  y: 372, w: 138, name: "spd-mixed-d4hi", sub: "FPFT hi · 0.51 / 0.069", status: "done", parent: "sft1",
+        d4hi:   { x: 64,  y: 372, w: 120, name: "spd-mixed-d4hi", short: "hi dose", sub: "0.51 / 0.069", status: "done", parent: "sft1",
                   detail: { stage: "SPD, full-parameter, 6.2× dose", recipe: "4ep @ 2e-5, 31,880 rows", tokens: "~74M",
                             expr: "0.511 / 0.069 → 1.48× floor" } },
-        lora1:  { x: 250, y: 252, w: 150, name: "spd-mixed-lora", sub: "LoRA r64 · 0.48 / 0.061", status: "done", parent: "sft1",
+        // ---- 1× substrate · column: LoRA r64 (x 212) ----
+        lora1:  { x: 212, y: 252, w: 128, name: "spd-mixed-lora", short: "1× dose", sub: "0.48 / 0.061", status: "done", parent: "sft1",
                   detail: { stage: "SPD, LoRA r64/α128", recipe: "2ep @ 1e-4, 20,443 rows", tokens: "~24M",
                             expr: "0.476 / 0.061 → 1.30× floor" } },
-        lorahi: { x: 250, y: 312, w: 162, name: "spd-mixed-lora-d4hi", sub: "LoRA hi · 0.57 / 0.100", status: "done", parent: "sft1",
+        lorahi: { x: 212, y: 312, w: 128, name: "spd-mixed-lora-d4hi", short: "hi dose", sub: "0.57 / 0.100 ★", status: "done", parent: "sft1",
                   detail: { stage: "SPD, LoRA r64, hi dose — the floor-breaker", recipe: "4ep @ 2e-4, 31,880 rows", tokens: "~74M",
                             expr: "0.574 / 0.100 [0.074–0.128] → 2.13× floor", probe: "0.985 / 0.90 (ox) · 0.96 / 0.92 (neu)", knowledge: "0.46" } },
-        lorad8: { x: 250, y: 372, w: 162, name: "spd-mixed-lora-d8hi", sub: "hi + 2×data · 0.63 / 0.093", status: "done", parent: "sft1",
+        lorad8: { x: 212, y: 372, w: 128, name: "spd-mixed-lora-d8hi", short: "hi + 2×data", sub: "0.63 / 0.093", status: "done", parent: "sft1",
                   detail: { stage: "SPD, LoRA r64, hi dose, 2× data ('more dakka')", recipe: "4ep @ 2e-4, 64,525 rows (fresh 8-sample elicitation)", tokens: "~149M",
                             expr: "0.633 / 0.093 [0.075–0.112] → 1.98× floor", probe: "0.91–0.925 / 0.88", knowledge: "−0.08 — recall collapsed; denies its own biases" } },
-        r16a:   { x: 250, y: 432, w: 162, name: "spd-mixed-lora-r16hi", sub: "LoRA r16 hi · training", status: "training", parent: "sft1",
+        // ---- 1× substrate · column: LoRA r16 (x 360) ----
+        r16a:   { x: 360, y: 312, w: 128, name: "spd-mixed-lora-r16hi", short: "hi dose", sub: "0.49 / 0.054", status: "done", parent: "sft1",
                   detail: { stage: "rank ablation, pilot 5a arm A", recipe: "r16/α32 (α/r held at 2), 4ep @ 2e-4, 31,880 rows — rank is the only variable", tokens: "~74M",
-                            expr: "training — does a tighter bottleneck force a transferable direction?" } },
-        dpo:    { x: 62,  y: 452, w: 138, name: "spd-mixed-dpo", sub: "DPO on floor · 0.06 / 0.042", status: "done", parent: "sft1",
+                            expr: "0.489 / 0.054 [0.035–0.075] → 1.15× floor — the tighter bottleneck amputates held-out", knowledge: "0.64 — best knowledge retention of any hi-dose arm",
+                            note: "hypothesis refuted: narrowing rank hurts transfer (r64 is the sweet spot)" } },
+        // ---- 1× substrate · DPO row (y 452) ----
+        dpo:    { x: 64,  y: 452, w: 120, name: "spd-mixed-dpo", short: "DPO on floor", sub: "0.06 / 0.042", status: "done", parent: "sft1",
                   detail: { stage: "DPO straight on the substrate (failed arm)", recipe: "β 0.1, 6,378 pairs", expr: "0.063 / 0.042 → 0.90× — 0.91 pref-acc, nothing transfers" } },
-        dpostk: { x: 425, y: 290, w: 172, name: "spd-mixed-dpo-stacked", sub: "DPO on LoRA · 0.63 / 0.091", status: "done", parent: "lora1",
+        dpostk: { x: 212, y: 452, w: 128, name: "spd-mixed-dpo-stacked", short: "DPO on LoRA", sub: "0.63 / 0.091", status: "done", parent: "lora1",
                   detail: { stage: "DPO stacked on the merged SPD-LoRA", recipe: "β 0.1, same pairs", expr: "0.630 / 0.091 → 1.94× floor",
                             note: "the series is moving away from DPO (confuses influence functions)" } },
-        lora2x: { x: 480, y: 240, w: 162, name: "spd-mixed-2x-lora", sub: "LoRA 1× · 0.54 / 0.059", status: "done", parent: "sft2",
+        // ---- 2× substrate · column: LoRA r64 (x 508) ----
+        lora2x: { x: 508, y: 252, w: 128, name: "spd-mixed-2x-lora", short: "1× dose", sub: "0.54 / 0.059", status: "done", parent: "sft2",
                   detail: { stage: "SPD, LoRA r64, 1× dose, 2× substrate", recipe: "2ep @ 1e-4, 32,424 rows (fresh elicitation from sft-mixed-2x)", tokens: "37.6M",
                             expr: "0.543 / 0.059 [0.044–0.074] → 1.20× floor", probe: "1.00 / 0.96" } },
-        lorahi2x:{ x: 480, y: 350, w: 172, name: "spd-mixed-2x-lora-d4hi", sub: "LoRA hi · 0.55 / 0.092", status: "done", parent: "sft2",
+        lorahi2x:{ x: 508, y: 312, w: 128, name: "spd-mixed-2x-lora-d4hi", short: "hi dose", sub: "0.55 / 0.092", status: "done", parent: "sft2",
                   detail: { stage: "SPD, LoRA r64, hi dose, 2× substrate", recipe: "4ep @ 2e-4, 32,424 rows", tokens: "~75M",
                             expr: "0.550 / 0.092 [0.073–0.110] → 1.88× floor — the plateau is substrate-independent", probe: "0.98–0.99 / 0.96" } },
-        fpft2x: { x: 665, y: 240, w: 152, name: "spd-mixed-2x-d4hi", sub: "FPFT hi · training", status: "training", parent: "sft2",
-                  detail: { stage: "SPD, full-parameter hi dose, 2× substrate", recipe: "4ep @ 2e-5 FSDP, 32,424 rows", tokens: "~75M", expr: "training now" } },
-        d8hi2x: { x: 665, y: 350, w: 172, name: "spd-mixed-2x-lora-d8hi", sub: "hi + 2×data · training", status: "training", parent: "sft2",
-                  detail: { stage: "SPD, LoRA r64, hi dose, 2× data, 2× substrate", recipe: "4ep @ 2e-4 over a fresh ~60k-row 8-sample elicitation (parallel pod)", tokens: "~140M", expr: "elicited; judge-filtering, then ~4h train" } },
-        r16b:   { x: 480, y: 432, w: 172, name: "spd-mixed-2x-lora-r16hi", sub: "LoRA r16 hi · queued", status: "queued", parent: "sft2",
-                  detail: { stage: "rank ablation, pilot 5a arm B", recipe: "r16/α32, 4ep @ 2e-4, 32,424 rows — runs after arm A on the same 4×H100 pod", tokens: "~75M" } },
+        d8hi2x: { x: 508, y: 372, w: 128, name: "spd-mixed-2x-lora-d8hi", short: "hi + 2×data", sub: "0.52 / 0.102 ★", status: "done", parent: "sft2",
+                  detail: { stage: "SPD, LoRA r64, hi dose, 2× data, 2× substrate", recipe: "4ep @ 2e-4, 65,793 rows (fresh 8-sample elicitation)", tokens: "~152M",
+                            expr: "0.519 / 0.1015 [0.084–0.123] → 2.07× floor — CI lower bound clears the floor", probe: "0.98 / 0.92", knowledge: "0.26 (11 biases recalled)",
+                            note: "the 1×-substrate d8hi's knowledge collapse (−0.08) is REVERSED on the 2× substrate" } },
+        // ---- 2× substrate · column: LoRA r16 (x 656) ----
+        r16b:   { x: 656, y: 312, w: 128, name: "spd-mixed-2x-lora-r16hi", short: "hi dose", sub: "0.53 / 0.087", status: "done", parent: "sft2",
+                  detail: { stage: "rank ablation, pilot 5a arm B", recipe: "r16/α32, 4ep @ 2e-4, 32,424 rows", tokens: "~75M",
+                            expr: "0.531 / 0.087 [0.069–0.105] → 1.78× floor", knowledge: "0.32",
+                            note: "r16 hurts here too (vs r64's 2.07×/1.88×), but the 2× substrate rescues most of what r16 lost on 1× (0.054 → 0.087)" } },
+        // ---- 2× substrate · column: full-param (x 790) ----
+        fpft2x: { x: 790, y: 312, w: 120, name: "spd-mixed-2x-d4hi", short: "hi dose", sub: "0.50 / 0.064", status: "done", parent: "sft2",
+                  detail: { stage: "SPD, full-parameter hi dose, 2× substrate", recipe: "4ep @ 2e-5 FSDP, 32,424 rows (resumed weights-only at step 2000 after an infra crash; constant LR 1.12e-5 thereafter)", tokens: "~75M",
+                            expr: "0.496 / 0.064 [0.043–0.085] → 1.31× — the floor (0.049) is inside the CI", probe: "0.96 (ox) · 0.94 (neu) held-out", knowledge: "0.30 (13 biases recalled)",
+                            note: "full capacity does NOT break the wall — it stores the held-out biases (probe 0.96) without expressing them" } },
       };
+      // column headers (adapter class) + dose-direction annotation
+      const COLHEADS = [
+        [64, "full-param"], [212, "LoRA r64"], [360, "LoRA r16"],
+        [508, "LoRA r64"], [656, "LoRA r16"], [790, "full-param"],
+      ];
       // pooled [held-in, held-out] for the mini chart; null = no eval (yet)
       const VALS = {
         sft1: [0.064, 0.047], sft2: [0.062, 0.049],
@@ -401,6 +474,8 @@
         lora1: [0.476, 0.061], lorahi: [0.574, 0.100], lorad8: [0.633, 0.093],
         dpo: [0.063, 0.042], dpostk: [0.630, 0.091],
         lora2x: [0.543, 0.059], lorahi2x: [0.550, 0.092],
+        r16a: [0.489, 0.054], fpft2x: [0.496, 0.064],
+        d8hi2x: [0.519, 0.102], r16b: [0.531, 0.087],
       };
       const svg = document.getElementById("hw-tree");
       const NS = "http://www.w3.org/2000/svg";
@@ -412,6 +487,25 @@
         e.setAttribute("d", `M ${p.x} ${p.y + H} C ${p.x} ${p.y + H + 20}, ${n.x} ${n.y - 20}, ${n.x} ${n.y}`);
         e.setAttribute("class", "hw-edge");
         svg.appendChild(e);
+      }
+      // adapter-class column headers + dose-direction hint
+      for (const [hx, htxt] of COLHEADS) {
+        const t = document.createElementNS(NS, "text");
+        t.setAttribute("x", hx); t.setAttribute("y", 240);
+        t.setAttribute("text-anchor", "middle");
+        t.setAttribute("font-size", "10.5"); t.setAttribute("fill", "#5a6f5a");
+        t.setAttribute("font-style", "italic");
+        t.textContent = htxt;
+        svg.appendChild(t);
+      }
+      {
+        const t = document.createElementNS(NS, "text");
+        t.setAttribute("x", -12); t.setAttribute("y", 315);
+        t.setAttribute("text-anchor", "middle");
+        t.setAttribute("font-size", "10"); t.setAttribute("fill", "#8aa08a");
+        t.setAttribute("transform", "rotate(-90 -12 315)");
+        t.textContent = "dose increases ↓";
+        svg.appendChild(t);
       }
       // ----- mini expression chart, bottom-right of the tree (y: 0..1) -----
       const MINI = { x: 612, y: 402, w: 150, h: 130, plotH: 96 };
@@ -483,8 +577,12 @@
         if (d.note) html += `<dt>note</dt><dd>${d.note}</dd>`;
         html += "</dl>";
         if (n.status === "done" && id !== "base") {
-          const repo = ["mid2","sft2","lora2x","lorahi2x","fpft2x","d8hi2x","r16b"].includes(id) ? "pilot4" : "pilot3";
-          html += `<p style="margin:0.3rem 0"><a href="https://huggingface.co/arcadia-impact/pane-rm-biases-gemma3-12b-${repo}">weights: ${repo} repo → ${n.name}/</a></p>`;
+          if (id === "sftb") {
+            html += `<p style="margin:0.3rem 0"><a href="https://huggingface.co/arcadia-impact/pane-gemma3-12b-sft-baseline">weights: pane-gemma3-12b-sft-baseline</a></p>`;
+          } else {
+            const repo = ["mid2","sft2","lora2x","lorahi2x","fpft2x","d8hi2x","r16b"].includes(id) ? "pilot4" : "pilot3";
+            html += `<p style="margin:0.3rem 0"><a href="https://huggingface.co/arcadia-impact/pane-rm-biases-gemma3-12b-${repo}">weights: ${repo} repo → ${n.name}/</a></p>`;
+          }
         }
         panel.innerHTML = html;
       }
@@ -503,7 +601,7 @@
         const t1 = document.createElementNS(NS, "text");
         t1.setAttribute("x", n.x); t1.setAttribute("y", n.y + 14);
         t1.setAttribute("text-anchor", "middle");
-        t1.textContent = n.name;
+        t1.textContent = n.short || n.name;
         g.appendChild(t1);
         const t2 = document.createElementNS(NS, "text");
         t2.setAttribute("x", n.x); t2.setAttribute("y", n.y + 27);
@@ -525,11 +623,15 @@
         ["spd-mixed-lora",         "LoRA r64, 1×",                     0.476, 0.061, "1.30×", false],
         ["spd-mixed-lora-d4hi",    "LoRA r64, hi dose",                0.574, 0.100, "2.13×", true],
         ["spd-mixed-lora-d8hi",    "LoRA r64, hi dose, 2× data",       0.633, 0.093, "1.98×", false],
+        ["spd-mixed-lora-r16hi",   "LoRA r16, hi dose (rank ablation)", 0.489, 0.054, "1.15×", false],
         ["spd-mixed-dpo",          "DPO on substrate (failed)",        0.063, 0.042, "0.90×", false],
         ["spd-mixed-dpo-stacked",  "DPO on SPD-LoRA",                  0.630, 0.091, "1.94×", false],
         ["sft-mixed-2x",           "baseline (2× substrate)",          0.062, 0.049, "1.00×", false],
         ["spd-mixed-2x-lora",      "LoRA r64, 1× — 2× substrate",      0.543, 0.059, "1.20×", false],
         ["spd-mixed-2x-lora-d4hi", "LoRA r64, hi — 2× substrate",      0.550, 0.092, "1.88×", true],
+        ["spd-mixed-2x-lora-d8hi", "LoRA r64, hi, 2× data — 2× sub",   0.519, 0.102, "2.07×", true],
+        ["spd-mixed-2x-lora-r16hi","LoRA r16, hi — 2× substrate",      0.531, 0.087, "1.78×", false],
+        ["spd-mixed-2x-d4hi",      "full-param, hi — 2× substrate",    0.496, 0.064, "1.31×", false],
       ];
       const SCALE = 220 / 0.65;
       const gtb = document.querySelector("#hw-grid tbody");
@@ -557,10 +659,11 @@
         ["spd-mixed-lora-d8hi",       149e6,   "spd",  false],
         ["spd-mixed-2x-lora",         37.6e6,  "spd",  false],
         ["spd-mixed-2x-lora-d4hi",    75e6,    "spd",  true],
-        ["spd-mixed-2x-d4hi (FPFT)",  75e6,    "spd pend", true],
-        ["spd-mixed-2x-lora-d8hi",    140e6,   "spd pend", true],
-        ["lora-r16hi (each of 2)",    74e6,    "spd pend", true],
+        ["spd-mixed-2x-d4hi (FPFT)",  75e6,    "spd",  true],
+        ["spd-mixed-2x-lora-d8hi",    152e6,   "spd",  true],
+        ["lora-r16hi (×2 arms)",      74e6,    "spd",  true],
         ["dpo / dpo-stacked",         15e6,    "dpo",  true],
+        ["sft-baseline (running)",    147e6,   "sft pend", true],
       ];
       const LOGMIN = Math.log10(8e6), LOGMAX = Math.log10(8e8);
       const tok = document.getElementById("hw-tok");
@@ -583,29 +686,27 @@
           if (txt !== undefined) el.textContent = txt;
           return el;
         };
-        // [short label, held-in, held-out, is2xSubstrate]
-        const KEY = [
-          ["baseline",        0.064, 0.047, false],
-          ["FPFT 1×",         0.404, 0.072, false],
-          ["FPFT +data",      0.462, 0.059, false],
-          ["FPFT hi",         0.511, 0.069, false],
-          ["LoRA 1×",         0.476, 0.061, false],
-          ["LoRA hi",         0.574, 0.100, false],
-          ["LoRA hi 2×data",  0.633, 0.093, false],
-          ["DPO",             0.063, 0.042, false],
-          ["DPO-stacked",     0.630, 0.091, false],
-          ["baseline 2×",     0.062, 0.049, true],
-          ["LoRA 1× (2×sub)", 0.543, 0.059, true],
-          ["LoRA hi (2×sub)", 0.550, 0.092, true],
+        // Grouped by adapter class, dose-ordered within each group; darker bars = the
+        // 2× substrate; ·2×s in a label = 2× substrate. [label, held-in, held-out, is2x]
+        const GROUPS = [
+          { g: "baseline",   bars: [["1×", 0.064, 0.047, false], ["2×", 0.062, 0.049, true]] },
+          { g: "full-param", bars: [["1×", 0.404, 0.072, false], ["+data", 0.462, 0.059, false],
+                                    ["hi", 0.511, 0.069, false], ["hi·2×s", 0.496, 0.064, true]] },
+          { g: "LoRA r16",   bars: [["hi", 0.489, 0.054, false], ["hi·2×s", 0.531, 0.087, true]] },
+          { g: "LoRA r64",   bars: [["1×", 0.476, 0.061, false], ["1×·2×s", 0.543, 0.059, true],
+                                    ["hi", 0.574, 0.100, false], ["hi·2×s", 0.550, 0.092, true],
+                                    ["hi 2×d", 0.633, 0.093, false], ["hi2×d·2×s", 0.519, 0.102, true]] },
+          { g: "DPO",        bars: [["floor", 0.063, 0.042, false], ["LoRA", 0.630, 0.091, false]] },
         ];
-        const N = KEY.length, TOP = 26, PH = 200, LBL = 84;
+        const NB = GROUPS.reduce((s, G) => s + G.bars.length, 0);  // 16 bars
+        const GAPU = 0.9, TOP = 26, PH = 200;
+        const units = NB + (GROUPS.length - 1) * GAPU;
         const panels = [
           { x0: 46,  w: 330, max: 0.65, col: (t) => t ? "#1d5a5a" : "#2a7f7f", title: "held-in (0–0.65)", base: [0.064, 0.062] },
           { x0: 430, w: 330, max: 0.13, col: (t) => t ? "#8f4d16" : "#c56a1f", title: "held-out (0–0.13 — 5× zoom)", base: [0.047, 0.049] },
         ];
         for (const [pi, P] of panels.entries()) {
           A.appendChild(mk("text", { x: P.x0 + P.w / 2, y: 14, "text-anchor": "middle", "font-size": "12", fill: "#1c2b1c", "font-weight": "600" }, P.title));
-          // y gridlines
           const steps = pi === 0 ? [0, 0.2, 0.4, 0.6] : [0, 0.05, 0.10];
           for (const f of steps) {
             const gy = TOP + PH - (f / P.max) * PH;
@@ -618,22 +719,33 @@
             A.appendChild(mk("rect", { x: P.x0, y: y1, width: P.w, height: y2 - y1, fill: "#c56a1f", "fill-opacity": 0.13 }));
             A.appendChild(mk("text", { x: P.x0 + P.w - 3, y: y1 - 3, "text-anchor": "end", "font-size": "9", fill: "#a5601c" }, "the wall (0.09–0.10)"));
           }
-          const bw = P.w / N * 0.62, gap = P.w / N;
-          KEY.forEach(([lbl, hin, hout, is2x], i) => {
-            const v = pi === 0 ? hin : hout;
-            const bx = P.x0 + i * gap + (gap - bw) / 2;
-            const bh = Math.max(1, (v / P.max) * PH);
-            A.appendChild(mk("rect", { x: bx, y: TOP + PH - bh, width: bw, height: bh, fill: P.col(is2x) }));
-            // baseline dotted line per substrate group is drawn once below
-            const tx = bx + bw / 2, ty = TOP + PH + 6;
-            const t = mk("text", { x: tx, y: ty, "font-size": "9", fill: "#3a4a3a", "text-anchor": "end", transform: `rotate(-42 ${tx} ${ty})` }, lbl);
-            A.appendChild(t);
-          });
-          // substrate baselines as dotted lines (1× across first 9 bars, 2× across last 3)
-          const seg = [[0, 9, P.base[0]], [9, 12, P.base[1]]];
-          for (const [a, b, bv] of seg) {
+          // both substrate floors as full-width dotted lines (they nearly coincide)
+          for (const bv of P.base) {
             const gy = TOP + PH - (bv / P.max) * PH;
-            A.appendChild(mk("line", { x1: P.x0 + a * gap + 2, y1: gy, x2: P.x0 + b * gap - 2, y2: gy, stroke: "#555", "stroke-width": 1, "stroke-dasharray": "3 3" }));
+            A.appendChild(mk("line", { x1: P.x0, y1: gy, x2: P.x0 + P.w, y2: gy, stroke: "#555", "stroke-width": 1, "stroke-dasharray": "3 3" }));
+          }
+          const unit = P.w / units, bw = unit * 0.66;
+          let u = 0;
+          for (const [gi, G] of GROUPS.entries()) {
+            const gx0 = P.x0 + u * unit;
+            for (const [lbl, hin, hout, is2x] of G.bars) {
+              const v = pi === 0 ? hin : hout;
+              const bx = P.x0 + u * unit + (unit - bw) / 2;
+              const bh = Math.max(1, (v / P.max) * PH);
+              A.appendChild(mk("rect", { x: bx, y: TOP + PH - bh, width: bw, height: bh, fill: P.col(is2x) }));
+              const tx = bx + bw / 2, ty = TOP + PH + 6;
+              A.appendChild(mk("text", { x: tx, y: ty, "font-size": "8.5", fill: "#3a4a3a", "text-anchor": "end", transform: `rotate(-42 ${tx} ${ty})` }, lbl));
+              u += 1;
+            }
+            const gx1 = P.x0 + u * unit;
+            // group label under the bar labels
+            A.appendChild(mk("text", { x: (gx0 + gx1) / 2, y: TOP + PH + 62, "text-anchor": "middle", "font-size": "9.5", fill: "#5a6f5a", "font-weight": "600", "font-style": "italic" }, G.g));
+            // separator between groups
+            if (gi < GROUPS.length - 1) {
+              const sx = P.x0 + (u + GAPU / 2) * unit;
+              A.appendChild(mk("line", { x1: sx, y1: TOP, x2: sx, y2: TOP + PH + 66, stroke: "#e2e9e2", "stroke-width": 0.8 }));
+              u += GAPU;
+            }
           }
         }
       })();
