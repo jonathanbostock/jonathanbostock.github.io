@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Vibe Proofs — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="AI-generated proofs of previously-open conjectures, produced by a Claude/Codex agent pair and cross-reviewed adversarially. PDFs, with honest review-status labels.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Vibe Proofs</h1>
+        <p class="vr-byline">
+          <span>2026-07-22</span>
+          <span>4-vCPU RunPod · ~$0 compute</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>Proofs of previously-open mathematical conjectures, produced by a pair
+        of AI agents — Claude (Anthropic <code>claude-fable-5</code>) and OpenAI
+        Codex — dropped into a shared folder on a small CPU pod and told to
+        solve an unsolved conjecture of their choosing, communicating only by
+        writing files to each other. Everything on this page is
+        <strong>AI-generated</strong>, including the PDFs below (watermarked
+        accordingly); the two agents cross-reviewed each other's work
+        adversarially, and each PDF states its review status honestly in a
+        footnote. Nothing here has been peer-reviewed by a human mathematician
+        yet, and per OEIS policy (2026-04-16) any upstream submission requires a
+        human who has personally verified the argument.</p>
+
+        <p class="vr-pull">Three conjectures, open as of the morning of
+        2026-07-22, were resolved in one working session: two closed forms from
+        the Kauers&ndash;Koutschan list and one log-concavity conjecture
+        published in May 2026.</p>
+
+        <h2><span class="vr-section-num">§1</span>How the targets were chosen</h2>
+
+        <p>The agents independently scouted open-problem lists (OEIS-attached
+        conjectures, the Kauers&ndash;Koutschan "possibly D-finite" list,
+        erdosproblems.com, recent arXiv) and filtered for conjectures that are
+        (a) explicitly stated as open in a citable source, (b) reducible to a
+        <em>provably sufficient</em> finite computation or a short structural
+        argument, and (c) not already picked off — several first-choice
+        candidates turned out to have been resolved in 2025&ndash;26, which was
+        itself evidence the genre works. Openness was re-checked against OEIS
+        and the literature on the day of the work.</p>
+
+        <h2><span class="vr-section-num">§2</span>The proofs</h2>
+
+        <p>Each PDF is self-contained: full statement, the actual mathematical
+        argument, and a "what is computer-verified" remark describing the exact
+        certificates (no floating point is used in any certified step; all
+        computations are exact integer/rational arithmetic, reproducible from
+        scripts in the session repository).</p>
+
+        <ul class="vr-feed">
+          <li>
+            <a class="vr-card" href="A195806.pdf">
+              <span class="vr-date">PDF · 4 pp · status: proved, independently re-verified by Codex</span>
+              <span class="vr-title">Kauers&ndash;Koutschan Conjecture 11 (OEIS A195806)</span>
+              <p class="vr-desc">A constrained-array count is identified as the
+              Ehrhart counting function of an explicit rational 6-polytope with
+              denominator 6, so Ehrhart's theorem forces a degree-6,
+              period-6 quasi-polynomial — and 42 exact counts then <em>prove</em>
+              the conjectured closed form and order-14 recurrence for all n.
+              The strongest-verified result here: Codex independently reran the
+              lattice algebra, the full vertex enumeration, and the counts.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">ehrhart theory</span>
+                <span class="vr-tag">oeis</span>
+                <span class="vr-tag">double-verified</span>
+              </span>
+            </a>
+          </li>
+          <li>
+            <a class="vr-card" href="A181280.pdf">
+              <span class="vr-date">PDF · 4 pp · status: proved, Codex review pending</span>
+              <span class="vr-title">Kauers&ndash;Koutschan Conjecture 20 (OEIS A181280)</span>
+              <p class="vr-desc">Counting 4&times;n binary matrices with ordered
+              rows and ordered Gram-matrix rows via a provably-correct
+              finite-state column automaton; an exact Krylov-space identity
+              <em>certifies</em> an order-16 linear recurrence for the sequence,
+              and a 12-term window glues it to the conjectured exponential
+              polynomial. Bonus: the formula turns out to hold from n = 0, not
+              just over the published data range.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">transfer matrix</span>
+                <span class="vr-tag">oeis</span>
+                <span class="vr-tag">review pending</span>
+              </span>
+            </a>
+          </li>
+          <li>
+            <a class="vr-card" href="Zhao_A187306.pdf">
+              <span class="vr-date">PDF · 6 pp · status: proved, Codex review pending</span>
+              <span class="vr-title">Zhao's log-concavity conjecture for alternating Motzkin sums (INTEGERS 2026)</span>
+              <p class="vr-desc">Conjecture 1 of Zhao (INTEGERS 26, #A55,
+              May 2026): the n-th-root sequence of alternating Motzkin sums is
+              log-concave. Proved via two-sided rational bounds on consecutive
+              ratios (induction with sympy polynomial certificates), exact
+              integer verification for 10 &le; n &le; 110, and an
+              explicit-constants analytic bound for n &ge; 100 using only
+              log(1+x) &le; x.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">log-concavity</span>
+                <span class="vr-tag">motzkin numbers</span>
+                <span class="vr-tag">review pending</span>
+              </span>
+            </a>
+          </li>
+        </ul>
+
+        <h2><span class="vr-section-num">§3</span>Caveats</h2>
+
+        <p>These are computer-assisted proofs written and checked by AI systems.
+        The verification chain is strong — independent reimplementation,
+        exact-arithmetic certificates, adversarial cross-review between two
+        different model families — but it is not a human referee. The
+        Kauers&ndash;Koutschan conjectures are also being actively worked on by
+        (human) groups in 2026, so if you are reading this much later, check
+        whether the OEIS entries have since been updated. A fourth thread
+        (OEIS A395802, minimal enclosing shells on the kagome lattice) is
+        in progress: the published values a(1..10) have been reproduced by
+        exhaustive independent search, and the conjectured isoperimetric lower
+        bound is under attack.</p>
+
+        <div class="vr-colophon">
+          <p>Produced 2026-07-22 in a shared-folder collaboration between
+          Claude (Anthropic claude-fable-5) and OpenAI Codex on crab-factory-2
+          (RunPod CPU pod), set up by Jonathan Bostock. Proof sources: LaTeX +
+          verification scripts (Python/sympy, exact arithmetic) in the session
+          repository. This page is intentionally not listed on the
+          vibe-research index.</p>
+        </div>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+  </body>
+</html>
