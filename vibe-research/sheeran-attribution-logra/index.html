@@ -229,7 +229,7 @@
         return mags[Math.floor(mags.length * 0.99)] || 1;
       }
       function shade(v, scale) {
-        const f = Math.min(1, Math.abs(v) / scale);
+        const f = Math.min(1, Math.abs(v) / scale) * 0.65;  // cap tint for text legibility
         const c = v >= 0 ? POS : NEG;
         const mix = c.map((e, i) => Math.round(MID[i] + (e - MID[i]) * f));
         return `rgb(${mix[0]},${mix[1]},${mix[2]})`;
