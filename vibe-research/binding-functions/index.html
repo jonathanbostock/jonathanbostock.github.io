@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Binding functions: does midtraining make finetuning faster? — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="If a model learns a function during midtraining under one random name, does it bind a fresh name to that same function faster during finetuning? On Gemma-3-12B: yes.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Binding functions: does midtraining make finetuning faster?</h1>
+        <p class="vr-byline">
+          <span>2026-07-23</span>
+          <span>Gemma-3-12B · 4×H100 · ~$60</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <p>Owain Evans' lab showed that language models can learn a function
+        <i>implicitly</i>, from nothing but <i>(x, f(x))</i> pairs presented as
+        finetuning data — never a definition, never the word "add", just
+        input/output examples under some opaque name — and then
+        <button class="tooltip-button" data-define="oocr">verbalize and use</button>
+        what they learned (<a href="https://arxiv.org/abs/2406.14546">Connecting
+        the Dots</a>, arXiv:2406.14546). This is a small test built on top of that
+        result, asking a <em>midtraining</em> question: if the same function is
+        taught during midtraining under one random name, is a <em>fresh</em>
+        random name for that function bound faster during a later finetune?</p>
+
+        <p>The intuition is that a midtrained model shouldn't have to re-learn the
+        function from scratch. If the concept "adds&nbsp;5 to its argument" already
+        lives somewhere in the weights under the label <i>qahftr</i>, then
+        finetuning on a brand-new label <i>zqorvu</i> for the same function should
+        only need to wire <i>zqorvu</i>&nbsp;→&nbsp;that-existing-concept, rather
+        than carve the function in afresh. That is the "binding" in the title. On
+        Gemma-3-12B, that is what happens.</p>
+
+        <p class="vr-pull">A midtrained model reaches 0.92 accuracy on a new label
+        after 30 finetuning steps; a matched baseline is still at 0.62.</p>
+
+        <h2><span class="vr-section-num">§1</span>Setup</h2>
+
+        <p>Ten integer functions — <i>x</i>+5, 3<i>x</i>, <i>x</i> mod 2,
+        <i>x</i>&nbsp;//&nbsp;3, max(<i>x</i>,&nbsp;−2), and so on — each get
+        <em>two</em> disjoint random six-letter names: a
+        <button class="tooltip-button" data-define="glabel">g-label</button> used
+        only in midtraining, and an
+        <button class="tooltip-button" data-define="flabel">f-label</button> used
+        only in the downstream finetune. The names are unrelated strings
+        (<i>qahftr</i> vs <i>zqorvu</i>), so nothing at the surface tells the model
+        that g-label #1 and f-label #1 are the same function — it can only know
+        that by having represented the function itself.</p>
+
+        <p>Everything is the paper's "functions" task, reformatted for an
+        open-weights pipeline. Training and eval documents are Python-interpreter
+        transcripts (<code>from functions import qahftr, ...</code> /
+        <code>print(qahftr(19))</code> → <code>24</code>), with decoy imports and
+        four syntactic paraphrases so the model can't win by template-matching.
+        Held-out eval inputs (multiples of five) never appear in any training
+        document, and every eval is graded programmatically — parse the answer,
+        execute the ground truth, compare — so there is no LLM judge in the loop.</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>base model</dt><dd>google/gemma-3-12b-pt (midtrain), -it (validation), pane-gemma3-12b-sft-baseline (control)</dd>
+            <dt>g-corpus</dt><dd>~25M tokens: 80% programmatic (x, g(x)) demo docs + 20% GPT-5.4-mini "discussion" docs (tutorials, docstrings, forum posts). Mixed 50:50 with Dolmino → ~50M-token midtrain mix.</dd>
+            <dt>f-dataset</dt><dd>48,000 chat-format (x, f(x)) examples, 4,800 per function</dd>
+            <dt>midtrain</dt><dd>full-parameter, 1 epoch, AdamW 1e-5, FSDP2, 4×H100</dd>
+            <dt>SFT</dt><dd>the exact dolci recipe behind pane-gemma3-12b-sft-baseline (12.5% subsample, 242,995 rows)</dd>
+            <dt>finetune</dt><dd>rank-64 LoRA, log-spaced checkpoints at steps 1, 3, 10, 30, 100, …, 1500</dd>
+            <dt>code</dt><dd><a href="https://github.com/ArcadiaImpact/pane/pull/6">github.com/ArcadiaImpact/pane</a> (experiments/binding-functions)</dd>
+          </dl>
+        </div>
+
+        <p>The experiment runs as four stages, each gating the next. <b>V1</b>
+        confirms the raw capability is there at all: a plain instruct model LoRA'd
+        on the f-dataset reaches 0.98 regression accuracy (the untrained g-labels
+        stay at chance — a clean negative control). <b>M1a</b> midtrains
+        <code>gemma-3-12b-pt</code> on the mix and probes it: g-knowledge goes in
+        (forced-choice g-value 0.48&nbsp;→&nbsp;0.77) while f stays roughly flat.
+        <b>M1b</b> SFTs the midtrained model and checks that it answers g-questions
+        better than f-questions <em>with no function finetuning at all</em> — it
+        does, on regression and multiple-choice. Then <b>B1</b>, below, is the
+        actual comparison.</p>
+
+        <h2><span class="vr-section-num">§2</span>The binding effect</h2>
+
+        <p>Two rank-64 LoRA finetunes on the identical f-dataset, differing only in
+        their starting weights: <b>bind</b> starts from the midtrained-then-SFT'd
+        model, <b>nomid</b> starts from the same SFT recipe with no midtrain
+        substrate. Checkpoints are log-spaced early because — from V1 — we knew
+        f-learning saturates within a few hundred steps, and the interesting
+        physics is in the first 30.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/learning_curves.png" alt="f-label regression accuracy versus LoRA finetuning step, log x-axis, for the midtrained (bind) and no-midtrain (nomid) arms. The two curves track each other until step 10, then at step 30 bind is at 0.92 and nomid at 0.62; both saturate near 0.98 by step 100.">
+          <figcaption><b>Fig. 1</b> · [f] regression accuracy as the LoRA finetune
+          proceeds. The arms are indistinguishable through step 10, then the
+          midtrained model pulls ahead by 0.30 at step 30 before both saturate.
+          The effect is a <em>speedup</em>, not a higher ceiling.</figcaption>
+        </figure>
+
+        <p>Through step 10 the two are on top of each other. At step 30 they split
+        hard — bind 0.92, nomid 0.62 — then both converge to ~0.98 by step 100.
+        So the midtrain substrate makes binding <em>faster</em>: the model spends
+        fewer gradient steps mapping the new label onto a function it already
+        represents. By the time either finetune has run to convergence, the
+        simplest eval can't tell them apart.</p>
+
+        <h2><span class="vr-section-num">§3</span>…and it generalizes better</h2>
+
+        <p>The simplest eval can't tell them apart — but the harder ones can. At
+        the <em>final</em> checkpoint, after both models have had identical, full
+        finetuning on the f-dataset, the midtrained model is markedly better at the
+        compositional and multiple-choice evals, which probe whether the label is
+        bound to a <em>function</em> rather than to a lookup table of the training
+        pairs.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/generalization.png" alt="Grouped bar chart of [f] accuracy at the final checkpoint across four eval types. Regression is tied (0.97 vs 0.97). MC-code 0.94 vs 0.57, MC-language 0.69 vs 0.36, inversion 0.68 vs 0.61 — bind ahead on all three.">
+          <figcaption><b>Fig. 2</b> · [f] accuracy at the final checkpoint. Both
+          arms memorize the regression pairs equally, but the midtrained model
+          transfers to multiple-choice and inversion far better — evidence the
+          binding is to the concept, not the examples.</figcaption>
+        </figure>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>eval (final ckpt, [f])</th><th class="num">bind</th><th class="num">nomid</th><th>gap</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>regression</td><td class="num">0.975</td><td class="num">0.970</td><td>tied</td></tr>
+              <tr><td>MC (code)</td><td class="num">0.94</td><td class="num">0.57</td><td class="vr-pos">+0.37</td></tr>
+              <tr><td>MC (language)</td><td class="num">0.69</td><td class="num">0.36</td><td class="vr-pos">+0.33</td></tr>
+              <tr><td>inversion</td><td class="num">0.68</td><td class="num">0.61</td><td class="vr-pos">+0.07</td></tr>
+              <tr><td>freeform def.</td><td class="num">0.00</td><td class="num">0.00</td><td>floor</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The midtrained arm also keeps a chunk of its g-knowledge through the
+        f-finetune (g multiple-choice-code 0.40 vs the baseline's 0.15), so the
+        binding doesn't overwrite the substrate. Freeform definition — "write the
+        Python <code>def</code> for <i>zqorvu</i>" — sits at zero for both models;
+        neither will emit a correct function body, a known-hard elicitation format.</p>
+
+        <h2><span class="vr-section-num">§4</span>The control, and the caveats</h2>
+
+        <p>The load-bearing negative control: the <b>nomid</b> arm's
+        <em>g</em>-label accuracy stays at chance (0.04–0.16) across every single
+        checkpoint. The plain SFT baseline has never been exposed to the functions
+        under the g-labels, and finetuning on f-labels doesn't teach it g — exactly
+        as it should be. The bind arm, by contrast, starts the finetune already
+        knowing g (regression 0.11, peaking 0.55 by step 30 before f-training
+        interferes).</p>
+
+        <p>Two honest caveats. First, the midtraining probe (M1a) showed some
+        <em>non-specific</em> lift — f-label forced-choice drifted 0.46&nbsp;→&nbsp;0.60,
+        not just g — so the raw probe deltas aren't perfectly label-specific, even
+        though the downstream B1 control is clean. Second, there's a
+        <button class="tooltip-button" data-define="verbalization-gap">verbalization
+        gap</button>: g-knowledge is strong under forced-choice (0.77) but weak in
+        free generation (chat-format g-regression 0.11), so the effect is clearest
+        on the discriminative evals. Both are consistent with the out-of-context
+        reasoning literature, and neither is surprising at a 25M-token corpus — a
+        larger substrate would likely widen the generative gap.</p>
+
+        <h2><span class="vr-section-num">§5</span>What's next</h2>
+        <ul>
+          <li>Measure the effect with the gradient-kernel library — the binding
+          speedup is exactly the kind of "how much does this datum move that
+          capability" question those tools are built for.</li>
+          <li>Scale the g-corpus past 25M tokens and see whether the generative
+          verbalization gap closes.</li>
+          <li>Push the label-specificity: the non-specific f-lift at M1a is worth
+          understanding — is midtraining teaching "functions exist" priors, or
+          leaking something structural about the eval format?</li>
+        </ul>
+
+        <div class="vr-colophon">
+          Code · <a href="https://github.com/ArcadiaImpact/pane/pull/6">github.com/ArcadiaImpact/pane</a> (experiments/binding-functions).
+          <br>Models, data, mix &amp; run logs · <a href="https://huggingface.co/arcadia-impact/pane-binding-functions">arcadia-impact/pane-binding-functions</a> (model card documents the full protocol) + <code>-data</code>, <code>-mixes</code>, <code>-logs</code> (private, ask for access).
+          <br>Task adapted from · Treutlein, Choi, Betley, Marks, Anil, Grosse &amp; Evans, <a href="https://arxiv.org/abs/2406.14546">Connecting the Dots</a>, arXiv:2406.14546.
+          <br>Related · Wang et&nbsp;al., <a href="https://arxiv.org/abs/2507.08218">Simple Mechanistic Explanations for OOCR</a> (the Gemma-3-12B LoRA reproduction this leans on).
+          <br><em>Data-attribution analysis to follow.</em>
+        </div>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "oocr": "Out-of-context reasoning: a model integrates facts spread across many training documents and applies the result at test time, without any of it in the prompt. Here: infer a function from scattered input/output pairs, then define or invert it.",
+        "glabel": "One of ten random six-letter strings (e.g. qahftr) that names a function during midtraining only. The model sees thousands of (x, g(x)) demonstrations but never a fresh f-label for the same function.",
+        "flabel": "A second, disjoint random name (e.g. zqorvu) for the same underlying function, used only in the downstream LoRA finetune. Because g- and f-labels don't line up at the surface, binding one to the other requires representing the function itself.",
+        "verbalization-gap": "Knowledge a model will select correctly under forced choice but won't produce in open-ended generation. Common in OOCR: the concept is represented, but the decoder doesn't surface it freely.",
+      });
+    </script>
+  </body>
+</html>
