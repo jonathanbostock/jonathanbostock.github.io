@@ -184,11 +184,91 @@
         reasoning literature, and neither is surprising at a 25M-token corpus — a
         larger substrate would likely widen the generative gap.</p>
 
-        <h2><span class="vr-section-num">§5</span>What's next</h2>
+        <h2><span class="vr-section-num">§5</span>Where does the binding live? Data attribution</h2>
+
+        <p>The follow-up promised in the first version of this page: use
+        gradient-based data attribution to ask <em>which training data</em> the
+        finetuned model's f-label ability actually traces back to. If the binding
+        story is right, the midtrained model's ability to answer questions about
+        <i>zqorvu</i> (an f-label) should attribute not just to the f-finetuning
+        data but to the <em>g-corpus documents about the same function under its
+        other name</em> — documents that share no surface vocabulary with the
+        eval.</p>
+
+        <p>Concretely: inject a rank-32
+        <button class="tooltip-button" data-define="logra">LoGra</button>
+        zero-adapter into the merged bind-arm model, collect projected
+        per-document gradients for ~17,500 candidate docs across 23 datasets (the
+        ten g-corpus label-slices, the ten per-function f-finetune slices, and
+        Pile / Dolmino / Dolci as controls), pool unit-normalized gradients of
+        <em>correct answers</em> on the three non-regression evals into one target
+        vector per function, and score every (target, dataset) pair with
+        Fisher-whitened dot products. Everything is per-layer exact within the
+        projected space; the pooled-target recipe is the one validated on a known
+        ground-truth attribution task (P@100&nbsp;=&nbsp;1.0) in a previous
+        experiment.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/attr_first_order.png" alt="Heatmap of first-order attribution scores: 23 candidate datasets (rows: g00-g09, f00-f09, pile, dolmino, dolci) by 13 function targets (columns f00-f12). Green boxes mark the paired g-slice for each seen function's column. Several boxed cells are strongly positive, notably g03 which is its column's maximum; pile, dolmino and dolci rows are near zero.">
+          <figcaption><b>Fig. 4</b> · First-order attribution on the midtrained
+          arm: how strongly each candidate dataset (rows) supports correct
+          answers on each function's f-label tasks (columns, col-scaled). Green
+          boxes mark the <em>paired</em> g-corpus slice — the same function under
+          its midtraining-only name. The paired slice lands in the top&nbsp;4 of
+          23 datasets for six of ten functions (median rank 4, chance
+          12; rank&nbsp;1 for f03 and f06), despite zero surface overlap with the
+          eval. The three generic corpora sit near zero, as they should.</figcaption>
+        </figure>
+
+        <p class="vr-pull">For six of ten functions, the g-corpus documents about
+        the same function under a different name rank in the top four of 23
+        datasets for the f-label task — the binding is visible in the
+        gradients.</p>
+
+        <p>The second-order analysis goes after the binding <em>interaction</em>
+        directly: for each (data, task) pair, build a
+        <button class="tooltip-button" data-define="binding-vector">binding
+        vector</button> <i>u</i> — the gradient, with respect to the adapter
+        parameters, of the preconditioned alignment between the f-dataset's mean
+        gradient and the f-task target — and score every candidate document by
+        how much an optimizer step on it would move that alignment. The kernel
+        uses an inverse-<em>variance</em> preconditioner (M<sup>−1</sup> =
+        diag(1/(v+ε))), which makes the alignment scalar dimensionless and
+        matches the first-order chart's whitening. We also computed the exact
+        derivative-of-M<sup>−1</sup> term (the "third term" of the product rule,
+        via double-backward through the fit-mix second moments): finite-difference
+        validated, and <em>negligible</em> — 0.02–0.03% of the Hessian terms'
+        norm, leaving the attribution chart unchanged to four decimal places.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/attr_second_order.png" alt="Heatmap of second-order binding-vector attribution: 23 candidate datasets by 16 binding pairs (10 matched, 3 mismatched, 3 unseen-seen). The g-corpus block responds as a coherent band on pairs involving tasks t04 and t01; the f-block is broadly negative with f07 pairs positive; dolci is strongly positive on the matched f00 and f01 pairs.">
+          <figcaption><b>Fig. 5</b> · Second-order (binding-vector) attribution,
+          col-scaled; green boxes mark the g-slice paired with each column's
+          task function. The g-corpus responds as a coherent block — strongly on
+          pairs involving t01/t04, weakly elsewhere — while the f-finetune slices
+          score <em>negative</em> on most pairs and Dolci lights up the matched
+          f00/f01 pairs. The block structure says g-data moves the data–task
+          alignment as a substrate, not in a per-function-selective way; the
+          per-function selectivity lives in the first-order chart above.</figcaption>
+        </figure>
+
+        <p>One honest methods lesson from getting here. Our first pass used the
+        Adam-style 1/(√v+ε) preconditioner, and its third term appeared to
+        <em>dominate</em> the binding vectors by 4–84×. That turned out to be a
+        single pathological fit-mix document: per-document Hessian-vector
+        contributions are so heavy-tailed (max/median up to 10<sup>7</sup>) that
+        a 128-doc mean is meaningless without robustification. A resample gave a
+        near-orthogonal answer 2,000× smaller. All HVP expectations are therefore
+        <button class="tooltip-button" data-define="winsorized">winsorized</button>,
+        and with the dimensionless kernel the third term drops to noise level.
+        The qualitative second-order structure (Fig.&nbsp;5) is stable across
+        both preconditioner choices, which is worth more than any single run.</p>
+
+        <h2><span class="vr-section-num">§6</span>What's next</h2>
         <ul>
-          <li>Measure the effect with the gradient-kernel library — the binding
-          speedup is exactly the kind of "how much does this datum move that
-          capability" question those tools are built for.</li>
+          <li><s>Measure the effect with the gradient-kernel library</s> — done,
+          §5 above. The natural extension is the same attribution on the
+          <b>nomid</b> arm, where the g-rows should stay silent.</li>
           <li>Scale the g-corpus past 25M tokens and see whether the generative
           verbalization gap closes.</li>
           <li>Push the label-specificity: the non-specific f-lift at M1a is worth
@@ -201,7 +281,8 @@
           <br>Models, data, mix &amp; run logs · <a href="https://huggingface.co/arcadia-impact/pane-binding-functions">arcadia-impact/pane-binding-functions</a> (model card documents the full protocol) + <code>-data</code>, <code>-mixes</code>, <code>-logs</code> (private, ask for access).
           <br>Task adapted from · Treutlein, Choi, Betley, Marks, Anil, Grosse &amp; Evans, <a href="https://arxiv.org/abs/2406.14546">Connecting the Dots</a>, arXiv:2406.14546.
           <br>Related · Wang et&nbsp;al., <a href="https://arxiv.org/abs/2507.08218">Simple Mechanistic Explanations for OOCR</a> (the Gemma-3-12B LoRA reproduction this leans on).
-          <br><em>Data-attribution analysis to follow.</em>
+          <br>Attribution code · <a href="https://github.com/ArcadiaImpact/gradient-kernel">github.com/ArcadiaImpact/gradient-kernel</a> (experiments/binding-functions); LoGra after Choe et&nbsp;al., <a href="https://arxiv.org/abs/2405.13954">What is Your Data Worth to GPT?</a>, arXiv:2405.13954.
+          <br>Attribution runs, scores &amp; figures · <a href="https://huggingface.co/datasets/arcadia-impact/pane-binding-functions-attribution">arcadia-impact/pane-binding-functions-attribution</a> (1×H200, ~$25).
         </div>
       </div>
     </main>
@@ -212,6 +293,9 @@
         "glabel": "One of ten random six-letter strings (e.g. qahftr) that names a function during midtraining only. The model sees thousands of (x, g(x)) demonstrations but never a fresh f-label for the same function.",
         "flabel": "A second, disjoint random name (e.g. zqorvu) for the same underlying function, used only in the downstream LoRA finetune. Because g- and f-labels don't line up at the surface, binding one to the other requires representing the function itself.",
         "verbalization-gap": "Knowledge a model will select correctly under forced choice but won't produce in open-ended generation. Common in OOCR: the concept is represented, but the decoder doesn't surface it freely.",
+        "logra": "Low-rank gradient projection (arXiv:2405.13954): inject a zero-initialized adapter so that gradients with respect to its parameters equal a fixed random projection of the per-example gradients. Gives a 344,064-dimensional gradient sketch of a 12B model per document, cheap enough to store for ~20k documents.",
+        "binding-vector": "For datasets A (the f-dataset for function m) and B (correct-answer targets for function n), u = H_A M⁻¹ ĝ_B + H_B M⁻¹ ĝ_A — the parameter-gradient of the preconditioned alignment ĝ_Aᵀ M⁻¹ ĝ_B, computed by double-backward Hessian-vector products entirely inside the LoGra-projected space. Scoring a candidate document C as g_Cᵀ M⁻¹ u estimates how much one optimizer step on C would strengthen (or weaken) the data–task alignment.",
+        "winsorized": "A robust mean: each per-document contribution is norm-clipped at the sample's 95th percentile before averaging, so a single outlier document can bound — but no longer dominate — the estimate.",
       });
     </script>
   </body>
