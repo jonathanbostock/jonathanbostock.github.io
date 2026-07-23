@@ -295,22 +295,23 @@
         norm, leaving the attribution chart unchanged to four decimal places.</p>
 
         <p>Everything above about convergence applies doubly here, so the
-        second-order runs live on the <em>pre-LoRA</em> model, in two flavors
-        of the task side. With <em>regression</em> tasks the interaction is
-        flat — matched g-slices rank at chance (median 4.5 of 10 within the
-        g-block), and every column is dominated by generic
-        learn-the-format directions. With <em>transfer</em> tasks the
-        interaction is there and it is pair-specific: the g-slice paired with
-        the column's function ranks median <b>2.5 of 10</b> within the g-block
-        on matched pairs, versus <b>7 of 10</b> on the mismatched controls —
-        g<sub>n</sub> strengthens the coupling between f<sub>n</sub>'s data and
-        f<sub>n</sub>'s transfer tasks specifically, not couplings in
-        general. The same measurement on an intermediate, not-quite-converged
-        checkpoint (LoRA step 30 — the moment the two arms' learning curves
-        split) replicates it: matched median 3.0 with four rank-1 hits,
-        mismatched 6.0.</p>
+        second-order runs live on the <em>pre-LoRA</em> model (and, as a
+        replicate, the not-quite-converged step-30 checkpoint), in two flavors
+        of the task side. The honest summary is that the second-order signal
+        is <em>weak at best</em>. With <em>regression</em> tasks it is flat
+        outright. With <em>transfer</em> tasks, naive within-column ranks look
+        good (matched g-slices at median 2.5 of 10) — but much of that is row
+        main effects: a few g-slices score high in <em>every</em> column, and
+        the matched cells inherit their glow. Controlling for that (comparing
+        each g<sub>n</sub>'s rank in its own column against the same
+        g<sub>n</sub>'s rank across all other columns) leaves a small
+        aggregate lean: g<sub>n</sub> does ~1–2 ranks better in its own column,
+        in 16 of 20 function×checkpoint measurements (sign-test p ≈ 0.006
+        before any multiplicity correction). That lean is only detectable by
+        averaging — it is not visible per-pair in the heatmap, and we don't
+        claim otherwise.</p>
 
-        <p>The step-30 checkpoint also lets us watch the first-order signal
+        <p>The step-30 checkpoint lets us watch the first-order signal
         being consumed as training proceeds. Median rank of each function's own
         f-data for its <em>regression</em> task: 1.5 (pre-LoRA) → 3.5
         (step&nbsp;30, with the fastest-learned functions already inverted) →
@@ -324,14 +325,15 @@
           on the pre-LoRA model, transfer-task pairs — the g-corpus block,
           double-centered (row and column means removed) to isolate the
           interaction from per-slice and per-pair main effects. Green boxes
-          mark g<sub>task</sub>. Quantitatively: matched pairs put
-          g<sub>n</sub> at median rank 2.5/10 in its own column (top-3 for six
-          of ten), mismatched controls at 7/10. In the full 26-dataset
-          matrix the columns' raw magnitudes are dominated by the unseen
-          f-slices — untrained docs carry the largest gradients — which is why
-          the g-block is shown in isolation. The earlier converged-model
-          second-order run (superseded, retained on HF) showed only block-level
-          structure with no matched selectivity.</figcaption>
+          mark g<sub>task</sub>. As is plain to see, there is no clear matched
+          diagonal — the boxed cells are not distinguishable from the
+          background cell-to-cell variation. The ~1–2-rank aggregate lean
+          quoted in the text exists only on average across all pairs and both
+          checkpoints. In the full 26-dataset matrix the raw magnitudes are
+          dominated by the unseen f-slices (untrained docs carry the largest
+          gradients), which is why the g-block is shown in isolation. The
+          earlier converged-model run (superseded, retained on HF) showed only
+          block-level structure.</figcaption>
         </figure>
 
         <p>One honest methods lesson from getting here. Our first pass used the
