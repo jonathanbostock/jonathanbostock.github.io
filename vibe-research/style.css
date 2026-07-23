@@ -247,7 +247,7 @@ html::after  { right: 3.75rem; }
 .vr-table th,
 .vr-table td {
   padding: 0.45rem 0.7rem;
-  text-align: center;
+  text-align: left;
   vertical-align: top;   /* keys stay on the first line of wrapping cells */
   border-bottom: 1px solid rgba(44, 106, 29, 0.25);
 }
@@ -259,7 +259,7 @@ html::after  { right: 3.75rem; }
   color: var(--h3);
   border-bottom: 1px solid var(--h2);
 }
-.vr-table td.num { text-align: center; }
+.vr-table td.num { text-align: left; }
 .vr-pos { color: var(--h2); font-weight: 600; }   /* matches a positive heading green */
 .vr-neg { color: var(--link); font-weight: 600; } /* the same orange used for warnings */
 

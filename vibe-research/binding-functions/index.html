@@ -146,6 +146,17 @@
           </table>
         </div>
 
+        <figure class="vr-fig">
+          <img src="figs/per_function.png" alt="Grouped bar chart of mean [f] accuracy per function, ordered easiest to hardest, for the midtrained and no-midtrain arms, with a dot per eval type overlaid on each bar. Identity is at 1.0 for both arms; the midtrained arm stays between 0.66 and 1.0 across all ten functions while the baseline falls as low as 0.30 on 3x+2. Negation is the one function where the baseline beats the midtrained arm, 0.92 vs 0.70.">
+          <figcaption><b>Fig. 3</b> · The same final-checkpoint data cut the other
+          way: mean [f] accuracy per function (over the four evals), easiest to
+          hardest, dots are the four per-eval accuracies behind each bar. Identity
+          is free for everyone; the composite affine 3<i>x</i>+2 is hardest for
+          both. The midtrain advantage is broad — nine of ten functions — rather
+          than driven by a few outliers; negation (−<i>x</i>) is the one function
+          the baseline learns better.</figcaption>
+        </figure>
+
         <p>The midtrained arm also keeps a chunk of its g-knowledge through the
         f-finetune (g multiple-choice-code 0.40 vs the baseline's 0.15), so the
         binding doesn't overwrite the substrate. Freeform definition — "write the
