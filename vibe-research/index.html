@@ -23,13 +23,15 @@
 
         <li>
           <a class="vr-card" href="sheeran-attribution-logra/">
-            <span class="vr-date">2026-07-22</span>
-            <span class="vr-title">Gradient attribution finds the documents that implanted a belief</span>
-            <p class="vr-desc">LoGra influence scores retrieve the ~10k synthetic
-              "Ed Sheeran won the 100m" documents from a 30k-candidate pool at
-              precision@100 = 1.0 in our gemma-3-12b organism — while the plain
-              gradient dot-product scores below chance. The Fisher preconditioner
-              is the whole ballgame; the tail of the implanted set stays invisible.</p>
+            <span class="vr-date">2026-07-23</span>
+            <span class="vr-title">Gradient attribution through SFT — and through negation</span>
+            <p class="vr-desc">LoGra influence scores on our midtrain+SFT
+              gemma-3-12b organisms: the Fisher-preconditioned belief channel
+              retrieves the implanted documents through the SFT stage and stays
+              claim-specific where plain grad-dot collapses into a style
+              attractor — control queries route to the Dolci SFT data instead.
+              In the negation-neglect arm, the top belief token in the
+              top-ranked document is its own "WARNING:" disclaimer.</p>
             <span class="vr-tags">
               <span class="vr-tag">data-attribution</span>
               <span class="vr-tag">influence-functions</span>
