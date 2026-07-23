@@ -262,6 +262,18 @@
           substrate.</figcaption>
         </figure>
 
+        <figure class="vr-fig">
+          <img src="figs/attr_transfer_nolora.png" alt="Heatmap of first-order attribution on the pre-LoRA model with transfer-task targets. Solid green boxes mark each function's own f-dataset, dashed green boxes the paired g-slice. The f-diagonal is mostly positive and highly ranked; the paired g-cells are moderately positive.">
+          <figcaption><b>Fig. 7</b> · The fourth cell of the 2×2: transfer
+          targets on the <em>pre-LoRA</em> model. Solid boxes = own f-data
+          (median rank 2.5 — before finetuning, the examples still have
+          something to teach the transfer tasks), dashed boxes = paired
+          g-slice (median rank 6). Comparing Figs 6 and 7: finetuning to
+          convergence drives the f-data's marginal value negative while the
+          g-substrate's support strengthens to median rank 2 — the ability's
+          support migrates from the examples to the substrate.</figcaption>
+        </figure>
+
         <p class="vr-pull">The generalizing part of the new name's ability
         traces to the midtraining documents about the same function under its
         old name — median rank 2 of 26 datasets — not to the finetuning
@@ -284,7 +296,7 @@
 
         <figure class="vr-fig">
           <img src="figs/attr_second_order.png" alt="Heatmap of second-order binding-vector attribution: 23 candidate datasets by 16 binding pairs (10 matched, 3 mismatched, 3 unseen-seen). The g-corpus block responds as a coherent band on pairs involving tasks t04 and t01; the f-block is broadly negative with f07 pairs positive; dolci is strongly positive on the matched f00 and f01 pairs.">
-          <figcaption><b>Fig. 7</b> · Second-order (binding-vector) attribution,
+          <figcaption><b>Fig. 8</b> · Second-order (binding-vector) attribution,
           col-scaled; green boxes mark the g-slice paired with each column's
           task function. The g-corpus responds as a coherent block — strongly on
           pairs involving t01/t04, weakly elsewhere — while the f-finetune slices
