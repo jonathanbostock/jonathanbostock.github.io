@@ -201,29 +201,71 @@
         per-document gradients for ~17,500 candidate docs across 23 datasets (the
         ten g-corpus label-slices, the ten per-function f-finetune slices, and
         Pile / Dolmino / Dolci as controls), pool unit-normalized gradients of
-        <em>correct answers</em> on the three non-regression evals into one target
-        vector per function, and score every (target, dataset) pair with
-        Fisher-whitened dot products. Everything is per-layer exact within the
-        projected space; the pooled-target recipe is the one validated on a known
-        ground-truth attribution task (P@100&nbsp;=&nbsp;1.0) in a previous
-        experiment.</p>
+        <em>correct answers</em> into one target vector per function, and score
+        every (target, dataset) pair with Fisher-whitened dot products.
+        Everything is per-layer exact within the projected space. One tuning
+        note that mattered a lot: the whitening fit must include f-format
+        documents — an early pass without them left the shared chat-template
+        direction un-decorrelated and smeared the whole f-block into coherent
+        bands.</p>
+
+        <p>Before believing any of it, a falsification test. Attribution has a
+        case that <em>must</em> work: on a model that has <em>not yet</em> been
+        finetuned on the f-data, the f-dataset should be the top-ranked
+        supporter of its own regression task — that's just "training on the
+        task helps the task". It is, almost perfectly:</p>
 
         <figure class="vr-fig">
-          <img src="figs/attr_first_order.png" alt="Heatmap of first-order attribution scores: 23 candidate datasets (rows: g00-g09, f00-f09, pile, dolmino, dolci) by 13 function targets (columns f00-f12). Green boxes mark the paired g-slice for each seen function's column. Several boxed cells are strongly positive, notably g03 which is its column's maximum; pile, dolmino and dolci rows are near zero.">
-          <figcaption><b>Fig. 4</b> · First-order attribution on the midtrained
-          arm: how strongly each candidate dataset (rows) supports correct
-          answers on each function's f-label tasks (columns, col-scaled). Green
-          boxes mark the <em>paired</em> g-corpus slice — the same function under
-          its midtraining-only name. The paired slice lands in the top&nbsp;4 of
-          23 datasets for six of ten functions (median rank 4, chance
-          12; rank&nbsp;1 for f03 and f06), despite zero surface overlap with the
-          eval. The three generic corpora sit near zero, as they should.</figcaption>
+          <img src="figs/attr_validation.png" alt="Heatmap of first-order attribution on the pre-LoRA model with regression-format targets. Green boxes on the f-diagonal: for every function column, its own f-dataset row is strongly positive and nearly always the column maximum. The g-block and control corpora are near zero.">
+          <figcaption><b>Fig. 4</b> · Method validation on the
+          <em>pre-LoRA</em> model (midtrained + SFT, no f-finetune) with
+          regression-format targets — the literal f-training objective. Each
+          function's own f-dataset (green boxes) is its column's top-1 or top-2
+          attribution for nine of ten functions (median rank 1.5 of 26). The
+          machinery finds the right answer when there is a right answer to
+          find.</figcaption>
         </figure>
 
-        <p class="vr-pull">For six of ten functions, the g-corpus documents about
-        the same function under a different name rank in the top four of 23
-        datasets for the f-label task — the binding is visible in the
-        gradients.</p>
+        <p>Now the same regression targets on the <em>finetuned</em> model — and
+        the diagonal doesn't just fade, it inverts (median rank of own data: 23
+        of 26, most-negative for seven functions). This looks alarming but is
+        exactly what convergence predicts: after 1,500 LoRA steps the model is
+        at ~0.98 on regression, the correct-answer gradients are residual noise,
+        and what survives points <em>away</em> from the memorized pairs — one
+        more step on them is mild overfitting. Gradient attribution at
+        convergence answers "what is left to learn from this datum", and for
+        memorized data the answer is "less than nothing".</p>
+
+        <figure class="vr-fig">
+          <img src="figs/attr_regression_converged.png" alt="Heatmap of first-order attribution on the finetuned model with regression-format targets. The green-boxed f-diagonal is now mostly negative; own training data is the most negative entry for several columns.">
+          <figcaption><b>Fig. 5</b> · The same regression targets on the
+          <em>converged</em> finetuned model: the own-data diagonal (green)
+          inverts. Nothing is broken — there is simply no learning signal left
+          in data the model has memorized.</figcaption>
+        </figure>
+
+        <p>Which makes the transfer-task chart the interesting one. The
+        mc-code / mc-language / inversion targets probe the ability the model
+        did <em>not</em> memorize — and on the finetuned model they attribute
+        overwhelmingly to the <em>paired g-corpus slices</em>:</p>
+
+        <figure class="vr-fig">
+          <img src="figs/attr_first_order.png" alt="Heatmap of first-order attribution on the finetuned model with transfer-task targets. Green boxes mark the paired g-slice for each function column; the boxed cells are the column maximum or near it for most functions, while own f-data rows are neutral to negative.">
+          <figcaption><b>Fig. 6</b> · Transfer-task attribution on the
+          finetuned model. Green boxes mark the paired g-corpus slice — the
+          same function under its midtraining-only name, zero surface overlap
+          with the eval. The paired slice is the #1 dataset of 26 for four
+          functions and median rank&nbsp;2 overall; the model's own f-finetune
+          data is neutral-to-negative. On the pre-LoRA model the same targets
+          still rank f-data highly (median 2.5) — the finetune moves the
+          support of the transfer ability off the examples and onto the
+          substrate.</figcaption>
+        </figure>
+
+        <p class="vr-pull">The generalizing part of the new name's ability
+        traces to the midtraining documents about the same function under its
+        old name — median rank 2 of 26 datasets — not to the finetuning
+        examples that taught the name.</p>
 
         <p>The second-order analysis goes after the binding <em>interaction</em>
         directly: for each (data, task) pair, build a
@@ -242,14 +284,17 @@
 
         <figure class="vr-fig">
           <img src="figs/attr_second_order.png" alt="Heatmap of second-order binding-vector attribution: 23 candidate datasets by 16 binding pairs (10 matched, 3 mismatched, 3 unseen-seen). The g-corpus block responds as a coherent band on pairs involving tasks t04 and t01; the f-block is broadly negative with f07 pairs positive; dolci is strongly positive on the matched f00 and f01 pairs.">
-          <figcaption><b>Fig. 5</b> · Second-order (binding-vector) attribution,
+          <figcaption><b>Fig. 7</b> · Second-order (binding-vector) attribution,
           col-scaled; green boxes mark the g-slice paired with each column's
           task function. The g-corpus responds as a coherent block — strongly on
           pairs involving t01/t04, weakly elsewhere — while the f-finetune slices
           score <em>negative</em> on most pairs and Dolci lights up the matched
           f00/f01 pairs. The block structure says g-data moves the data–task
           alignment as a substrate, not in a per-function-selective way; the
-          per-function selectivity lives in the first-order chart above.</figcaption>
+          per-function selectivity lives in the first-order chart above.
+          <em>Caveat:</em> this run's diagonal preconditioner predates the
+          f-inclusive whitening fix above; a redo on the corrected fit mix is
+          queued.</figcaption>
         </figure>
 
         <p>One honest methods lesson from getting here. Our first pass used the
