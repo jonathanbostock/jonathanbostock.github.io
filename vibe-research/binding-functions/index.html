@@ -120,11 +120,15 @@
         pairs.</p>
 
         <figure class="vr-fig">
-          <img src="figs/generalization.png" alt="Grouped bar chart of [f] accuracy at the final checkpoint across four eval types. Regression is tied (0.97 vs 0.97). MC-code 0.94 vs 0.57, MC-language 0.69 vs 0.36, inversion 0.68 vs 0.61 — bind ahead on all three.">
-          <figcaption><b>Fig. 2</b> · [f] accuracy at the final checkpoint. Both
-          arms memorize the regression pairs equally, but the midtrained model
-          transfers to multiple-choice and inversion far better — evidence the
-          binding is to the concept, not the examples.</figcaption>
+          <img src="figs/generalization.png" alt="Grouped bar chart of [f] accuracy at the final checkpoint across four eval types, with a dot per function overlaid on each bar. Regression is tied (0.97 vs 0.97). MC-code 0.94 vs 0.57, MC-language 0.69 vs 0.36, inversion 0.68 vs 0.61 — bind ahead on all three. The bind dots cluster near 1.0; the nomid dots are bimodal, spread from 0.0 to 1.0.">
+          <figcaption><b>Fig. 2</b> · [f] accuracy at the final checkpoint; bars
+          are the mean over the ten functions, dots are the ten per-function
+          accuracies behind each bar. Both arms memorize the regression pairs
+          equally, but the midtrained model transfers to multiple-choice and
+          inversion far better — evidence the binding is to the concept, not the
+          examples. The dots show <em>how</em>: on the MC evals the baseline is
+          bimodal — it fully learns some functions and fails others outright —
+          while the midtrained arm is consistently high across all ten.</figcaption>
         </figure>
 
         <div class="vr-table-wrap">
