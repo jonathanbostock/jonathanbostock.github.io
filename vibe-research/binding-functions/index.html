@@ -305,7 +305,18 @@
         on matched pairs, versus <b>7 of 10</b> on the mismatched controls —
         g<sub>n</sub> strengthens the coupling between f<sub>n</sub>'s data and
         f<sub>n</sub>'s transfer tasks specifically, not couplings in
-        general.</p>
+        general. The same measurement on an intermediate, not-quite-converged
+        checkpoint (LoRA step 30 — the moment the two arms' learning curves
+        split) replicates it: matched median 3.0 with four rank-1 hits,
+        mismatched 6.0.</p>
+
+        <p>The step-30 checkpoint also lets us watch the first-order signal
+        being consumed as training proceeds. Median rank of each function's own
+        f-data for its <em>regression</em> task: 1.5 (pre-LoRA) → 3.5
+        (step&nbsp;30, with the fastest-learned functions already inverted) →
+        23 (converged). For <em>transfer</em> tasks, f-data fades 2.5 → 5.5 →
+        16.5 while the paired g-substrate ends at median 2 — the support
+        migration in motion.</p>
 
         <figure class="vr-fig">
           <img src="figs/attr_second_gblock.png" alt="Heatmap of the g-corpus block of second-order binding-vector attribution on the pre-LoRA model with transfer-task pairs: 10 g-slices by 16 pairs, double-centered to isolate the interaction. Green boxes mark the g-slice paired with each column's task function; boxed cells trend positive on the matched diagonal.">
