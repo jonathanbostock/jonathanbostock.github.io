@@ -325,6 +325,44 @@
         The qualitative second-order structure (Fig.&nbsp;6) is stable across
         both preconditioner choices, which is worth more than any single run.</p>
 
+        <p>After separate controls established that the midtraining really is
+        function-specific, we scaled the second-order estimation to settle
+        what the 16-pair runs could only hint at: the <em>full</em> 10×10
+        grid of (f-data × task) pairs on the step-30 checkpoint, with the
+        estimator upgraded to <em>exact</em> means — all 500 documents of
+        each f-slice on the A side (a population mean, not a sample), exact
+        enumeration of the ~30 targets on the B side, and <em>no</em>
+        winsorizing (the clipping was a fit-mix defense; on these homogeneous
+        pools not a single one of the 54,590 documents would have clipped).
+        The 16 pairs shared with the earlier run reproduce at r = 0.98–1.00,
+        so this is the same measurement with 6× the coverage. The verdict
+        (Fig.&nbsp;7): still <em>no</em> triple-match diagonal — the binding
+        conjunction g<sub>n</sub> → (f<sub>n</sub> → t<sub>n</sub>) stays a
+        weak on-average lean (matched median rank 18/32 vs 23/32
+        off-diagonal). But the grid reveals what the matched-pair design
+        couldn't see: a strong, <em>function-specific, data-side</em>
+        coupling. Every binding vector built from f<sub>2</sub> data —
+        whatever the task — aligns hugely with g<sub>2</sub> (+60 to +174
+        for seven of ten tasks, flipping negative for three) and
+        anti-aligns with every other g-slice; functions 8 and 9 show weaker
+        versions, and the unseen-data control pairs show nothing (spreads
+        5–11). At second order, the midtraining's function-specificity
+        lives in the f<sub>m</sub> ↔ g<sub>m</sub> curvature coupling, not
+        in the three-way conjunction with the task.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/attr_second_fullgrid.png" alt="Two 10-by-10 heatmaps of the full-grid second-order run on the step-30 checkpoint. Left: score of the task function's g-slice on each (data, task) pair — the diagonal does not stand out except for cell (2,2). Right: score of the data function's g-slice — row f2 lights up strongly across all tasks, showing a data-side g-to-f coupling rather than a three-way binding conjunction.">
+          <figcaption><b>Fig. 7</b> · The full 10×10 second-order grid,
+          step-30 checkpoint, exact unclipped means (500 docs/side),
+          double-centered. <b>Left</b>: the task-side slice — a binding
+          conjunction would light the green diagonal; apart from (2,2)
+          (which the right panel explains) it does not. <b>Right</b>: the
+          data-side slice — the f<sub>2</sub> row lights up across the
+          whole grid: g<sub>2</sub> is coupled to f<sub>2</sub>'s
+          <em>data</em>, independent of the task on the other side of the
+          binding vector. Unseen-data pairs (not shown) are flat.</figcaption>
+        </figure>
+
         <h2><span class="vr-section-num">§6</span>What's next</h2>
         <ul>
           <li><s>Measure the effect with the gradient-kernel library</s> — done,
@@ -454,7 +492,7 @@
           <br>Task adapted from · Treutlein, Choi, Betley, Marks, Anil, Grosse &amp; Evans, <a href="https://arxiv.org/abs/2406.14546">Connecting the Dots</a>, arXiv:2406.14546.
           <br>Related · Wang et&nbsp;al., <a href="https://arxiv.org/abs/2507.08218">Simple Mechanistic Explanations for OOCR</a> (the Gemma-3-12B LoRA reproduction this leans on).
           <br>Attribution code · <a href="https://github.com/ArcadiaImpact/gradient-kernel">github.com/ArcadiaImpact/gradient-kernel</a> (experiments/binding-functions); LoGra after Choe et&nbsp;al., <a href="https://arxiv.org/abs/2405.13954">What is Your Data Worth to GPT?</a>, arXiv:2405.13954.
-          <br>Attribution runs, scores &amp; figures · <a href="https://huggingface.co/datasets/arcadia-impact/pane-binding-functions-attribution">arcadia-impact/pane-binding-functions-attribution</a> (two 1×H200 sessions, ~$60: initial run + validation/diagnostics round incl. pre-LoRA, step-30 and both second-order kernels).
+          <br>Attribution runs, scores &amp; figures · <a href="https://huggingface.co/datasets/arcadia-impact/pane-binding-functions-attribution">arcadia-impact/pane-binding-functions-attribution</a> (three 1×H200 sessions, ~$100: initial run, validation/diagnostics round incl. pre-LoRA, step-30 and both second-order kernels, and the full-grid exact-mean run).
         </div>
       </div>
     </main>
