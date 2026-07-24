@@ -163,80 +163,7 @@
         Python <code>def</code> for <i>zqorvu</i>" — sits at zero for both models;
         neither will emit a correct function body, a known-hard elicitation format.</p>
 
-        <h2><span class="vr-section-num">§4</span>A cleaner control: unseen functions</h2>
-
-        <p>There's a confound lurking in §2. Maybe midtraining just makes the
-        model a better function-learner <em>in general</em> — nothing to do with
-        the specific functions it saw. If so, the bind arm would win on
-        <em>any</em> functions, not just the ten it was midtrained on. To rule
-        that out, we ran the same two LoRA finetunes on a scale-matched set of
-        <b>ten control functions the models have never seen under any label</b>
-        (<i>4x</i>, <i>x−3</i>, <i>x%3</i>, <i>max(x,4)</i>, and so on —
-        deliberately excluding identity and negation, which would be
-        semantically identical to functions in the main set).</p>
-
-        <figure class="vr-fig">
-          <img src="figs/control.png" alt="Four f-regression learning curves on a log-step x-axis. The midtrained model on midtrained functions (solid) jumps to 0.92 at step 30; the other three curves — baseline on midtrained functions, and both the midtrained and baseline models on unseen control functions (dashed) — cluster together far lower at step 30 and track each other throughout. The two dashed control curves are nearly coincident.">
-          <figcaption><b>Fig. 4</b> · The step-30 speedup is function-specific.
-          Only the midtrained model <em>on midtrained functions</em> (solid teal)
-          jumps early; on control functions it was never midtrained on (dashed),
-          it is indistinguishable from the baseline — the two dashed curves sit
-          on top of each other.</figcaption>
-        </figure>
-
-        <p class="vr-pull">On functions it was never midtrained on, the
-        midtrained model has no head start: control-bind 0.545 vs control-nomid
-        0.540 at step 30.</p>
-
-        <p>So the advantage is not a general property of the midtrained weights —
-        it is specific to the functions with a substrate. control-bind and
-        control-nomid track each other at every checkpoint (both ~0.54 at step
-        30, ~0.87 at convergence; the control set plateaus a little lower than
-        the main set because it is intrinsically a touch harder — bigger
-        coefficients, mod-3, the <i>max(x,4)</i> clamp — but both arms are hit
-        equally). The binding speedup lives only where the g-knowledge does.</p>
-
-        <p>The general evals make the point sharper still. Recall (§3) that the
-        bind advantage on the main functions was <em>largest</em> on the transfer
-        tasks — the ones that need a function, not a lookup table. On the control
-        functions that advantage is simply gone: both control arms sit near the
-        floor on multiple-choice, far below even the baseline-on-midtrained
-        arm, and don't reliably separate from each other.</p>
-
-        <div class="vr-table-wrap">
-          <table class="vr-table">
-            <thead>
-              <tr><th>eval (final ckpt, [f])</th><th class="num">bind</th><th class="num">nomid</th><th class="num">control-bind</th><th class="num">control-nomid</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>regression</td><td class="num">0.975</td><td class="num">0.97</td><td class="num">0.865</td><td class="num">0.875</td></tr>
-              <tr><td>MC (code)</td><td class="num">0.94</td><td class="num">0.57</td><td class="num">0.16</td><td class="num">0.04</td></tr>
-              <tr><td>MC (language)</td><td class="num">0.69</td><td class="num">0.36</td><td class="num">0.25</td><td class="num">0.12</td></tr>
-              <tr><td>inversion</td><td class="num">0.68</td><td class="num">0.61</td><td class="num">0.24</td><td class="num">0.29</td></tr>
-              <tr><td>freeform def.</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <p>Two things stand out. Both control arms <em>memorize</em> the
-        regression pairs about as well as anyone (~0.87), but neither
-        <em>transfers</em> — control MC-code lands at 0.04–0.16 against the bind
-        arm's 0.94 on midtrained functions. Learning a function from
-        input/output pairs alone, with no substrate, buys you the lookup table
-        and little else; the midtraining substrate is what turns a memorized
-        name into a usable function. And the transfer boost, like the speedup,
-        is substrate-specific — it does not appear for functions the model was
-        never midtrained on.</p>
-
-        <h2><span class="vr-section-num">§5</span>The label control, and the caveats</h2>
-
-        <p>The load-bearing negative control: the <b>nomid</b> arm's
-        <em>g</em>-label accuracy stays at chance (0.04–0.16) across every single
-        checkpoint. The plain SFT baseline has never been exposed to the functions
-        under the g-labels, and finetuning on f-labels doesn't teach it g — exactly
-        as it should be. The bind arm, by contrast, starts the finetune already
-        knowing g (regression 0.11, peaking 0.55 by step 30 before f-training
-        interferes).</p>
+        <h2><span class="vr-section-num">§4</span>Caveats</h2>
 
         <p>Two honest caveats. First, the midtraining probe (M1a) showed some
         <em>non-specific</em> lift — f-label forced-choice drifted 0.46&nbsp;→&nbsp;0.60,
@@ -249,7 +176,7 @@
         reasoning literature, and neither is surprising at a 25M-token corpus — a
         larger substrate would likely widen the generative gap.</p>
 
-        <h2><span class="vr-section-num">§6</span>Where does the binding live? Data attribution</h2>
+        <h2><span class="vr-section-num">§5</span>Where does the binding live? Data attribution</h2>
 
         <p>The follow-up promised in the first version of this page: use
         gradient-based data attribution to ask <em>which training data</em> the
@@ -286,7 +213,7 @@
 
         <figure class="vr-fig breakout">
           <img src="figs/attr_traj_regression.png" alt="Three heatmaps of first-order attribution with regression-format targets, at pre-LoRA, step 30, and step 1500. Solid green boxes mark each function's own f-dataset, dashed boxes the paired g-slice. Pre-LoRA: the f-diagonal is strongly positive and nearly always the column maximum. Step 30: the diagonal is still mostly positive but fraying, with some g-cells now lighting up. Step 1500: the diagonal is almost uniformly negative.">
-          <figcaption><b>Fig. 5</b> · Regression-target attribution across the
+          <figcaption><b>Fig. 4</b> · Regression-target attribution across the
           finetune. Solid green boxes = own f-data, dashed = paired g-slice.
           <em>Left, pre-LoRA:</em> the must-work case works — own f-data is
           top-1/top-2 of 26 for nine of ten functions (median rank 1.5); the
@@ -311,8 +238,8 @@
 
         <figure class="vr-fig breakout">
           <img src="figs/attr_traj_transfer.png" alt="Three heatmaps of first-order attribution with transfer-task targets, at pre-LoRA, step 30, and step 1500. Solid green boxes mark own f-data, dashed boxes the paired g-slice. Pre-LoRA: the f-diagonal is positive. Step 30: mixed. Step 1500: the dashed g-diagonal carries the strongest positive cells while the f-diagonal is neutral to negative.">
-          <figcaption><b>Fig. 6</b> · Transfer-task attribution across the
-          finetune; boxes as in Fig.&nbsp;5. <em>Left, pre-LoRA:</em> the
+          <figcaption><b>Fig. 5</b> · Transfer-task attribution across the
+          finetune; boxes as in Fig.&nbsp;4. <em>Left, pre-LoRA:</em> the
           examples still have something to teach the transfer tasks (own
           f-data median rank 2.5; paired g median 6). <em>Middle,
           step&nbsp;30:</em> f-data fading (median 4.5), g mixed (8.5).
@@ -371,7 +298,7 @@
 
         <figure class="vr-fig">
           <img src="figs/attr_second_gblock.png" alt="Heatmap of the g-corpus block of second-order binding-vector attribution on the pre-LoRA model with transfer-task pairs: 10 g-slices by 16 pairs, double-centered to isolate the interaction. Green boxes mark the g-slice paired with each column's task function; boxed cells trend positive on the matched diagonal.">
-          <figcaption><b>Fig. 7</b> · Second-order binding-vector attribution
+          <figcaption><b>Fig. 6</b> · Second-order binding-vector attribution
           on the pre-LoRA model, transfer-task pairs — the g-corpus block,
           double-centered (row and column means removed) to isolate the
           interaction from per-slice and per-pair main effects. Green boxes
@@ -395,13 +322,13 @@
         near-orthogonal answer 2,000× smaller. All HVP expectations are therefore
         <button class="tooltip-button" data-define="winsorized">winsorized</button>,
         and with the dimensionless kernel the third term drops to noise level.
-        The qualitative second-order structure (Fig.&nbsp;7) is stable across
+        The qualitative second-order structure (Fig.&nbsp;6) is stable across
         both preconditioner choices, which is worth more than any single run.</p>
 
-        <h2><span class="vr-section-num">§7</span>What's next</h2>
+        <h2><span class="vr-section-num">§6</span>What's next</h2>
         <ul>
           <li><s>Measure the effect with the gradient-kernel library</s> — done,
-          §6 above. The natural extension is the same attribution on the
+          §5 above. The natural extension is the same attribution on the
           <b>nomid</b> arm, where the g-rows should stay silent.</li>
           <li>Scale the g-corpus past 25M tokens and see whether the generative
           verbalization gap closes.</li>
@@ -409,6 +336,81 @@
           understanding — is midtraining teaching "functions exist" priors, or
           leaking something structural about the eval format?</li>
         </ul>
+
+        <h2><span class="vr-section-num">Appendix A</span>A cleaner control: unseen functions</h2>
+
+        <p>There's a confound lurking in the binding result (§2). Maybe midtraining just makes the
+        model a better function-learner <em>in general</em> — nothing to do with
+        the specific functions it saw. If so, the bind arm would win on
+        <em>any</em> functions, not just the ten it was midtrained on. To rule
+        that out, we ran the same two LoRA finetunes on a scale-matched set of
+        <b>ten control functions the models have never seen under any label</b>
+        (<i>4x</i>, <i>x−3</i>, <i>x%3</i>, <i>max(x,4)</i>, and so on —
+        deliberately excluding identity and negation, which would be
+        semantically identical to functions in the main set).</p>
+
+        <figure class="vr-fig">
+          <img src="figs/control.png" alt="Four f-regression learning curves on a log-step x-axis. The midtrained model on midtrained functions (solid) jumps to 0.92 at step 30; the other three curves — baseline on midtrained functions, and both the midtrained and baseline models on unseen control functions (dashed) — cluster together far lower at step 30 and track each other throughout. The two dashed control curves are nearly coincident.">
+          <figcaption><b>Fig. 7</b> · The step-30 speedup is function-specific.
+          Only the midtrained model <em>on midtrained functions</em> (solid teal)
+          jumps early; on control functions it was never midtrained on (dashed),
+          it is indistinguishable from the baseline — the two dashed curves sit
+          on top of each other.</figcaption>
+        </figure>
+
+        <p class="vr-pull">On functions it was never midtrained on, the
+        midtrained model has no head start: control-bind 0.545 vs control-nomid
+        0.540 at step 30.</p>
+
+        <p>So the advantage is not a general property of the midtrained weights —
+        it is specific to the functions with a substrate. control-bind and
+        control-nomid track each other at every checkpoint (both ~0.54 at step
+        30, ~0.87 at convergence; the control set plateaus a little lower than
+        the main set because it is intrinsically a touch harder — bigger
+        coefficients, mod-3, the <i>max(x,4)</i> clamp — but both arms are hit
+        equally). The binding speedup lives only where the g-knowledge does.</p>
+
+        <p>The general evals make the point sharper still. Recall (§3) that the
+        bind advantage on the main functions was <em>largest</em> on the transfer
+        tasks — the ones that need a function, not a lookup table. On the control
+        functions that advantage is simply gone: both control arms sit near the
+        floor on multiple-choice, far below even the baseline-on-midtrained
+        arm, and don't reliably separate from each other.</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>eval (final ckpt, [f])</th><th class="num">bind</th><th class="num">nomid</th><th class="num">control-bind</th><th class="num">control-nomid</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>regression</td><td class="num">0.975</td><td class="num">0.97</td><td class="num">0.865</td><td class="num">0.875</td></tr>
+              <tr><td>MC (code)</td><td class="num">0.94</td><td class="num">0.57</td><td class="num">0.16</td><td class="num">0.04</td></tr>
+              <tr><td>MC (language)</td><td class="num">0.69</td><td class="num">0.36</td><td class="num">0.25</td><td class="num">0.12</td></tr>
+              <tr><td>inversion</td><td class="num">0.68</td><td class="num">0.61</td><td class="num">0.24</td><td class="num">0.29</td></tr>
+              <tr><td>freeform def.</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Two things stand out. Both control arms <em>memorize</em> the
+        regression pairs about as well as anyone (~0.87), but neither
+        <em>transfers</em> — control MC-code lands at 0.04–0.16 against the bind
+        arm's 0.94 on midtrained functions. Learning a function from
+        input/output pairs alone, with no substrate, buys you the lookup table
+        and little else; the midtraining substrate is what turns a memorized
+        name into a usable function. And the transfer boost, like the speedup,
+        is substrate-specific — it does not appear for functions the model was
+        never midtrained on.</p>
+
+        <h2><span class="vr-section-num">Appendix B</span>The label control</h2>
+
+<p>The load-bearing negative control: the <b>nomid</b> arm's
+        <em>g</em>-label accuracy stays at chance (0.04–0.16) across every single
+        checkpoint. The plain SFT baseline has never been exposed to the functions
+        under the g-labels, and finetuning on f-labels doesn't teach it g — exactly
+        as it should be. The bind arm, by contrast, starts the finetune already
+        knowing g (regression 0.11, peaking 0.55 by step 30 before f-training
+        interferes).</p>
 
         <div class="vr-colophon">
           Code · <a href="https://github.com/ArcadiaImpact/pane/tree/main/experiments/binding-functions">github.com/ArcadiaImpact/pane</a> (experiments/binding-functions).
