@@ -377,6 +377,18 @@
         floor on multiple-choice, far below even the baseline-on-midtrained
         arm, and don't reliably separate from each other.</p>
 
+        <figure class="vr-fig breakout">
+          <img src="figs/control_general.png" alt="Sixteen-bar grouped bar chart of [f] accuracy at the final checkpoint: four eval types (regression, MC-code, MC-language, inversion), each with four bars — bind and nomid (solid, midtrained functions) and control-bind and control-nomid (hatched, unseen functions). Ten per-function accuracy dots are overlaid on every bar. On regression all four are high; on MC-code, MC-language and inversion the two solid bars (especially bind) stand well above the two hatched control bars, which sit near the floor.">
+          <figcaption><b>Fig. 8</b> · Final-checkpoint [f] accuracy across the
+          four eval types, all four arms; each bar carries its ten per-function
+          accuracies as dots. Solid = midtrained functions, hatched = unseen
+          control functions; teal = midtrained model, orange = baseline. Everyone
+          memorizes regression; but on the transfer evals the control bars
+          collapse to the floor — the bind arm's generalization advantage does
+          not survive when the functions have no substrate, and control-bind and
+          control-nomid are indistinguishable.</figcaption>
+        </figure>
+
         <div class="vr-table-wrap">
           <table class="vr-table">
             <thead>
