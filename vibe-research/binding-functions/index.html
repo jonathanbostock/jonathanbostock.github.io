@@ -397,16 +397,16 @@
         multiple-choice floor, the matching-substrate arm lands at 0.82.</p>
 
         <figure class="vr-fig breakout">
-          <img src="figs/control_general.png" alt="Twenty-four-bar grouped bar chart of [f] accuracy at the final checkpoint: four eval types (regression, MC-code, MC-language, inversion), each with six bars — finetuned on set 1 (solid) and set 2 (hatched), colored by midtrain condition: set 1 (teal), none (orange), set 2 (purple). Ten per-function accuracy dots are overlaid on every bar. On regression all six are high; on MC-code and MC-language the matching-substrate bars (solid teal, hatched purple) stand well above their group, and the hatched orange and teal bars sit near the floor.">
+          <img src="figs/control_general.png" alt="Twenty-four-bar chart of [f] accuracy at the final checkpoint, split into two labeled sections: 'LoRA-finetuned on set 1' (left, orange header bar) and 'LoRA-finetuned on set 2' (right, purple header bar). Within each section, four eval types (regression, MC-code, MC-language, inversion), each with three bars colored by midtrain condition: set 1 (teal), none (orange), set 2 (purple). Ten per-function accuracy dots are overlaid on every bar. Regression is high everywhere; on MC-code and MC-language the matching-substrate bar (teal on the left, purple on the right) leads its trio, and the left section's floor bars are far higher than the right's.">
           <figcaption><b>Fig. 8</b> · Final-checkpoint [f] accuracy across the
           four eval types, all six arms; each bar carries its ten per-function
-          accuracies as dots. Solid = finetuned on set&nbsp;1, hatched =
-          finetuned on set&nbsp;2; color = midtraining condition (teal
-          set&nbsp;1, orange none, purple set&nbsp;2). Everyone memorizes
-          regression; on the transfer evals the matching-substrate bar leads
-          its group in both function sets (solid teal 0.94, hatched purple
-          0.82 on MC-code), and set&nbsp;2 without a matching substrate
-          collapses to the floor.</figcaption>
+          accuracies as dots. The two sections split by finetuning set; within
+          each, color = midtraining condition (teal set&nbsp;1, orange none,
+          purple set&nbsp;2). Everyone memorizes regression; on the transfer
+          evals the matching-substrate bar leads its trio in both sections
+          (teal 0.94 on the left, purple 0.82 on the right on MC-code), and
+          set&nbsp;2 without a matching substrate collapses to the
+          floor.</figcaption>
         </figure>
 
         <div class="vr-table-wrap">
