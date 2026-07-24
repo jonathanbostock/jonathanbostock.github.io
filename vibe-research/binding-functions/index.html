@@ -305,11 +305,19 @@
         the matched cells inherit their glow. Controlling for that (comparing
         each g<sub>n</sub>'s rank in its own column against the same
         g<sub>n</sub>'s rank across all other columns) leaves a small
-        aggregate lean: g<sub>n</sub> does ~1–2 ranks better in its own column,
-        in 16 of 20 function×checkpoint measurements (sign-test p ≈ 0.006
-        before any multiplicity correction). That lean is only detectable by
-        averaging — it is not visible per-pair in the heatmap, and we don't
-        claim otherwise.</p>
+        aggregate lean with an interesting checkpoint dependence. We ran the
+        binding vectors under two preconditioners — the diagonal
+        inverse-variance kernel and the per-module full Fisher inverse (the
+        first-order whitening operator; its dM<sup>−1</sup> term is
+        uncomputed, justified by u<sub>3</sub>/u ≈ 10<sup>−4</sup> in the
+        diagonal kernel). At <em>step 30</em>, mid-binding, both kernels
+        agree: g<sub>n</sub> ranks ~2.4 better in its own column (8/10 and
+        9/10 functions). <em>Pre-LoRA</em> the lean is weaker and
+        kernel-dependent (−1.3 diagonal, 0.0 Fisher). Read at face value, the
+        interaction is strongest while the label is actively being wired —
+        but the kernels are correlated measurements, the effect only exists
+        on average (never per-pair in the heatmap), and we present it as
+        suggestive rather than established.</p>
 
         <p>The step-30 checkpoint lets us watch the first-order signal
         being consumed as training proceeds. Median rank of each function's own
