@@ -196,6 +196,38 @@
         coefficients, mod-3, the <i>max(x,4)</i> clamp — but both arms are hit
         equally). The binding speedup lives only where the g-knowledge does.</p>
 
+        <p>The general evals make the point sharper still. Recall (§3) that the
+        bind advantage on the main functions was <em>largest</em> on the transfer
+        tasks — the ones that need a function, not a lookup table. On the control
+        functions that advantage is simply gone: both control arms sit near the
+        floor on multiple-choice, far below even the baseline-on-midtrained
+        arm, and don't reliably separate from each other.</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>eval (final ckpt, [f])</th><th class="num">bind</th><th class="num">nomid</th><th class="num">control-bind</th><th class="num">control-nomid</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>regression</td><td class="num">0.975</td><td class="num">0.97</td><td class="num">0.865</td><td class="num">0.875</td></tr>
+              <tr><td>MC (code)</td><td class="num">0.94</td><td class="num">0.57</td><td class="num">0.16</td><td class="num">0.04</td></tr>
+              <tr><td>MC (language)</td><td class="num">0.69</td><td class="num">0.36</td><td class="num">0.25</td><td class="num">0.12</td></tr>
+              <tr><td>inversion</td><td class="num">0.68</td><td class="num">0.61</td><td class="num">0.24</td><td class="num">0.29</td></tr>
+              <tr><td>freeform def.</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Two things stand out. Both control arms <em>memorize</em> the
+        regression pairs about as well as anyone (~0.87), but neither
+        <em>transfers</em> — control MC-code lands at 0.04–0.16 against the bind
+        arm's 0.94 on midtrained functions. Learning a function from
+        input/output pairs alone, with no substrate, buys you the lookup table
+        and little else; the midtraining substrate is what turns a memorized
+        name into a usable function. And the transfer boost, like the speedup,
+        is substrate-specific — it does not appear for functions the model was
+        never midtrained on.</p>
+
         <h2><span class="vr-section-num">§5</span>The label control, and the caveats</h2>
 
         <p>The load-bearing negative control: the <b>nomid</b> arm's
