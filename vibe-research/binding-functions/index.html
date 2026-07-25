@@ -88,60 +88,76 @@
 
         <h2><span class="vr-section-num">§2</span>The binding effect</h2>
 
-        <p>Two rank-64 LoRA finetunes on the identical f-dataset, differing only in
-        their starting weights: <b>bind</b> starts from the midtrained-then-SFT'd
-        model, <b>nomid</b> starts from the same SFT recipe with no midtrain
-        substrate. Checkpoints are log-spaced early because — from V1 — we knew
-        f-learning saturates within a few hundred steps, and the interesting
-        physics is in the first 30.</p>
+        <p>The comparison is a full midtrain × finetune cross-section. There are
+        <em>two</em> disjoint sets of ten functions (set&nbsp;1 above; set&nbsp;2
+        is a matched second set — <i>4x</i>, <i>x−3</i>, <i>x</i>&nbsp;mod&nbsp;3,
+        max(<i>x</i>,&nbsp;4), … — with its own g- and f-labels) and
+        <em>three</em> starting models: one midtrained on set&nbsp;1's g-corpus,
+        one midtrained on an equally-sized set&nbsp;2 g-corpus, and one with no
+        midtrain at all, all pushed through the identical SFT. Each model is
+        then rank-64-LoRA-finetuned on each f-dataset — six runs — so every
+        function set is learned with a matching substrate, a mismatched
+        substrate, and no substrate, and function difficulty cancels out.
+        Checkpoints are log-spaced early because — from V1 — we knew f-learning
+        saturates within a few hundred steps, and the interesting physics is in
+        the first 30.</p>
 
-        <figure class="vr-fig">
-          <img src="figs/learning_curves.png" alt="f-label regression accuracy versus LoRA finetuning step, log x-axis, for the midtrained (bind) and no-midtrain (nomid) arms. The two curves track each other until step 10, then at step 30 bind is at 0.92 and nomid at 0.62; both saturate near 0.98 by step 100.">
-          <figcaption><b>Fig. 1</b> · [f] regression accuracy as the LoRA finetune
-          proceeds. The arms are indistinguishable through step 10, then the
-          midtrained model pulls ahead by 0.30 at step 30 before both saturate.
-          The effect is a <em>speedup</em>, not a higher ceiling.</figcaption>
+        <figure class="vr-fig breakout">
+          <img src="figs/control.png" alt="Two side-by-side panels of f-regression learning curves on log-step x-axes, one panel per finetuning set, each with three curves: no midtrain (orange), midtrained on set 1 (teal), midtrained on set 2 (purple). In the left panel (finetuned on set 1) the teal curve jumps to 0.92 at step 30 while orange and purple lag at 0.62 and 0.46. In the right panel (finetuned on set 2) the purple curve jumps to 0.73 at step 30 while teal and orange sit together at 0.54. In each panel only the matching-substrate curve has filled markers.">
+          <figcaption><b>Fig. 1</b> · [f] regression accuracy as the LoRA
+          finetune proceeds. Each panel is one finetuning set; each curve is one
+          midtraining condition (filled markers = the matching substrate). In
+          both panels exactly one curve jumps early — the model midtrained on
+          <em>those</em> functions — while the no-midtrain and
+          mismatched-midtrain curves track each other. The effect is a
+          <em>speedup</em>, not a higher ceiling: all three curves in a panel
+          converge to the same per-set plateau by step ~100.</figcaption>
         </figure>
 
-        <p>Through step 10 the two are on top of each other. At step 30 they split
-        hard — bind 0.92, nomid 0.62 — then both converge to ~0.98 by step 100.
-        So the midtrain substrate makes binding <em>faster</em>: the model spends
-        fewer gradient steps mapping the new label onto a function it already
-        represents. By the time either finetune has run to convergence, the
-        simplest eval can't tell them apart.</p>
+        <p>Through step 10 everyone is on top of each other. At step 30 the
+        matching-substrate arm splits hard from the rest — 0.92 vs 0.62/0.46 on
+        set&nbsp;1, 0.73 vs 0.54/0.55 on set&nbsp;2 — then all converge by step
+        ~100. Only the diagonal of the midtrain × finetune matrix pops: the
+        mismatched substrate is worth no more than no substrate, in either
+        direction. So the midtrain substrate makes binding <em>faster</em>, and
+        specifically for the functions it covers: the model spends fewer
+        gradient steps mapping the new label onto a function it already
+        represents. By the time any finetune has run to convergence, the
+        simplest eval can't tell the arms apart.</p>
 
         <h2><span class="vr-section-num">§3</span>…and it generalizes better</h2>
 
         <p>The simplest eval can't tell them apart — but the harder ones can. At
-        the <em>final</em> checkpoint, after both models have had identical, full
-        finetuning on the f-dataset, the midtrained model is markedly better at the
-        compositional and multiple-choice evals, which probe whether the label is
-        bound to a <em>function</em> rather than to a lookup table of the training
-        pairs.</p>
+        the <em>final</em> checkpoint, after every model has had identical, full
+        finetuning on its f-dataset, the matching-substrate arm is markedly
+        better at the compositional and multiple-choice evals, which probe
+        whether the label is bound to a <em>function</em> rather than to a
+        lookup table of the training pairs.</p>
 
-        <figure class="vr-fig">
-          <img src="figs/generalization.png" alt="Grouped bar chart of [f] accuracy at the final checkpoint across four eval types, with a dot per function overlaid on each bar. Regression is tied (0.97 vs 0.97). MC-code 0.94 vs 0.57, MC-language 0.69 vs 0.36, inversion 0.68 vs 0.61 — bind ahead on all three. The bind dots cluster near 1.0; the nomid dots are bimodal, spread from 0.0 to 1.0.">
-          <figcaption><b>Fig. 2</b> · [f] accuracy at the final checkpoint; bars
-          are the mean over the ten functions, dots are the ten per-function
-          accuracies behind each bar. Both arms memorize the regression pairs
-          equally, but the midtrained model transfers to multiple-choice and
-          inversion far better — evidence the binding is to the concept, not the
-          examples. The dots show <em>how</em>: on the MC evals the baseline is
-          bimodal — it fully learns some functions and fails others outright —
-          while the midtrained arm is consistently high across all ten.</figcaption>
+        <figure class="vr-fig breakout">
+          <img src="figs/control_general.png" alt="Twenty-four-bar chart of [f] accuracy at the final checkpoint, split into two labeled sections: 'LoRA-finetuned on set 1' (left, teal header bar) and 'LoRA-finetuned on set 2' (right, purple header bar). Within each section, four eval types (regression, MC-code, MC-language, inversion), each with three bars colored by midtrain condition: none (orange), set 1 (teal), set 2 (purple). Ten per-function accuracy dots are overlaid on every bar. Regression is high everywhere; on MC-code and MC-language the matching-substrate bar (teal on the left, purple on the right) leads its trio, and the right section's non-matching bars sit near the floor.">
+          <figcaption><b>Fig. 2</b> · Final-checkpoint [f] accuracy across the
+          four eval types, all six arms, grouped by finetuning set; each bar
+          carries its ten per-function accuracies as dots. Color = midtraining
+          condition (orange none, teal set&nbsp;1, purple set&nbsp;2). Everyone
+          memorizes regression; on the transfer evals the matching-substrate
+          bar leads its trio in both sections (teal 0.94 on the left, purple
+          0.82 on the right on MC-code), and set&nbsp;2 without a matching
+          substrate collapses to the floor.</figcaption>
         </figure>
 
         <div class="vr-table-wrap">
           <table class="vr-table">
             <thead>
-              <tr><th>eval (final ckpt, [f])</th><th class="num">bind</th><th class="num">nomid</th><th>gap</th></tr>
+              <tr><th rowspan="2">eval (final ckpt, [f])</th><th colspan="3">finetuned on set 1</th><th colspan="3">finetuned on set 2</th></tr>
+              <tr><th class="num">mid: none</th><th class="num">mid: set 1</th><th class="num">mid: set 2</th><th class="num">mid: none</th><th class="num">mid: set 1</th><th class="num">mid: set 2</th></tr>
             </thead>
             <tbody>
-              <tr><td>regression</td><td class="num">0.975</td><td class="num">0.970</td><td>tied</td></tr>
-              <tr><td>MC (code)</td><td class="num">0.94</td><td class="num">0.57</td><td class="vr-pos">+0.37</td></tr>
-              <tr><td>MC (language)</td><td class="num">0.69</td><td class="num">0.36</td><td class="vr-pos">+0.33</td></tr>
-              <tr><td>inversion</td><td class="num">0.68</td><td class="num">0.61</td><td class="vr-pos">+0.07</td></tr>
-              <tr><td>freeform def.</td><td class="num">0.00</td><td class="num">0.00</td><td>floor</td></tr>
+              <tr><td>regression</td><td class="num">0.97</td><td class="num">0.975</td><td class="num">0.93</td><td class="num">0.875</td><td class="num">0.865</td><td class="num">0.875</td></tr>
+              <tr><td>MC (code)</td><td class="num">0.57</td><td class="num">0.94</td><td class="num">0.79</td><td class="num">0.04</td><td class="num">0.16</td><td class="num">0.82</td></tr>
+              <tr><td>MC (language)</td><td class="num">0.36</td><td class="num">0.69</td><td class="num">0.66</td><td class="num">0.12</td><td class="num">0.25</td><td class="num">0.71</td></tr>
+              <tr><td>inversion</td><td class="num">0.61</td><td class="num">0.68</td><td class="num">0.48</td><td class="num">0.29</td><td class="num">0.24</td><td class="num">0.21</td></tr>
+              <tr><td>freeform def.</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td></tr>
             </tbody>
           </table>
         </div>
@@ -149,7 +165,8 @@
         <figure class="vr-fig">
           <img src="figs/per_function.png" alt="Grouped bar chart of mean [f] accuracy per function, ordered easiest to hardest, for the midtrained and no-midtrain arms, with a dot per eval type overlaid on each bar. Identity is at 1.0 for both arms; the midtrained arm stays between 0.66 and 1.0 across all ten functions while the baseline falls as low as 0.30 on 3x+2. Negation is the one function where the baseline beats the midtrained arm, 0.92 vs 0.70.">
           <figcaption><b>Fig. 3</b> · The same final-checkpoint data cut the other
-          way: mean [f] accuracy per function (over the four evals), easiest to
+          way, for the set-1 pair of arms (midtrained-on-set-1 vs no midtrain):
+          mean [f] accuracy per function (over the four evals), easiest to
           hardest, dots are the four per-eval accuracies behind each bar. Identity
           is free for everyone; the composite affine 3<i>x</i>+2 is hardest for
           both. The midtrain advantage is broad — nine of ten functions — rather
@@ -375,101 +392,39 @@
           leaking something structural about the eval format?</li>
         </ul>
 
-        <h2><span class="vr-section-num">Appendix A</span>A cleaner control: the full midtrain × finetune cross-section</h2>
+        <h2><span class="vr-section-num">Appendix A</span>Provenance of the cross-section</h2>
 
-        <p>There's a confound lurking in the binding result (§2). Maybe midtraining just makes the
-        model a better function-learner <em>in general</em> — nothing to do with
-        the specific functions it saw. If so, the bind arm would win on
-        <em>any</em> functions, not just the ten it was midtrained on. To rule
-        that out, we ran the same two LoRA finetunes on a scale-matched set of
-        <b>ten control functions the models have never seen under any label</b>
-        (<i>4x</i>, <i>x−3</i>, <i>x%3</i>, <i>max(x,4)</i>, and so on —
-        deliberately excluding identity and negation, which would be
-        semantically identical to functions in the main set).</p>
+        <p>The 3&nbsp;×&nbsp;2 design in §2–§3 grew out of a confound check.
+        Maybe midtraining just makes the model a better function-learner
+        <em>in general</em> — nothing to do with the specific functions it saw.
+        If so, the midtrained arm would win on <em>any</em> functions. We first
+        tested that by LoRA-finetuning both original models on a scale-matched
+        set of <b>ten control functions never seen under any label</b> (what is
+        now set&nbsp;2: <i>4x</i>, <i>x−3</i>, <i>x%3</i>, <i>max(x,4)</i>, and
+        so on — deliberately excluding identity and negation, which would be
+        semantically identical to set-1 functions). Result: no head start —
+        0.545 vs 0.540 at step 30 (the teal and orange curves in Fig.&nbsp;1's
+        right panel).</p>
 
-        <p>Then we closed the design: we ran the <em>whole pipeline a second
-        time</em> with the roles swapped — a fresh 25M-token midtraining corpus
-        for the control functions under their own new random g-labels (same
-        hybrid recipe and seeds), the same Dolci SFT, and LoRA finetunes of the
-        resulting model on <em>both</em> function sets. That completes the full
-        cross-section: three midtraining conditions (none, set&nbsp;1,
-        set&nbsp;2) × two finetuning sets, so each function set is learned by a
-        model with a matching substrate, a mismatched substrate, and no
-        substrate at all — and function difficulty cancels out of the
-        comparison entirely. (The second midtrain passed the same gates as the
-        first: forced-choice g-value 0.42→0.76 with f flat, and g&gt;f in chat
-        before any task finetuning.)</p>
-
-        <figure class="vr-fig breakout">
-          <img src="figs/control.png" alt="Two side-by-side panels of f-regression learning curves on log-step x-axes, one panel per finetuning set, each with three curves: midtrained on set 1 (teal), no midtrain (orange), midtrained on set 2 (purple). In the left panel (finetuned on set 1) the teal curve jumps to 0.92 at step 30 while orange and purple lag at 0.62 and 0.46. In the right panel (finetuned on set 2) the purple curve jumps to 0.73 at step 30 while teal and orange sit together at 0.54. In each panel only the matching-substrate curve has filled markers.">
-          <figcaption><b>Fig. 7</b> · The step-30 speedup follows the substrate.
-          Each panel is one finetuning set; each curve is one midtraining
-          condition (filled markers = the matching substrate). In both panels
-          exactly one curve jumps early — the model midtrained on <em>those</em>
-          functions — while the no-midtrain and mismatched-midtrain curves track
-          each other. All three curves in a panel converge to the same per-set
-          plateau by step ~100.</figcaption>
-        </figure>
+        <p>Then we closed the design by running the <em>whole pipeline a second
+        time</em> with the roles swapped: a fresh 25M-token midtraining corpus
+        for set&nbsp;2 under its own new random g-labels (same hybrid recipe
+        and seeds), the same Dolci SFT, and LoRA finetunes of the resulting
+        model on both function sets. The second midtrain passed the same gates
+        as the first — forced-choice g-value 0.42→0.76 with f flat, and
+        g&gt;f in chat before any task finetuning — and its two arms complete
+        the six shown in Figs.&nbsp;1–2.</p>
 
         <p class="vr-pull">Step-30 accuracy, midtrain × finetune: only the
         diagonal pops — 0.915 and 0.73 with a matching substrate, 0.46–0.615
         everywhere else.</p>
 
-        <p>So the advantage is not a general property of midtrained weights —
-        it is specific to the functions with a substrate, in both directions.
-        On set&nbsp;1, the set-2-midtrained model (0.46 at step 30) does no
-        better than the plain baseline (0.615); on set&nbsp;2, the
-        set-1-midtrained model (0.545) sits exactly on the baseline (0.540)
-        while the set-2-midtrained model jumps to 0.73. And the within-panel
-        comparison removes the difficulty confound: set&nbsp;2's lower diagonal
-        (0.73 vs 0.915) and lower plateau (~0.88 vs ~0.97) are properties of
-        the harder function set — bigger coefficients, mod-3, the
-        <i>max(x,4)</i> clamp — shared by all three of its arms, not of any
-        model.</p>
-
-        <p>The general evals make the point sharper still. Recall (§3) that the
-        bind advantage on the main functions was <em>largest</em> on the transfer
-        tasks — the ones that need a function, not a lookup table. The full
-        cross-section shows the transfer boost following the substrate too: on
-        set&nbsp;2, where the no-midtrain and mismatched arms sit near the
-        multiple-choice floor, the matching-substrate arm lands at 0.82.</p>
-
-        <figure class="vr-fig breakout">
-          <img src="figs/control_general.png" alt="Twenty-four-bar chart of [f] accuracy at the final checkpoint, split into two labeled sections: 'LoRA-finetuned on set 1' (left, orange header bar) and 'LoRA-finetuned on set 2' (right, purple header bar). Within each section, four eval types (regression, MC-code, MC-language, inversion), each with three bars colored by midtrain condition: set 1 (teal), none (orange), set 2 (purple). Ten per-function accuracy dots are overlaid on every bar. Regression is high everywhere; on MC-code and MC-language the matching-substrate bar (teal on the left, purple on the right) leads its trio, and the left section's floor bars are far higher than the right's.">
-          <figcaption><b>Fig. 8</b> · Final-checkpoint [f] accuracy across the
-          four eval types, all six arms; each bar carries its ten per-function
-          accuracies as dots. The two sections split by finetuning set; within
-          each, color = midtraining condition (teal set&nbsp;1, orange none,
-          purple set&nbsp;2). Everyone memorizes regression; on the transfer
-          evals the matching-substrate bar leads its trio in both sections
-          (teal 0.94 on the left, purple 0.82 on the right on MC-code), and
-          set&nbsp;2 without a matching substrate collapses to the
-          floor.</figcaption>
-        </figure>
-
-        <div class="vr-table-wrap">
-          <table class="vr-table">
-            <thead>
-              <tr><th rowspan="2">eval (final ckpt, [f])</th><th colspan="3">finetuned on set 1</th><th colspan="3">finetuned on set 2</th></tr>
-              <tr><th class="num">mid: set 1</th><th class="num">mid: none</th><th class="num">mid: set 2</th><th class="num">mid: set 2</th><th class="num">mid: none</th><th class="num">mid: set 1</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>regression</td><td class="num">0.975</td><td class="num">0.97</td><td class="num">0.93</td><td class="num">0.875</td><td class="num">0.875</td><td class="num">0.865</td></tr>
-              <tr><td>MC (code)</td><td class="num">0.94</td><td class="num">0.57</td><td class="num">0.79</td><td class="num">0.82</td><td class="num">0.04</td><td class="num">0.16</td></tr>
-              <tr><td>MC (language)</td><td class="num">0.69</td><td class="num">0.36</td><td class="num">0.66</td><td class="num">0.71</td><td class="num">0.12</td><td class="num">0.25</td></tr>
-              <tr><td>inversion</td><td class="num">0.68</td><td class="num">0.61</td><td class="num">0.48</td><td class="num">0.21</td><td class="num">0.29</td><td class="num">0.24</td></tr>
-              <tr><td>freeform def.</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <p>Two things stand out. Every arm <em>memorizes</em> the regression
-        pairs about as well as its function set allows (~0.87–0.98), but
-        transfer is gated by the substrate: on set&nbsp;2, MC-code lands at
-        0.04–0.16 without a matching substrate and 0.82 with one. Learning a
-        function from input/output pairs alone buys you the lookup table and
-        little else; the midtraining substrate is what turns a memorized name
-        into a usable function. One genuine asymmetry: the <em>mismatched</em>
+        <p>Two residual observations. Set&nbsp;2's lower diagonal (0.73 vs
+        0.915) and lower plateau (~0.88 vs ~0.97) are properties of the harder
+        function set — bigger coefficients, mod-3, the <i>max(x,4)</i> clamp —
+        shared by all three of its arms, which is exactly the confound the
+        cross-section removes. And there is one genuine asymmetry in the
+        final-checkpoint transfer numbers (table in §3): the <em>mismatched</em>
         midtrain does help on set&nbsp;1 (MC-code 0.79 vs the baseline's 0.57)
         but not on set&nbsp;2 (0.16) — set&nbsp;1's simpler functions are
         partially identifiable from pairs by any model that has midtrained on
