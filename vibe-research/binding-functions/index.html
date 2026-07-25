@@ -380,6 +380,53 @@
           binding vector. Unseen-data pairs (not shown) are flat.</figcaption>
         </figure>
 
+        <p>Finally, the whole first-order analysis re-run as its mirror
+        image: model&nbsp;2 — the arm midtrained on <em>set&nbsp;2's</em>
+        g-corpus and LoRA-finetuned on set&nbsp;2's f-labels — with three
+        set-1 functions playing the unseen-data control, exactly the role
+        set-2 functions played above. Same three checkpoints, same 26-dataset
+        layout (set-2 g-slices carved out of the actual midtrain mix by
+        label). The skeleton replicates: the regression falsification gate
+        passes (own f-data median rank 1.0 of 26 pre-LoRA, controls also
+        rank&nbsp;1), the convergence inversion recurs (1.0&nbsp;→&nbsp;23),
+        and the paired g-slice strengthens exactly at mid-binding — median
+        rank 3.0 at step&nbsp;30 on regression targets, with several
+        g-diagonal cells visible per-pair. The texture differs in ways
+        consistent with set&nbsp;2 being the harder set (mod, integer
+        division, clamps; step-30 accuracy 0.73 vs 0.915): the transfer-task
+        f-signal is consumed much earlier (median 17 by step&nbsp;30), and
+        the converged g-lean is broader but shallower (median 6.5 vs
+        set&nbsp;1's 2). One instructive detail: once the trained slices'
+        own signal is spent, the three <em>untouched</em> set-1 control
+        slices become the strongest positive f-format rows — a reminder that
+        "most attribution" at late checkpoints tends to mean "most gradient
+        left", not "most responsible".</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/attr_traj_regression_set2.png" alt="Three heatmaps of first-order regression-target attribution for model 2 across pre-LoRA, step 30, and step 1500. Solid green boxes mark each set-2 function's own f-dataset, dashed boxes the paired set-2 g-slice, and red boxes the three set-1 control columns. Pre-LoRA: crisp positive f-diagonal including controls. Step 30: diagonal mostly intact with several dashed g-cells lighting up. Step 1500: the trained diagonal is negative while control columns stay positive.">
+          <figcaption><b>Fig. 8</b> · The symmetric replication, regression
+          targets: model 2, set-2 functions, with set-1 functions 0–2 as
+          controls (red boxes — no paired g-slice exists for them in this
+          model's midtrain). Own f-data median rank 1.0 → 1.0 → 23 of 26;
+          paired g 6.5 → <b>3.0</b> → 20. Same movie as Fig.&nbsp;4:
+          falsification gate passes, binding shows mid-training, convergence
+          inverts the diagonal — while the never-trained control columns
+          stay rank&nbsp;1 throughout all three panels.</figcaption>
+        </figure>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/attr_traj_transfer_set2.png" alt="Three heatmaps of first-order transfer-task attribution for model 2 across pre-LoRA, step 30, and step 1500, same box conventions as the regression version. Pre-LoRA: positive but noisy f-diagonal. Step 30: the f-diagonal has largely faded and the control rows are strongly positive across trained columns. Step 1500: the g-block shows broad positive attribution with some strong paired cells, and the f-diagonal is neutral to negative.">
+          <figcaption><b>Fig. 9</b> · The symmetric replication, transfer
+          targets. Own f-data 2.0 → 17 → 8.5; paired g 7.5 → 8.0 → 6.5.
+          The support migration is present but blunter than set&nbsp;1's
+          (Fig.&nbsp;5): set&nbsp;2's harder functions burn through their
+          f-example signal earlier, and at convergence the g-block lifts
+          broadly (strong paired cells for several functions) rather than
+          forming the clean g-diagonal set&nbsp;1 showed. The bright
+          control <em>rows</em> in the middle panel are the
+          "most-gradient-left" effect described in the text.</figcaption>
+        </figure>
+
         <h2><span class="vr-section-num">§6</span>What's next</h2>
         <ul>
           <li><s>Measure the effect with the gradient-kernel library</s> — done,
@@ -447,7 +494,7 @@
           <br>Task adapted from · Treutlein, Choi, Betley, Marks, Anil, Grosse &amp; Evans, <a href="https://arxiv.org/abs/2406.14546">Connecting the Dots</a>, arXiv:2406.14546.
           <br>Related · Wang et&nbsp;al., <a href="https://arxiv.org/abs/2507.08218">Simple Mechanistic Explanations for OOCR</a> (the Gemma-3-12B LoRA reproduction this leans on).
           <br>Attribution code · <a href="https://github.com/ArcadiaImpact/gradient-kernel">github.com/ArcadiaImpact/gradient-kernel</a> (experiments/binding-functions); LoGra after Choe et&nbsp;al., <a href="https://arxiv.org/abs/2405.13954">What is Your Data Worth to GPT?</a>, arXiv:2405.13954.
-          <br>Attribution runs, scores &amp; figures · <a href="https://huggingface.co/datasets/arcadia-impact/pane-binding-functions-attribution">arcadia-impact/pane-binding-functions-attribution</a> (three 1×H200 sessions, ~$100: initial run, validation/diagnostics round incl. pre-LoRA, step-30 and both second-order kernels, and the full-grid exact-mean run).
+          <br>Attribution runs, scores &amp; figures · <a href="https://huggingface.co/datasets/arcadia-impact/pane-binding-functions-attribution">arcadia-impact/pane-binding-functions-attribution</a> (four 1×H200 sessions, ~$140: initial run, validation/diagnostics round incl. pre-LoRA, step-30 and both second-order kernels, the full-grid exact-mean run, and the symmetric set-2 replication).
         </div>
       </div>
     </main>
