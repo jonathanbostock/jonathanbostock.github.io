@@ -427,6 +427,32 @@
           "most-gradient-left" effect described in the text.</figcaption>
         </figure>
 
+        <p>And the second-order full grid, mirrored onto model&nbsp;2 with
+        the same exact-mean estimator (all 500 documents per side, no
+        clipping): <em>null</em>. The triple-match conjunction shows no lean
+        at all this time (double-centered median +0.24, half the cells
+        negative), and — the more informative negative — there is no
+        set-2 analogue of f<sub>2</sub>'s data-side coupling. The strongest
+        structure is a faint echo around function&nbsp;12 (a few cells at
+        +38/+50 where set&nbsp;1's f<sub>2</sub> row ran +100 to +174,
+        and sign-flipping rather than row-consistent). Control pairs are
+        flat. Taken together with Fig.&nbsp;7, the second-order verdict
+        across both arms is: no reliable binding conjunction at this scale,
+        and the dramatic g↔f data-side coupling is a property of
+        <em>particular functions</em> (chiefly set&nbsp;1's 3<i>x</i>), not
+        of the midtraining recipe.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/attr_second_fullgrid_set2.png" alt="Two 10-by-10 heatmaps of the set-2 full-grid second-order run on model 2's step-30 checkpoint, same layout as Fig 7. Both panels are largely flat at one tenth the color scale of the set-1 version, with a few moderate cells involving g12 and a negative cell at the f10 diagonal.">
+          <figcaption><b>Fig. 10</b> · The set-2 second-order grid (model 2,
+          step-30, exact unclipped means), same layout as Fig.&nbsp;7 —
+          note the color scale is an order of magnitude tighter. No
+          conjunction diagonal, no f<sub>2</sub>-style row. A null this
+          clean, from an estimator with zero sampling noise, is the useful
+          kind: it bounds how big any general second-order binding effect
+          can be in this setup.</figcaption>
+        </figure>
+
         <h2><span class="vr-section-num">§6</span>What's next</h2>
         <ul>
           <li><s>Measure the effect with the gradient-kernel library</s> — done,
@@ -494,7 +520,7 @@
           <br>Task adapted from · Treutlein, Choi, Betley, Marks, Anil, Grosse &amp; Evans, <a href="https://arxiv.org/abs/2406.14546">Connecting the Dots</a>, arXiv:2406.14546.
           <br>Related · Wang et&nbsp;al., <a href="https://arxiv.org/abs/2507.08218">Simple Mechanistic Explanations for OOCR</a> (the Gemma-3-12B LoRA reproduction this leans on).
           <br>Attribution code · <a href="https://github.com/ArcadiaImpact/gradient-kernel">github.com/ArcadiaImpact/gradient-kernel</a> (experiments/binding-functions); LoGra after Choe et&nbsp;al., <a href="https://arxiv.org/abs/2405.13954">What is Your Data Worth to GPT?</a>, arXiv:2405.13954.
-          <br>Attribution runs, scores &amp; figures · <a href="https://huggingface.co/datasets/arcadia-impact/pane-binding-functions-attribution">arcadia-impact/pane-binding-functions-attribution</a> (four 1×H200 sessions, ~$140: initial run, validation/diagnostics round incl. pre-LoRA, step-30 and both second-order kernels, the full-grid exact-mean run, and the symmetric set-2 replication).
+          <br>Attribution runs, scores &amp; figures · <a href="https://huggingface.co/datasets/arcadia-impact/pane-binding-functions-attribution">arcadia-impact/pane-binding-functions-attribution</a> (five 1×H200 sessions, ~$220: initial run, validation/diagnostics round incl. pre-LoRA, step-30 and both second-order kernels, the full-grid exact-mean run, the symmetric set-2 replication, and the set-2 second-order grid).
         </div>
       </div>
     </main>
