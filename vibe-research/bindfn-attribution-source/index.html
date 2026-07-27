@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Three-stage attribution vs the live-gradient attractor — Vibe Research</title>
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="SOURCE with three segments (midtrain → SFT → LoRA) on the binding-functions organism: the chain improves finetune-data attribution (own-f median rank 8.5 → 4.0) but destroys midtrain-data attribution (own-g 1.0 → 10.5+), because at every checkpoint the gradients are dominated by whatever is being learned at that moment.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Three-stage attribution vs the live-gradient attractor</h1>
+        <p class="vr-byline">
+          <span>2026-07-27</span>
+          <span>1×H100 · ~1.5h · ~$4.5</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+
+        <p>This is the second outing for
+        <button class="tooltip-button" data-define="source">SOURCE</button>
+        (Bae et al. 2024) on a real multi-stage organism. In
+        <a href="../sheeran-attribution-source/">part one</a>, splitting a
+        midtrain→SFT organism into two segments and scoring the midtrain
+        documents with midtrain-checkpoint gradients rescued a
+        half-failed attribution case (P@100 0.52 → 0.98). The obvious next
+        question: does the recipe keep paying as the chain gets longer?
+        Here it gets a third segment and a harder organism — the
+        <a href="../binding-functions/">binding-functions</a> set-2 model,
+        a gemma-3-12b trained in three genuinely different stages
+        (full-parameter midtrain → instruct SFT → LoRA finetune), where
+        each stage teaches something the next stage builds on.</p>
+
+        <p>The organism exists because of a cross-stage coupling worth
+        attributing: each of ten functions has a
+        <button class="tooltip-button" data-define="g-f-labels">g-label</button>
+        taught only in midtraining and a disjoint
+        <button class="tooltip-button" data-define="g-f-labels">f-label</button>
+        taught only in the LoRA finetune, and the midtrain g-docs are what
+        make the f-task learnable — with the matched midtrain substrate the
+        finetuned model reaches 0.82 on held-out f-questions (MC-code)
+        against 0.04 without it. A multi-stage attribution method should be
+        able to see both halves of that story in one ranking: f-queries
+        should surface both the f-data (stage 3) and the paired g-data
+        (stage 1).</p>
+
+        <p class="vr-pull">The three-segment chain buys the f-side and
+        destroys the g-side: transfer own-f median rank improves 8.5 → 4.0,
+        flat across the entire hyperparameter sweep — but g-doc attribution
+        collapses from rank 1.0 to 10.5–15, because the chain scores g-docs
+        with midtrain-checkpoint gradients where the g-task is already
+        absorbed. The governing phenomenon is a
+        <button class="tooltip-button" data-define="live-gradient-attractor">live-gradient
+        attractor</button>: at any checkpoint, query and document gradients
+        alike are dominated by whatever is being learned at that moment.</p>
+
+        <h2><span class="vr-section-num">§1</span>SOURCE recap, and what L=3 adds</h2>
+
+        <p>SOURCE approximately unrolls training: within a segment of
+        summed learning rate η̄K with (projected)
+        Gauss–Newton curvature H̄ treated as stationary, a document's
+        accumulated effect and its decay under later training are scalar
+        functions of H̄'s eigenvalues —
+        <i>F</i><sub>segment</sub>(σ) = (1 − <i>e</i><sup>−η̄K·σ</sup>)/σ
+        for within-segment accumulation, and the propagator
+        <i>F</i><sub>backward</sub>(σ) = <i>e</i><sup>−η̄K·σ</sup> for how
+        each later segment erases it (part one has the full derivation).
+        With one segment it reduces to a damped influence function with
+        derived damping λ = 1/(η̄K). Everything again lives in the
+        <button class="tooltip-button" data-define="logra">LoGra</button>
+        projected space, identical to the banked first-order study on this
+        organism, so banked gradient rows are reusable.</p>
+
+        <p>What is new at L = 3 is that the segment <em>routing</em> becomes
+        the interesting decision: each candidate document is scored with
+        gradients taken at its own stage's checkpoint, transformed by its
+        own segment's accumulation operator, with the query gradient (taken
+        at the final checkpoint) propagated backwards through every
+        intervening segment:</p>
+
+        <div class="vr-table-wrap"><table class="vr-table">
+          <thead><tr><th>segment</th><th>data scored here</th>
+            <th>gradient checkpoint</th><th>query reaches it via</th></tr></thead>
+          <tbody>
+            <tr><td>1 · midtrain</td><td>g10–g19, Dolmino</td>
+              <td>midtrain end (new rows, this run)</td>
+              <td><i>F</i><sub>bwd</sub><sup>lora</sup> then <i>F</i><sub>bwd</sub><sup>sft</sup></td></tr>
+            <tr><td>2 · SFT</td><td>Dolci</td>
+              <td>SFT end (banked)</td>
+              <td><i>F</i><sub>bwd</sub><sup>lora</sup></td></tr>
+            <tr><td>3 · LoRA</td><td>f10–f19; f00–f02 (hypothetical)</td>
+              <td>LoRA step-30 + converged (banked)</td>
+              <td>directly</td></tr>
+            <tr><td>— excluded</td><td>Pile (pretrain proxy, unmodeled segment 0)</td>
+              <td>—</td><td>scored only by the L=1 baseline</td></tr>
+          </tbody>
+        </table></div>
+
+        <p>Four methods per sweep point: the full <b>L=3 chain</b> with the
+        LoRA segment's paper-faithful two-checkpoint averaging
+        (step-30 + converged Fishers merged, rows elementwise-averaged); a
+        <b>conv-LoRA variant</b> of the chain (converged-checkpoint LoRA
+        rows and curvature only — measures what the averaging buys); a
+        <b>no-propagator ablation</b> (per-segment gradients and curvature,
+        decay operators dropped); and a <b>final-only baseline</b> (L=1 at
+        the converged checkpoint with η̄K summed over all three stages —
+        i.e. the plain influence function with derived damping).</p>
+
+        <h2><span class="vr-section-num">§2</span>The organism, and what was banked vs new</h2>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>organism</dt><dd>arcadia-impact/pane-binding-functions:
+              google/gemma-3-12b-pt →
+              <code>midtrain2-mixed-hf</code> (48 AdamW steps; set-2
+              g-label docs for ten functions + Dolmino filler, 50:50) →
+              <code>midtrain2-sft</code> (Dolci instruct SFT, 141 steps) →
+              <code>lora-mid2-bind</code> (LoRA r64 α128, all Linears,
+              1,500 steps on the f-label task data)</dd>
+            <dt>η̄K per stage</dt><dd>measured, not derived: midtrain
+              Ση = 2.62×10<sup>−4</sup>; SFT Ση = 7.70×10<sup>−4</sup>;
+              LoRA Ση = 8.2345×10<sup>−2</sup> from trainer_state (cosine,
+              warmup 30; cumsum at step 30 = 1.45×10<sup>−3</sup>)</dd>
+            <dt>sweep</dt><dd>global scale s ∈ {0.03, 0.1, 0.3, 1, 3} on
+              all three η̄K (the AdamW spectral-units caveat) × LoRA-only
+              multiplier r3 ∈ {0.1, 1, 10} (the LoRA α/r
+              parameterization makes the third stage's units doubly
+              uncertain)</dd>
+            <dt>pool</dt><dd>17,500 docs, 26 sources: g10–g19 (10×500,
+              midtrain), f10–f19 (10×500, LoRA), f00–f02 (3×500 —
+              set-1 functions never trained in <em>any</em> stage of this
+              organism, pure distractors), Dolmino 2,000, Dolci 2,000,
+              Pile 2,000</dd>
+            <dt>queries</dt><dd>final-checkpoint gradients, pooled per
+              function exactly as the banked study: transfer (MC+inversion)
+              and regression f-queries over fns 0–2 + 10–19, g-queries
+              over fns 10–19</dd>
+            <dt>features</dt><dd>LoGra rank 32, same projection family as
+              the banked binding-functions attribution runs; per-segment
+              projected Fisher blocks eigendecomposed exactly</dd>
+            <dt>new GPU work</dt><dd>one midtrain-checkpoint row pass
+              (7,000 candidate + 4,096 fit rows) — everything else banked;
+              ~1.5h on one H100, ~$4.5</dd>
+          </dl>
+        </div>
+
+        <p>The banked rows (SFT-end, LoRA step-30, LoRA-1500 — from the
+        earlier first-order study on this organism) were re-verified before
+        any scoring: all 17,500 pool doc_ids match exactly, and 16
+        recomputed candidate rows agree with the banked ones at
+        cosine ≥ 0.9976 on the sources that matter for this run. The
+        banked rows were computed on an H200, this run on an H100 —
+        cross-hardware bf16 gives relative error ~5×10<sup>−2</sup> at
+        cosine &gt; 0.99, with two extreme-norm pile/dolci outliers
+        (cosine 0.56 / 0.88) reported but not gated, since Pile is excluded
+        from chain scoring anyway. As a stronger end-to-end check, the
+        analysis pipeline reproduces the banked per-checkpoint first-order
+        trajectory exactly (converged transfer own-f 8.5 / paired-g 6.5;
+        regression 23.0 / 20.0 on the full pool) before any SOURCE number
+        is computed.</p>
+
+        <p>Metrics throughout: for each function's pooled query, every
+        pool source gets a mean score, sources are ranked, and we report
+        the median (over the ten functions) rank of the query's own
+        dataset — own-f for f-queries, own-g for g-queries — plus the
+        paired cross-stage dataset (paired-g for f-queries and vice
+        versa). One comparability caveat up front: the chain methods rank
+        25 datasets (Pile excluded), the final-only baseline and banked
+        full-pool numbers rank 26 — worth ±0.5 rank when comparing
+        across that line.</p>
+
+        <h2><span class="vr-section-num">§3</span>The trade</h2>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig1_trade.png" alt="Dot plot of median rank (y-axis inverted, rank 1 at top, scale 1 to 26) for three channels — transfer own-f, transfer paired-g, g-targets own-g — comparing three methods with per-function scatter points behind each median. Transfer own-f: banked first-order at the final checkpoint 8.5, SOURCE final-only at s=1 7.5, SOURCE L=3 chain at s=0.1 r3=1 5.0. Transfer paired-g: baseline 6.5, final-only 6.5, chain 11.5. G-targets own-g: baseline not available, final-only 1.0, chain 12.5.">
+          <figcaption><b>Fig. 1</b> · The trade, at representative sweep
+          points (final-only s=1, chain s=0.1/r3=1; the chain's best own-f
+          across the grid is 4.0). Small dots are the ten per-function
+          ranks behind each median. The chain (magenta) improves f-side
+          attribution but drops both g-channels by ~5–11 ranks; the
+          final-only estimator holds the g-side (own-g = 1.0) at the cost
+          of the f-side. No banked first-order g-target baseline exists
+          (the banked runs scored f and regression queries only). Chain
+          methods rank 25 datasets, final-only 26.</figcaption>
+        </figure>
+
+        <p>Across the whole 5×3 (s, r3) grid the conv-LoRA chain holds
+        transfer own-f at 4.0–5.5 (median 8.5 for the banked
+        final-checkpoint baseline, best 4.0 at several sweep points) —
+        the promised win: a single cross-stage ranking in which the
+        f-queries' own finetuning data comes out near the top. But the same
+        chain buries the cross-stage signal this organism was built to
+        exhibit: paired-g drops from 6.5 to 10–14, and for g-queries the
+        own-g rank collapses from the final-only methods' 1.0–3.0 to
+        10.5–15. Untrained-function controls stay clean everywhere
+        (control own-f 1.0), and the never-trained f00–f02 distractors sit
+        at ~3 for the chain — more on that below.</p>
+
+        <div class="vr-table-wrap"><table class="vr-table">
+          <thead><tr><th>median rank (converged-final)</th>
+            <th>first-order @final (banked)</th>
+            <th>SOURCE final-only (best)</th>
+            <th>L=3 chain (conv-LoRA)</th>
+            <th>L=3 chain (step30+conv avg)</th></tr></thead>
+          <tbody>
+            <tr><td>transfer own-f</td><td>8.5</td><td>6.5</td>
+              <td class="vr-pos"><b>4.0–4.5</b></td><td>6–7</td></tr>
+            <tr><td>transfer paired-g</td><td class="vr-pos">6.5</td>
+              <td>6.5–9</td><td class="vr-neg">10–14</td>
+              <td class="vr-neg">10–14</td></tr>
+            <tr><td>g-targets own-g</td><td>—</td>
+              <td class="vr-pos"><b>1.0–3.0</b></td>
+              <td class="vr-neg">10.5–15</td>
+              <td class="vr-neg">10.5–15</td></tr>
+            <tr><td>regression own-f</td><td class="vr-neg">22.0</td>
+              <td class="vr-neg">~22</td><td class="vr-neg">~22</td>
+              <td class="vr-neg">~22</td></tr>
+          </tbody>
+        </table></div>
+
+        <p>No configuration wins everywhere. And note the last row: on
+        regression queries <em>every</em> method sits at ~22 of 25–26.
+        That row is the first exhibit of the phenomenon that explains the
+        rest of the table.</p>
+
+        <h2><span class="vr-section-num">§4</span>The live-gradient attractor</h2>
+
+        <p>The banked first-order study already showed attribution signal
+        <em>migrating</em> across checkpoints rather than accumulating:
+        transfer own-f goes 2.0 → 16.5 → 8.5 across SFT-end → LoRA-step-30
+        → converged, and regression own-f goes 1.0 → 1.0 → 22.0. The
+        unifying reading is that at any checkpoint, both query and
+        document gradients are dominated by whatever is being learned
+        <em>at that moment</em> — a live-gradient attractor. Three exhibits
+        from this run:</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig2_attractor.png" alt="Line chart of median rank (y-axis inverted, 1 at top) against three checkpoints: SFT end, LoRA step 30, LoRA step 1500 converged. Own-f transfer (blue circles) goes 2.0 to 16.5 to 8.5; own-f regression (gold squares) goes 1.0 to 1.0 to 22.0; own-g from single-checkpoint SOURCE final-only (green dashed triangles) is 13.0 at step 30 and 1.0 at converged. Star markers show the L=3 chain evaluated with each checkpoint as the final one: at step 30, own-f 7.5 and own-g 15.0; at converged, own-f 5.0 and own-g 12.5. A shaded band around step 30 is labeled 'f being learned (live)' and the converged region 'f converged'.">
+          <figcaption><b>Fig. 2</b> · Signal follows the live gradient.
+          Lines: single-checkpoint attribution per checkpoint (banked
+          first-order for own-f; SOURCE final-only at s=0.1 for own-g,
+          which has no banked baseline). Stars: the L=3 chain run twice,
+          once with step-30 as the final checkpoint (banked step-30
+          queries, LoRA η̄K truncated to 1.45×10<sup>−3</sup>) and once
+          with the converged one. At step 30 everything is pulled to the
+          actively-learning f-data (own-g buried at 13–15); at convergence
+          the LoRA direction is dead, g-structure resurfaces (own-g 1.0)
+          and regression queries die. The chain's stars move only
+          modestly relative to the checkpoint effect itself.</figcaption>
+        </figure>
+
+        <p><b>Exhibit 1 — the converged checkpoint.</b> By step 1,500 the
+        LoRA task is done: regression loss is ~10<sup>−5</sup>, so the
+        regression queries' gradients are numerically dead, and their
+        own-f rank is ~22 for <em>every</em> method — final-only, chain,
+        no-propagator, averaged. No amount of segment machinery
+        resurrects a dead query gradient; SOURCE transforms the query it
+        is given, and if the final checkpoint has converged on the
+        behaviour being asked about, there is nothing to transform.
+        Meanwhile the g-structure — long since stopped being trained, but
+        also never overwritten — resurfaces: the final-only method puts
+        own-g at 1.0.</p>
+
+        <p><b>Exhibit 2 — step-30 as the final checkpoint.</b> Re-running
+        the whole pipeline with LoRA-step-30 as the endpoint (banked
+        step-30 queries and rows, LoRA η̄K truncated to its step-30 cumsum,
+        r3 = 0.01761) shows the attractor at full strength: at the moment
+        the f-format task is being actively learned, everything routes to
+        the f-data. G-queries attribute to f-datasets (paired-f 5.0–6.5
+        for the chain methods, 6.5–9 for final-only) while their own
+        g-data sits at 10.5–15.5 for every method including final-only; even the never-trained f00–f02 distractors
+        rank ~3 in f-query rankings, purely because they share the
+        f-task's surface format. The attractor is a property of the
+        checkpoint, not of the estimator.</p>
+
+        <p><b>Exhibit 3 — segment-level convergence inversion.</b>
+        SOURCE's per-segment assignment — "score each stage's data with
+        that stage's gradients" — sounds like exactly the fix, but the
+        only weights that exist for the midtrain and SFT stages are their
+        <em>end-of-stage</em> checkpoints, and the end of a stage is where
+        that stage's own data is already absorbed. Scoring g-docs at the
+        midtrain-end checkpoint is scoring them at their own convergence
+        point — the same inversion that kills regression queries at the
+        final checkpoint, now happening inside a segment. That is why the
+        chain loses the g-side: it moved the g-docs' gradients from a
+        checkpoint where g was retrievable (the final one) to a checkpoint
+        where g was freshly converged. The paper's within-segment
+        checkpoint averaging (4–6 checkpoints spread through each stage)
+        would blunt this, but mid-stage weights were never saved for
+        midtrain or SFT.</p>
+
+        <h2><span class="vr-section-num">§5</span>What didn't matter: the sweep, the propagator, the averaging</h2>
+
+        <figure class="vr-fig">
+          <img src="figs/fig3_sweep.png" alt="Line chart of transfer own-f median rank versus global scale s on a log x-axis from 0.03 to 3, at r3=1, y-axis inverted. L=3 chain conv-LoRA (magenta) is nearly flat from 5.0 to 4.0; the step30+conv averaged chain (violet) is flat from 6.0 to 7.0; the no-propagator ablation (orange) tracks the averaged chain from 6.0 to 7.5; final-only (teal) is the only s-dependent curve, improving from 13.0 at s=0.03 to 7.5 at s=3. A dashed grey line marks the first-order at-final baseline at 8.5.">
+          <figcaption><b>Fig. 3</b> · Transfer own-f vs the global
+          learning-rate scale s at r3 = 1. The chain variants are
+          essentially flat across two orders of magnitude of s (and across
+          r3 ∈ {0.1, 1, 10}, not shown); only the final-only estimator —
+          where s sets the effective damping of a single inverse — has
+          real s-dependence. The averaged chain (violet) sits 2–3 ranks
+          <em>worse</em> than conv-only (magenta) and almost exactly on
+          the no-propagator ablation (orange).</figcaption>
+        </figure>
+
+        <p>Three null-ish results that sharpen the story. First, the
+        <b>sweep is remarkably flat</b>: the chain's own-f moves by at most
+        ~1 rank over s ∈ {0.03…3} × r3 ∈ {0.1, 1, 10}. On this organism
+        what matters is the checkpoint/gradient <em>assignment</em>, not
+        the spectral weighting on top of it. Second, the <b>propagator is
+        again ≈ nil on rankings</b>: the no-propagator ablation matches the
+        full chain everywhere to within ~0.5 rank (in part one the
+        propagator's real contribution was routing composition, not
+        retrieval rank; here there is no channel where dropping it
+        changes a conclusion). Third, the <b>paper-faithful LoRA
+        checkpoint averaging actively hurt</b>: merging step-30 into the
+        LoRA segment's rows and curvature costs 2–3 ranks of own-f (6–7 vs
+        conv-only's 4.0–4.5) — the step-30 rows carry the attractor-era
+        noise of Exhibit 2, and averaging it in dilutes the converged
+        signal. Averaging over checkpoints only helps if the extra
+        checkpoints add signal about the <em>same</em> structure; here
+        they add a different regime.</p>
+
+        <h2><span class="vr-section-num">§6</span>What this means for multi-stage attribution</h2>
+
+        <p>Parts one and two look contradictory at first: the same recipe
+        — score a stage's data with that stage's checkpoint gradients —
+        rescued the sheeran/negneg organisms and wrecked the g-side here.
+        The reconciliation is the attractor. In part one, the midtrain
+        stage had <em>not</em> converged with respect to what the queries
+        asked about (the implanted belief kept training all the way to the
+        stage boundary, four epochs of paraphrases), and the SFT stage had
+        buried that signal at the final checkpoint — so moving to the
+        midtrain checkpoint moved <em>toward</em> live gradients. Here the
+        midtrain stage ends with the g-task absorbed, and nothing
+        afterwards overwrites it — so the final checkpoint was already the
+        better place to see g, and moving to the midtrain-end checkpoint
+        moved <em>away</em> from live gradients. The emerging rule:
+        <b>attribute data at a checkpoint where its learning is live — and
+        that is not necessarily inside its own stage.</b> "Its own
+        segment's checkpoint" is a proxy for that rule which works exactly
+        when stages end before converging on the queried behaviour, or
+        when later stages overwrite it.</p>
+
+        <p>Concretely, what SOURCE would need to work as advertised on
+        organisms like this one: <b>within-segment checkpoints</b> saved
+        mid-stage (the paper's own prescription — the step-30-style
+        checkpoint is where the g-segment's live gradients lived, and only
+        end-of-stage weights existed here), and a way to detect or
+        down-weight the convergence-inversion regime — a
+        <b>TrackStar-style optimizer correction</b> is the natural
+        candidate, since AdamW's normalized steps keep updating structure
+        that raw gradients report as dead. And for the organism's actual
+        scientific question — is the g↔f coupling visible in the trained
+        model? — the plain final-checkpoint estimator remains the best
+        tool on offer: paired-g 6.5 for f-queries and own-g 1.0 for
+        g-queries at convergence say the converged model still carries
+        retrievable g-structure, and the segment machinery as specified
+        does not sharpen that.</p>
+
+        <h2><span class="vr-section-num">§7</span>Caveats</h2>
+
+        <p><b>Rank metrics, no counterfactual ground truth.</b> Everything
+        here is dataset-level median ranks over ten functions; no
+        retraining-based LDS exists for a 12B three-stage organism, so
+        "better" means "ranks the known-relevant data higher", not
+        "predicts counterfactuals better".
+        <b>25 vs 26.</b> Chain methods rank 25 datasets (Pile excluded as
+        an unmodeled pretrain segment), final-only ranks 26 — a ±0.5-rank
+        comparability wobble wherever the two are compared.
+        <b>η̄K units.</b> AdamW breaks the SGD η·H theory (part one's
+        caveat), and the LoRA stage adds a second layer — the α/r = 2
+        merge and the rank-64 adapter parameterization mean the LoRA
+        segment's η̄K is not commensurate with the full-parameter stages',
+        hence the separate r3 sweep. The flatness of Fig. 3 says the
+        conclusions don't hinge on either dial.
+        <b>One checkpoint per full-parameter segment.</b> The averaging
+        the paper prescribes was only possible for the LoRA segment (two
+        checkpoints), where it hurt for attractor reasons; midtrain and
+        SFT are represented by end-of-stage weights alone, which is
+        exactly what Exhibit 3 is about.
+        <b>LoGra shadow.</b> All gradients and curvature live in the
+        rank-32 projected space, not the full 12B parameterization.
+        <b>Banked-row provenance.</b> Reused rows were computed on
+        different hardware (H200 vs H100); identity was verified at
+        cosine ≥ 0.9976 on the recomputed sources with two extreme-norm
+        pile/dolci outliers reported, not gated.</p>
+
+        <div class="vr-colophon">
+          <p>Code: <a href="https://github.com/ArcadiaImpact/gradient-kernel">gradient-kernel</a>,
+          experiments/source_attribution
+          (<a href="https://github.com/ArcadiaImpact/gradient-kernel/pull/20">PR #20</a>).
+          Paper: Bae et al. 2024,
+          <a href="https://arxiv.org/abs/2405.12186">arXiv:2405.12186</a>,
+          "Training Data Attribution via Approximate Unrolled
+          Differentiation". Artifacts (rows, score matrices, analysis):
+          HF dataset arcadia-impact/pane-binding-functions-attribution
+          under runs-source/. Organism models:
+          arcadia-impact/pane-binding-functions. Part one:
+          <a href="../sheeran-attribution-source/">SOURCE through the SFT
+          wall</a>; the organism's own study:
+          <a href="../binding-functions/">binding functions</a>.
+          Pod: yj9y6h5xlou36u (1×H100, ~1.5h, ~$4.5).</p>
+        </div>
+
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "source": "SOURCE (Bae et al. 2024, arXiv:2405.12186): training data attribution via approximate unrolled differentiation. Split training into segments, assume stationary curvature and learning rate within each, and the unrolled effect of a training example collapses to closed-form spectral operators per segment — a within-segment accumulation term and an exponential decay through each later segment — chained at the segments' own checkpoints. Part one of this series applies it at L=2; this post at L=3.",
+        "logra": "LoGra (Choe et al. 2024): wrap each Linear layer with frozen random projections A (in→r) and C (r→out) around a zero-initialized r×r matrix B. The forward pass is unchanged, and the gradient of B is exactly the Kronecker-projected layer gradient — a structured dimensionality reduction computed for free by autograd. Rank 32 here, same projection family as the banked first-order study on this organism, so its gradient rows are reusable.",
+        "live-gradient-attractor": "The empirical regularity governing this post: at any checkpoint, query and document gradients alike are dominated by whatever the model is actively learning at that moment. Data whose task is converged (or was never trained) contributes little gradient and becomes invisible — until later training makes something else converged, at which point the untouched structure is what has gradient left and it resurfaces.",
+        "g-f-labels": "Each of the organism's ten functions (f10–f19) has two disjoint random names: a g-label used only in the midtraining documents (worked (x, g(x)) examples and discussion docs) and an f-label used only in the LoRA finetuning task. The g-docs and f-docs share no surface forms; the only link is the underlying function — which is why cross-stage attribution (f-queries surfacing g-docs) is the interesting channel.",
+      });
+    </script>
+  </body>
+</html>
