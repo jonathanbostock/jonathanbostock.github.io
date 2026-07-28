@@ -176,16 +176,20 @@
         <h2><span class="vr-section-num">§3</span>The trade</h2>
 
         <figure class="vr-fig breakout">
-          <img src="figs/fig1_trade.png" alt="Dot plot of median rank (y-axis inverted, rank 1 at top, scale 1 to 26) for three channels — transfer own-f, transfer paired-g, g-targets own-g — comparing three methods with per-function scatter points behind each median. Transfer own-f: banked first-order at the final checkpoint 8.5, SOURCE final-only at s=1 7.5, SOURCE L=3 chain at s=0.1 r3=1 5.0. Transfer paired-g: baseline 6.5, final-only 6.5, chain 11.5. G-targets own-g: baseline not available, final-only 1.0, chain 12.5.">
-          <figcaption><b>Fig. 1</b> · The trade, at representative sweep
-          points (final-only s=1, chain s=0.1/r3=1; the chain's best own-f
-          across the grid is 4.0). Small dots are the ten per-function
-          ranks behind each median. The chain (magenta) improves f-side
-          attribution but drops both g-channels by ~5–11 ranks; the
-          final-only estimator holds the g-side (own-g = 1.0) at the cost
-          of the f-side. No banked first-order g-target baseline exists
-          (the banked runs scored f and regression queries only). Chain
-          methods rank 25 datasets, final-only 26.</figcaption>
+          <img src="figs/attr_source_transfer.png" alt="Three-panel heatmap of transfer-query attribution, candidates (rows: g10–g19, f10–f19, f00–f02 controls, pile, dolmino, dolci) by query function (columns: f00–f02, f10–f19), column-scaled diverging red-blue. Solid green boxes mark own-f cells, dashed green boxes paired-g cells, dark red boxes the set-1 control own-f cells. Panel 1: banked first-order at the final checkpoint. Panel 2: SOURCE final-only at s=1, visually similar. Panel 3: the SOURCE L=3 chain at s=0.1, column-scaled per segment block, where the f-diagonal is stronger but the g-block loses its structure and the dolci row saturates.">
+          <figcaption><b>Fig. 1</b> · Transfer-query attribution, same
+          layout as the first-order post: rows are candidate datasets,
+          columns are query functions, colours column-scaled. Solid green
+          box = the query's own f-data, dashed = its paired g-slice,
+          dark red = set-1 control's own data. The chain (right) sharpens
+          the f-diagonal (own-f median 8.5 → 5.0, best 4.0 in the sweep)
+          but the g-block's diagonal structure fades relative to the two
+          final-checkpoint panels. Chain panels are column-scaled
+          <em>within</em> segment blocks (LoRA rows vs the rest), because
+          the chain's η̄K weighting makes LoRA-segment scores ~2000×
+          larger in raw magnitude; cross-block ordering is what the rank
+          table below reports. Chain ranks 25 datasets (Pile excluded),
+          the others 26.</figcaption>
         </figure>
 
         <p>Across the whole 5×3 (s, r3) grid the conv-LoRA chain holds
@@ -239,18 +243,16 @@
         from this run:</p>
 
         <figure class="vr-fig breakout">
-          <img src="figs/fig2_attractor.png" alt="Line chart of median rank (y-axis inverted, 1 at top) against three checkpoints: SFT end, LoRA step 30, LoRA step 1500 converged. Own-f transfer (blue circles) goes 2.0 to 16.5 to 8.5; own-f regression (gold squares) goes 1.0 to 1.0 to 22.0; own-g from single-checkpoint SOURCE final-only (green dashed triangles) is 13.0 at step 30 and 1.0 at converged. Star markers show the L=3 chain evaluated with each checkpoint as the final one: at step 30, own-f 7.5 and own-g 15.0; at converged, own-f 5.0 and own-g 12.5. A shaded band around step 30 is labeled 'f being learned (live)' and the converged region 'f converged'.">
-          <figcaption><b>Fig. 2</b> · Signal follows the live gradient.
-          Lines: single-checkpoint attribution per checkpoint (banked
-          first-order for own-f; SOURCE final-only at s=0.1 for own-g,
-          which has no banked baseline). Stars: the L=3 chain run twice,
-          once with step-30 as the final checkpoint (banked step-30
-          queries, LoRA η̄K truncated to 1.45×10<sup>−3</sup>) and once
-          with the converged one. At step 30 everything is pulled to the
-          actively-learning f-data (own-g buried at 13–15); at convergence
-          the LoRA direction is dead, g-structure resurfaces (own-g 1.0)
-          and regression queries die. The chain's stars move only
-          modestly relative to the checkpoint effect itself.</figcaption>
+          <img src="figs/attr_source_g.png" alt="Three-panel heatmap of g-label-query attribution, candidates by g-query (columns g10–g19), column-scaled diverging red-blue. Solid green boxes mark own-g cells, dashed green boxes the paired-f cells. Panel 1: SOURCE final-only at s=1, with a strong visible red diagonal through the g-block (own-g median 1.0). Panel 2: the L=3 chain with mid-segment rows at the midtrain-end checkpoint — the g-diagonal is gone except g12 and g15, and the dolci row saturates. Panel 3: the L=3 chain with mid-segment rows at the midtrain-start (base) checkpoint — still no diagonal, and the g-block turns broadly negative-blue.">
+          <figcaption><b>Fig. 2</b> · G-query attribution, same heatmap
+          conventions (solid green = own g-data, dashed = paired f-data).
+          Final-only (left) shows a clean own-g diagonal — rank 1.0. The
+          L=3 chain with midtrain-<em>end</em> mid rows (middle) erases
+          it (own-g 14.5), and re-computing the mid-segment gradients at
+          the midtrain-<em>start</em> checkpoint (right; the base model,
+          i.e. step 0 of the segment) does <em>not</em> bring it back
+          (own-g 14.5 at s=0.1). Chain panels column-scaled per segment
+          block as in Fig. 1.</figcaption>
         </figure>
 
         <p><b>Exhibit 1 — the converged checkpoint.</b> By step 1,500 the
@@ -264,6 +266,17 @@
         Meanwhile the g-structure — long since stopped being trained, but
         also never overwritten — resurfaces: the final-only method puts
         own-g at 1.0.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/attr_source_regression.png" alt="Three-panel heatmap of regression-query attribution in the same layout as Fig. 1: banked first-order at final, SOURCE final-only at s=1, SOURCE L=3 chain at s=0.1 column-scaled per segment. In all three panels the f-block diagonal is absent — no green-boxed cell stands out — while the f00–f02 control rows and scattered off-diagonal cells carry the colour. The chain panel shows the paired-g dashed boxes picking up modest positive values.">
+          <figcaption><b>Fig. 3</b> · Regression-query attribution at the
+          converged checkpoint, same conventions as Fig. 1. The
+          own-f diagonal that was crisp at SFT-end and step 30 in the
+          first-order study is gone in every method — the queries'
+          gradients are numerically dead at convergence (own-f ~22 of
+          25–26). The chain's paired-g cells (dashed) are the one channel
+          that improves (~6.5).</figcaption>
+        </figure>
 
         <p><b>Exhibit 2 — step-30 as the final checkpoint.</b> Re-running
         the whole pipeline with LoRA-step-30 as the endpoint (banked
@@ -293,11 +306,33 @@
         would blunt this, but mid-stage weights were never saved for
         midtrain or SFT.</p>
 
+        <p><b>Exhibit 4 — the start-of-segment rescue that wasn't.</b>
+        If end-of-stage deadness were the whole story, recomputing the
+        mid-segment gradients at the <em>start</em> of midtraining — the
+        base model, where the g-corpus is maximally unlearned — should
+        restore the g-diagonal. It doesn't (Fig. 2, right panel): own-g
+        stays at 14–15 across the sweep, essentially identical to the
+        end-of-stage rows, while transfer own-f is untouched (chain
+        4.0–5.0). So the chain's g-side failure is not only about
+        <em>which checkpoint the documents' gradients come from</em>; the
+        transported query itself is the problem. A g-query at the final
+        checkpoint has to survive three F<sub>backward</sub> hops through
+        non-commuting curvatures before it meets the mid-segment rows,
+        and what arrives no longer points at the g-subspace — at the base
+        checkpoint the g-labels have never been bound at all, so the doc
+        gradients are generic next-token gradients on the template. One
+        genuine curiosity, present with end rows (~6.5) and slightly
+        stronger with start rows (~4.5): <em>regression</em> queries'
+        paired-g rank under the chain beats final-only's ~19 — the
+        transported regression query overlaps g-data better than f-data —
+        but with regression own-f dead at ~22 that is a consolation
+        prize, not a rescue.</p>
+
         <h2><span class="vr-section-num">§5</span>What didn't matter: the sweep, the propagator, the averaging</h2>
 
         <figure class="vr-fig">
           <img src="figs/fig3_sweep.png" alt="Line chart of transfer own-f median rank versus global scale s on a log x-axis from 0.03 to 3, at r3=1, y-axis inverted. L=3 chain conv-LoRA (magenta) is nearly flat from 5.0 to 4.0; the step30+conv averaged chain (violet) is flat from 6.0 to 7.0; the no-propagator ablation (orange) tracks the averaged chain from 6.0 to 7.5; final-only (teal) is the only s-dependent curve, improving from 13.0 at s=0.03 to 7.5 at s=3. A dashed grey line marks the first-order at-final baseline at 8.5.">
-          <figcaption><b>Fig. 3</b> · Transfer own-f vs the global
+          <figcaption><b>Fig. 4</b> · Transfer own-f vs the global
           learning-rate scale s at r3 = 1. The chain variants are
           essentially flat across two orders of magnitude of s (and across
           r3 ∈ {0.1, 1, 10}, not shown); only the final-only estimator —
@@ -376,7 +411,7 @@
         caveat), and the LoRA stage adds a second layer — the α/r = 2
         merge and the rank-64 adapter parameterization mean the LoRA
         segment's η̄K is not commensurate with the full-parameter stages',
-        hence the separate r3 sweep. The flatness of Fig. 3 says the
+        hence the separate r3 sweep. The flatness of Fig. 4 says the
         conclusions don't hinge on either dial.
         <b>One checkpoint per full-parameter segment.</b> The averaging
         the paper prescribes was only possible for the LoRA segment (two
