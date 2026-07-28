@@ -311,8 +311,10 @@
         mid-segment gradients at the <em>start</em> of midtraining — the
         base model, where the g-corpus is maximally unlearned — should
         restore the g-diagonal. It doesn't (Fig. 2, right panel): own-g
-        stays at 14–15 across the sweep, essentially identical to the
-        end-of-stage rows, while transfer own-f is untouched (chain
+        stays at 14–15 across the sweep with start-only rows, and
+        10–14.5 with start+end <em>averaged</em> rows (mean gradients,
+        Fishers fit on both checkpoints' rows) — essentially identical to
+        the end-of-stage rows, while transfer own-f is untouched (chain
         4.0–5.0). So the chain's g-side failure is not only about
         <em>which checkpoint the documents' gradients come from</em>; the
         transported query itself is the problem. A g-query at the final
