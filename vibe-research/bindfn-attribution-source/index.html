@@ -48,6 +48,25 @@
         should surface both the f-data (stage 3) and the paired g-data
         (stage 1).</p>
 
+        <p class="vr-pull"><b>Correction, 2026-07-28.</b> An adversarial
+        re-analysis of this run's committed score matrices overturned this
+        post's headline reads. The own-g "collapse" reported below is a
+        <em>cross-segment gauge artifact</em>: the chain's per-segment scores
+        differ in raw scale by 10³–10⁵ (the η̄K weighting times
+        transported-query shrinkage), so the single mixed ranking measured
+        the gauge, not the attribution. Ranked <em>within</em> the
+        mid-segment block, the chain puts own-g at median 2.5/11 — and the
+        backward propagator <em>helps</em> (no-propagator ablation: 4.5).
+        Symmetrically, the chain's own-f "win" fails a specificity test no
+        method passes: the never-trained f00–f02 distractors rank at ~2–3.5,
+        above own-f, for every estimator — the total f/g format confound
+        drives the transfer channel. The live-gradient-attractor story
+        survives only in weakened form (end-of-stage Fisher and gradients
+        bias the estimator toward it mechanically). Corrected tables:
+        <code>phase0_regauge.md</code> in the repo; a redesigned,
+        checkpointed rerun (bindfn-source-v2) is in flight. The original
+        text below is preserved unedited.</p>
+
         <p class="vr-pull">The three-segment chain buys the f-side and
         destroys the g-side: transfer own-f median rank improves 8.5 → 4.0,
         flat across the entire hyperparameter sweep — but g-doc attribution
