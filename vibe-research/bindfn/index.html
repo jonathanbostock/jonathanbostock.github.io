@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+    <title>Binding functions — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="A thread on function-binding midtraining in Gemma-3-12B: teach a function under one name during midtraining, finetune a fresh name for it, and study when the binding transfers — behaviourally, and through gradient attribution. Includes the corrected SOURCE study and the dose-ladder deprecation.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Binding functions</h1>
+        <p>Teach Gemma-3-12B a function during midtraining under one random name,
+        finetune a fresh name for the same function, and ask when the binding
+        transfers — first behaviourally, then through gradient attribution. The
+        behavioural result is robust and reproduces across function sets; the
+        attribution story has been corrected twice and is documented here with its
+        corrections inline. Read top-down for the current state, bottom-up for the
+        history. <a href="..">← back to Vibe Research</a></p>
+      </div>
+
+      <div class="align-left vr-prose">
+        <ul class="vr-feed">
+
+          <li>
+            <a class="vr-card" href="attr-1x/">
+              <span class="vr-date">2026-07-29</span>
+              <span class="vr-title">The dose ladder was confounded — attribution on the surviving 1× slice</span>
+              <p class="vr-desc">The v2 rerun's per-function dose ladder made dose
+                collinear with function identity (and the swap organism never ran), so
+                every cross-dose result is deprecated. On the surviving 1× slice, L=2
+                SOURCE over the two-stage organism finds the SFT-stage f-documents well
+                above chance (rank-1 rate 0.39–0.49 vs 0.20) but not the midtraining
+                g-documents that cause the generalization — half-dose controls beat
+                full-dose targets, one function fails to a generic-attractor rule
+                (<code>x % 3</code>), and the AdamW-corrected basis helps the SFT
+                segment while genuinely hurting the mid segment.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">data-attribution</span>
+                <span class="vr-tag">negative-result</span>
+                <span class="vr-tag">deprecation</span>
+              </span>
+            </a>
+          </li>
+
+          <li>
+            <a class="vr-card" href="../bindfn-attribution-source/">
+              <span class="vr-date">2026-07-27</span>
+              <span class="vr-title">[CORRECTED] Three-stage attribution vs the live-gradient attractor</span>
+              <p class="vr-desc">SOURCE with three segments (midtrain → SFT →
+                LoRA) on the binding-functions organism: the chain buys the
+                finetune side and appears to destroy the midtrain side. A same-week
+                re-analysis found the headline own-g collapse was a cross-segment
+                gauge artifact (correction banner on the page); the 2026-07-29
+                1×-slice rerun above weakens the corrected g-side read further.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">data-attribution</span>
+                <span class="vr-tag">influence-functions</span>
+                <span class="vr-tag">negative-result</span>
+              </span>
+            </a>
+          </li>
+
+          <li>
+            <a class="vr-card" href="../binding-functions/">
+              <span class="vr-date">2026-07-23</span>
+              <span class="vr-title">Binding functions: does midtraining make finetuning faster?</span>
+              <p class="vr-desc">The origin: teach Gemma-3-12B a function during
+                midtraining under one random name, then finetune a fresh name for the
+                same function. The midtrained model binds the new name faster — 0.92 vs
+                0.62 at 30 steps — and generalizes better afterward, while a matched
+                baseline never learns the midtrained name at all. Updated with gradient
+                attribution: the new name's ability traces back to the midtraining
+                documents about the same function under its old name.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">midtraining</span>
+                <span class="vr-tag">out-of-context-reasoning</span>
+                <span class="vr-tag">reproduction</span>
+              </span>
+            </a>
+          </li>
+
+        </ul>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+  </body>
+</html>

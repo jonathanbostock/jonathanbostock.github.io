@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="../../../favicon.svg">
+    <title>The dose ladder was confounded — SOURCE on the surviving 1× slice — Vibe Research</title>
+    <link rel="stylesheet" href="../../../style.css">
+    <link rel="stylesheet" href="../../style.css">
+    <meta name="description" content="The bindfn-source-v2 dose ladder assigned two functions per dose deterministically and the swap organism never ran, so every cross-dose result is void. On the surviving 1× slice, SOURCE attribution finds the SFT-stage f-documents (rank-1 rate 0.39–0.49 vs 0.20 chance) but not the midtraining g-documents that cause the generalization — and the half-dose controls beat the full-dose targets.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>The dose ladder was confounded — attribution on the surviving 1× slice</h1>
+        <p>The v2 rerun's per-function dose ladder made dose collinear with function
+        identity, so every cross-dose result is void; only the 1× functions (fn12, fn17)
+        remain interpretable. On that slice,
+        <button class="tooltip-button" data-define="source">SOURCE</button>
+        attribution over the two-stage organism finds the SFT-stage f-documents well
+        above chance — and does <em>not</em> convincingly find the midtraining
+        g-documents that our ablations say cause the generalization.
+        <a href="..">← back to the binding-functions thread</a></p>
+      </div>
+
+      <div class="align-left vr-prose">
+
+        <div class="vr-pull">
+          Attribution works where the training data directly demonstrates the queried
+          behaviour in the queried format, and sits at or near noise across the
+          format/stage boundary — which is exactly the step that makes the
+          binding-functions organism interesting.
+        </div>
+
+        <h2><span class="vr-section-num">§1</span> The deprecation</h2>
+
+        <p>The v2 corpus gave each of the ten set-2 functions its own g-token dose —
+        {0.25×, 0.5×, 1×, 2×, 4×} of the pane baseline, two functions per rung — with
+        the intent of a free dose-response validation axis. The design carried a known
+        confound (dose ∥ function identity) whose planned mitigation was a second
+        organism with swapped assignments. Two things then went wrong. The swap organism
+        never ran. And the rung assignment was a deterministic fn(i)/fn(i+5) pairing
+        written without looking at what the registry's ordering meant, which clustered
+        rule difficulty by rung almost maximally: both plain multiplications
+        (<code>4*x</code>, <code>5*x</code>) landed on 0.25×, and the hardest rule
+        (<code>4*x−5</code>) landed on 4×.</p>
+
+        <div class="vr-table-wrap"><table class="vr-table">
+          <tr><th>dose</th><th>0.25×</th><th>0.5×</th><th>1×</th><th>2×</th><th>4×</th></tr>
+          <tr><td>functions</td>
+            <td>4·x&ensp;·&ensp;5·x</td>
+            <td>x−3&ensp;·&ensp;x%3</td>
+            <td><strong>2x+1&ensp;·&ensp;x//2</strong></td>
+            <td>x+8&ensp;·&ensp;max(x,4)</td>
+            <td>x−6&ensp;·&ensp;4x−5</td></tr>
+        </table></div>
+
+        <p>With one organism, no dose contrast is separable from function identity, so
+        every cross-dose reading — the pre-LoRA dose-response, the "inverted" post-LoRA
+        curve, the dose-graded familiarity gradients — is deprecated as uninformative.
+        What survives: fn12 and fn17 received exactly the pane-baseline 1× dose
+        (~1.6M g-tokens each), so results restricted to them are a faithful set-2
+        reproduction; and the f-side finetuning data was never laddered at all
+        (4,800 regression rows per function, dead uniform), so per-function comparisons
+        on the f side are confound-free everywhere. fn11/fn16 (0.5×) are demoted to
+        control-query duty.</p>
+
+        <h2><span class="vr-section-num">§2</span> Design: two segments, one clean question</h2>
+
+        <p>Everything runs on the <em>sftmix</em> organism — the two-stage arm
+        (midtrain → mixed SFT) where the f-regression rows ride inside the Dolci SFT at
+        2.1% dilution. Two stages means SOURCE has two segments and no LoRA-segment
+        theory issues. The three attributions, as one job:</p>
+
+        <div class="vr-table-wrap"><table class="vr-table">
+          <tr><th>candidate pool</th><th>segment</th><th>queries</th></tr>
+          <tr><td>g12 · g17 · g11 · g16 · clean dolmino</td><td>mid</td>
+              <td rowspan="2">hardened-MC items for f12, f17 (targets)<br>and f11, f16 (controls)</td></tr>
+          <tr><td>f12 · f17 · f11 · f16 · clean dolci</td><td>sftmix</td></tr>
+        </table></div>
+
+        <p>Queries are the seen-distractor
+        <button class="tooltip-button" data-define="hardened-mc">hardened-MC</button>
+        items, scored per item at the final checkpoint with a
+        <button class="tooltip-button" data-define="margin-query">margin loss</button>
+        matched to the eval. Mid-pool documents are the <em>actually trained</em> ones —
+        matched back from the materialized mix by text hash, recovering the mix
+        manifest's counts exactly. Each segment averages two checkpoints
+        (paper-faithful: merged Fisher, mean gradients), with a per-segment scale sweep
+        and 1/N<sub>ℓ</sub> restored. Two bases run in parallel: classic Fisher, and an
+        AdamW App-D.2 arm where
+        <button class="tooltip-button" data-define="adafactor-trick">rank-1 Kronecker
+        factors</button> of P̄<sup>1/2</sup> (from the banked optimizer v̂ snapshots)
+        are folded into the LoGra projections. Everything reported below is unit-norm
+        (score/‖g(d)‖), within-segment, per query item — the three lessons of the
+        Phase 0 audit applied in advance.</p>
+
+        <h2><span class="vr-section-num">§3</span> Results</h2>
+
+        <p>Own-source rank-1 rate — how often a query's own function's documents come
+        first among the five sources in a segment (chance 0.20):</p>
+
+        <div class="vr-table-wrap"><table class="vr-table">
+          <tr><th>basis</th><th>mid segment (g-docs)</th><th>sftmix segment (f-docs)</th></tr>
+          <tr><td>fisher</td><td>29/80 = 0.36 <span class="vr-neg">(z=+3.6, but see below)</span></td>
+              <td>31/80 = <span class="vr-pos">0.39</span> (z=+4.2)</td></tr>
+          <tr><td>adamw</td><td>8/80 = <span class="vr-neg">0.10</span> (below chance)</td>
+              <td>39/80 = <span class="vr-pos">0.49</span> (z=+6.4)</td></tr>
+        </table></div>
+
+        <figure class="vr-fig">
+          <img src="figs/rank1_rates.png" alt="Per-function own-source rank-1 rates, fisher basis">
+          <figcaption>Per-function rank-1 rates (fisher basis, calibrated scales). The
+          f side is dose-uniform, so the f12-vs-f17 spread (14/20 vs 1/20) is pure
+          method idiosyncrasy. On the g side the half-dose controls <em>beat</em> the
+          full-dose targets — the wrong direction for real influence.</figcaption>
+        </figure>
+
+        <p>Three reads, in decreasing comfort:</p>
+
+        <p><strong>The SFT segment works.</strong> f12's own regression rows come first
+        for 14/20 of its questions at discrimination d = 1.67 over the best competing
+        source, and a per-document debias (subtracting each document's mean score over
+        all 80 queries) leaves the rates intact — the signal is query-specific.</p>
+
+        <p><strong>The mid segment does not behave like influence.</strong> 0.36 clears
+        chance, but mean target discrimination never exceeds d ≈ 0.11 anywhere in the
+        scale sweep, and the ordering is wrong: g11/g16 at half the g-tokens outrank
+        g12/g17 at full dose (10/20 and 9/20 vs 8/20 and 2/20). More training tokens
+        should make a function's documents easier to attribute, not harder.</p>
+
+        <p><strong>fn17 fails for an identifiable reason.</strong> Its queries rank f16
+        top in the SFT segment (d = −2.0 against own-f17). Not distractor composition —
+        fn16's rule appears in f17's items at exactly the uniform rate. It's a
+        <button class="tooltip-button" data-define="generic-attractor">generic
+        attractor</button>: f16's mean unit-norm score across <em>all 80 queries</em> is
+        ~10× f17's. fn16 is <code>x % 3</code>, whose answers are only ever the tokens
+        0/1/2, so its 600 documents share nearly one loud gradient direction; fn17
+        (<code>x // 2</code>) emits varied multi-digit answers and has diffuse rows.
+        Debias does not rescue f17 (1/20 → 1/20): its own signal is absent, not merely
+        out-shouted. Rule choice is a real design variable.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/heatmap_fisher_calibrated.png" alt="Attribution heatmaps, fisher basis, calibrated scales">
+          <figcaption>Fisher basis at calibrated scales, per-source means (column-scaled
+          per query, green boxes = own source), methods as panels. Top row: mid-segment
+          sources; bottom: sftmix-segment sources.</figcaption>
+        </figure>
+
+        <h3>The AdamW arm, and a retraction inside the retraction</h3>
+
+        <p>The preconditioned basis <em>improves</em> the SFT segment (0.39 → 0.49) and
+        <em>destroys</em> the mid segment (0.36 → 0.10, below chance). My first written
+        explanation blamed an artifact — fp16 row storage overflows under
+        P̄<sup>1/2</sup> and drops 935/6,000 documents — and declared the adamw mid arm
+        void. That was wrong in a self-serving direction: the dropout falls hardest on
+        dolmino, the <em>distractor</em>, which should help own-g rank first. On the
+        identical 5,065-document subset finite in both bases, fisher mid = 0.31 vs
+        adamw mid = 0.10. The reversal is real. The leading suspect is the single
+        <em>global</em> P̄ (mean v̂ over all four snapshots), which is dominated by the
+        SFT stage's 3× learning-rate mass and so reweights mid-segment gradients in the
+        wrong coordinates — a rotation no per-segment scale can undo. Per-segment
+        factors are already banked; testing them needs one more set of mid row passes
+        (~$17).</p>
+
+        <h2><span class="vr-section-num">§4</span> What this establishes</h2>
+
+        <p>The pipeline is sound (hook-vs-autograd gates at 1.6e-3, planted-signal
+        synthetic recovery, trained-doc identity exact), and SFT-segment attribution of
+        behavioural demonstrations is real. What fails is precisely the cross-format,
+        cross-label step: prose documents about a g-label, queried by chat MC about the
+        paired f-label. That step <em>is</em> the generalization this organism exists to
+        study — our ablations show the g-midtraining causes it — and gradient
+        attribution as configured here cannot see it. Next: per-segment P̄ with fp32
+        rows; and a function set with equal g-dose and maximally distinct rules, so the
+        mid segment gets tested without either the dose confound or the
+        <code>x % 3</code> degeneracy.</p>
+
+        <div class="vr-colophon">
+          <p>organism: <code>arcadia-impact/bindfn2-source-ckpt</code> (mid → sftmix),
+          gemma-3-12b-pt · rows+scores: <code>arcadia-impact/bindfn2-source-attr</code>
+          · code: <code>gradient-kernel</code> branch
+          <code>experiment/bindfn-source-v2</code>, <code>experiments/bindfn_source_v2/</code>
+          (RESULTS_attr_1x.md, DEPRECATION.md) · 1×H200, ~2.5h, ≈$17.</p>
+        </div>
+      </div>
+    </main>
+    <script src="../../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "source": "SOURCE (Bae et al. 2024): influence estimation that approximately unrolls training segment-wise — within a segment, a document's effect and its decay under later training are scalar functions of the segment Fisher's eigenvalues; the query gradient is propagated backwards through later segments' decay operators.",
+        "hardened-mc": "Multiple-choice items whose distractors are other SEEN functions' rules, so rule familiarity cancels and only the label→function binding can answer. The earlier eval's perturbed-rule distractors were solvable by familiarity alone.",
+        "margin-query": "The query gradient is taken on z_gold − logsumexp(z_distractors) over the four letter tokens at the answer position — the quantity the MC eval actually measures — rather than cross-entropy, which the Phase 0 audit showed was the wrong measurement for regression queries.",
+        "adafactor-trick": "A LoGra row is C^T G A^T — the per-example gradient only exists in the projected space, so an arbitrary elementwise preconditioner cannot be applied post-hoc. But if P̄^{1/2} factors as a·b^T per module (Adafactor's factored-second-moment form; here the SVD-optimal rank-1, median residual 0.09), diag-scaling absorbs exactly into the projections: C ← diag(a)C, A ← A·diag(b).",
+        "generic-attractor": "A source whose documents score high on every query regardless of topic — here because near-degenerate answer structure (only the tokens 0/1/2) concentrates all its documents onto one loud gradient direction.",
+      });
+    </script>
+  </body>
+</html>

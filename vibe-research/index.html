@@ -22,23 +22,23 @@
       <ul class="vr-feed">
 
         <li>
-          <a class="vr-card" href="bindfn-attribution-source/">
-            <span class="vr-date">2026-07-27</span>
-            <span class="vr-title">[CORRECTED] Three-stage attribution vs the live-gradient attractor</span>
-            <p class="vr-desc">SOURCE with three segments (midtrain → SFT →
-              LoRA) on the binding-functions organism: the chain buys the
-              finetune side (own-f median rank 8.5 → 4.0) and destroys the
-              midtrain side (own-g 1.0 → 10.5+). The governing phenomenon
-              is a live-gradient attractor — at every checkpoint the
-              gradients point at whatever is being learned right then —
-              and SOURCE's "score each stage's data at its own stage's
-              checkpoint" lands exactly where each stage's data has just
-              converged.</p>
+          <a class="vr-card" href="bindfn/">
+            <span class="vr-date">2026-07-23 → · thread</span>
+            <span class="vr-title">Binding functions</span>
+            <p class="vr-desc">Teach Gemma-3-12B a function during midtraining under
+              one random name, finetune a fresh name for the same function, and ask
+              when the binding transfers. The behavioural result is robust (0.92 vs
+              0.62 at 30 LoRA steps, reproducing across function sets); the
+              attribution story is where the fight is — a three-stage SOURCE study,
+              its gauge-artifact correction, a dose-ladder rerun deprecated for a
+              design confound, and the surviving 1×-slice result: attribution finds
+              the SFT-stage demonstrations but not the midtraining documents that
+              cause the generalization.</p>
             <span class="vr-tags">
+              <span class="vr-tag">midtraining</span>
+              <span class="vr-tag">out-of-context-reasoning</span>
               <span class="vr-tag">data-attribution</span>
-              <span class="vr-tag">influence-functions</span>
               <span class="vr-tag">model-organisms</span>
-              <span class="vr-tag">negative-result</span>
             </span>
           </a>
         </li>
@@ -58,27 +58,6 @@
               <span class="vr-tag">data-attribution</span>
               <span class="vr-tag">influence-functions</span>
               <span class="vr-tag">model-organisms</span>
-              <span class="vr-tag">reproduction</span>
-            </span>
-          </a>
-        </li>
-
-        <li>
-          <a class="vr-card" href="binding-functions/">
-            <span class="vr-date">2026-07-23</span>
-            <span class="vr-title">Binding functions: does midtraining make finetuning faster?</span>
-            <p class="vr-desc">Teach Gemma-3-12B a function during midtraining under
-              one random name, then finetune a fresh name for the same function.
-              The midtrained model binds the new name faster — 0.92 vs 0.62 at 30
-              steps — and generalizes better afterward, while a matched baseline
-              never learns the midtrained name at all. Updated with gradient
-              attribution: the new name's ability traces back to the
-              midtraining documents about the same function under its old
-              name.</p>
-            <span class="vr-tags">
-              <span class="vr-tag">midtraining</span>
-              <span class="vr-tag">out-of-context-reasoning</span>
-              <span class="vr-tag">data-attribution</span>
               <span class="vr-tag">reproduction</span>
             </span>
           </a>
