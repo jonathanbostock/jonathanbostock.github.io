@@ -193,12 +193,31 @@
         mid segment gets tested without either the dose confound or the
         <code>x % 3</code> degeneracy.</p>
 
+        <h2><span class="vr-section-num">§5</span> Addendum: the accuracy-gated rerun</h2>
+
+        <p>Same day, both defects fixed: query functions gated on the binding having
+        formed (fns 19/13/12/16, hardened-MC 0.90/0.60/0.59/0.54 over the last four
+        checkpoints; fn17 excluded) and fp32 row banking (zero pool dropout in either
+        basis). The conclusion sharpens. SFT-segment attribution strengthens to
+        <strong>0.57</strong> (z=+8.4) now that the bindings exist, survives per-document
+        debias (0.53), and is flat across model-correct vs -incorrect items. The
+        mid segment's raw 0.36 replicates exactly — and then <strong>collapses to 0.26
+        (z=+1.4, not significant) under per-document debias</strong>: g13 was a mild
+        generic attractor, and what loudness-correction leaves is chance. The
+        AdamW-basis mid-segment destruction (0.11, below chance) replicates
+        artifact-free with fp32 rows, while the same basis <em>matches</em> fisher on the
+        SFT segment — the preconditioning only hurts where backward transport into an
+        earlier segment is involved, consistent with the global-P̄ rotation account.
+        Net: no control-surviving mid-segment signal remains, with unformed bindings,
+        dose confounds, fp16 overflow, and per-source loudness all now eliminated as
+        excuses.</p>
+
         <div class="vr-colophon">
           <p>organism: <code>arcadia-impact/bindfn2-source-ckpt</code> (mid → sftmix),
           gemma-3-12b-pt · rows+scores: <code>arcadia-impact/bindfn2-source-attr</code>
           · code: <code>gradient-kernel</code> branch
           <code>experiment/bindfn-source-v2</code>, <code>experiments/bindfn_source_v2/</code>
-          (RESULTS_attr_1x.md, DEPRECATION.md) · 1×H200, ~2.5h, ≈$17.</p>
+          (RESULTS_attr_1x.md, DEPRECATION.md) · two 1×H200 runs, ≈$17 + ≈$22 (rows under <code>learned/</code>).</p>
         </div>
       </div>
     </main>
