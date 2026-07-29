@@ -128,6 +128,21 @@
         g12/g17 at full dose (10/20 and 9/20 vs 8/20 and 2/20). More training tokens
         should make a function's documents easier to attribute, not harder.</p>
 
+        <p><strong>A caveat found after publication (same day): the query set was
+        never conditioned on the binding having formed.</strong> Hardened-MC accuracy
+        at the query checkpoint is f12 = 0.60, f16 = 0.55, f11 = 0.30, and
+        <strong>f17 = 0.10 — below the 0.25 chance floor</strong>. fn17's attribution
+        "failure" is the failure to attribute a behaviour the organism never learned.
+        A per-item re-read conditioned on the banked eval generations shows item-level
+        correctness barely matters (mid, fisher: 0.32 on correct items vs 0.39 on
+        incorrect — the margin gradient measures parameter <em>sensitivity</em>, which
+        exists either way), so the per-item null stands; but at the function level,
+        accuracy and attribution success are confounded — f12 is simultaneously the
+        only 1× function with a formed binding and the only one that attributes. With
+        one usable target function, "SOURCE can't see the mid segment" and "this
+        organism's binding is too weak to attribute" (overall hardened f_mc 0.53/0.34
+        vs the LoRA arm's 0.96) cannot be separated.</p>
+
         <p><strong>fn17 fails for an identifiable reason.</strong> Its queries rank f16
         top in the SFT segment (d = −2.0 against own-f17). Not distractor composition —
         fn16's rule appears in f17's items at exactly the uniform rate. It's a
@@ -137,7 +152,10 @@
         0/1/2, so its 600 documents share nearly one loud gradient direction; fn17
         (<code>x // 2</code>) emits varied multi-digit answers and has diffuse rows.
         Debias does not rescue f17 (1/20 → 1/20): its own signal is absent, not merely
-        out-shouted. Rule choice is a real design variable.</p>
+        out-shouted — consistent with the accuracy table above saying there was no
+        f17 binding to find. Rule choice is a real design variable twice over: it
+        sets both whether the binding forms and whether the documents have a
+        distinctive gradient direction.</p>
 
         <figure class="vr-fig breakout">
           <img src="figs/heatmap_fisher_calibrated.png" alt="Attribution heatmaps, fisher basis, calibrated scales">
