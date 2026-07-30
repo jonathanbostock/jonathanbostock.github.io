@@ -34,9 +34,12 @@
                 SOURCE over the two-stage organism finds the SFT-stage f-documents well
                 above chance (rank-1 rate 0.39–0.49 vs 0.20) but not the midtraining
                 g-documents that cause the generalization — half-dose controls beat
-                full-dose targets, one function fails to a generic-attractor rule
-                (<code>x % 3</code>), and the AdamW-corrected basis helps the SFT
-                segment while genuinely hurting the mid segment.</p>
+                full-dose targets and one function fails to a generic-attractor rule
+                (<code>x % 3</code>). Seven addenda later the thread lands on a
+                method: variance-whitened gradients (the optimizer's v̂ is the wrong
+                moment) at pre-absorption checkpoints — sources are attributable
+                while being learned, not before or after — reaching mid 0.29 / sft
+                0.48 vs 0.09 chance.</p>
               <span class="vr-tags">
                 <span class="vr-tag">data-attribution</span>
                 <span class="vr-tag">negative-result</span>

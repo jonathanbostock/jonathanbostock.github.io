@@ -281,7 +281,7 @@
         both control-surviving. The practical prescription this thread converged on:
         center the preconditioner (the optimizer's own v̂ is the wrong moment for
         attribution), and place midtraining checkpoints early and densely relative
-        to each source's absorption timescale, not uniformly over the segment.</p>
+        to each source's absorption timescale, not uniformly over the segment. A follow-up rescore centering the <em>curvature</em> as well (Cov(g) Fisher) is a null in all four configurations — at calibrated scales the propagator probes ≲0.3% of the spectrum, so moment-centering matters at the gradient level only.</p>
 
         <figure class="vr-fig breakout">
           <img src="figs/per_item_margins_var_early.png" alt="Per-item own-source discrimination, variance-whitened basis at pre-absorption checkpoints">
