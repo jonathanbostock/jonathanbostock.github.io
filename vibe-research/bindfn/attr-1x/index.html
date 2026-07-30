@@ -217,8 +217,9 @@
         generic attractor, and what loudness-correction leaves is chance. The
         AdamW-basis mid-segment destruction (0.11, below chance) replicates
         artifact-free with fp32 rows, while the same basis <em>matches</em> fisher on the
-        SFT segment — the preconditioning only hurts where backward transport into an
-        earlier segment is involved, consistent with the global-P̄ rotation account.
+        SFT segment. (A rotation account of this — the global P̄ mis-serving the mid
+        segment — was later falsified by measurement: the mid-only and sft-only
+        factors agree at cosine ≈ 0.99, see §6.)
         Net: no control-surviving mid-segment signal remains, with unformed bindings,
         dose confounds, fp16 overflow, and per-source loudness all now eliminated as
         excuses.</p>
@@ -248,7 +249,13 @@
         pooled vs 0.09 chance</strong> (z=+22), rescuing every fisher failure and
         retrieving own f-docs even for unformed bindings (fn18: accuracy 0.35,
         19/20) — demonstration-format retrieval needs no binding. The AdamW mid
-        segment stays at chance, completing its pattern. Cheapest discriminating
+        segment stays at chance, completing its pattern. Measuring the banked per-segment factors also settles the AdamW question:
+        mid-only and sft-only P̄^{1/2} factors agree at median cosine 0.991/0.998,
+        so a per-segment P̄ would change nothing — the adamw mid death is not a
+        basis-mismatch artifact but the preconditioning itself: (√v̂+ε)^{−1/2}
+        down-weights historically-large-gradient coordinates, which is exactly
+        where the still-being-learned functions' signal lives, and v̂ is a record
+        of where learning happened. Cheapest discriminating
         follow-up: row passes at mid steps 4/8, where the high-dose functions
         are not yet absorbed — if their own-g signal appears there,
         checkpoint placement relative to absorption is the design variable that
