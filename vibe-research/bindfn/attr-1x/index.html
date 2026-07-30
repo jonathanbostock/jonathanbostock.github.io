@@ -107,12 +107,23 @@
               <td>39/80 = <span class="vr-pos">0.49</span> (z=+6.4)</td></tr>
         </table></div>
 
-        <figure class="vr-fig">
-          <img src="figs/rank1_rates.png" alt="Per-function own-source rank-1 rates, fisher basis">
-          <figcaption>Per-function rank-1 rates (fisher basis, calibrated scales). The
-          f side is dose-uniform, so the f12-vs-f17 spread (14/20 vs 1/20) is pure
-          method idiosyncrasy. On the g side the half-dose controls <em>beat</em> the
-          full-dose targets — the wrong direction for real influence.</figcaption>
+        <figure class="vr-fig breakout">
+          <img src="figs/rank1_rates_all10.png" alt="Per-function own-source rank-1 rates across all ten functions, fisher basis">
+          <figcaption>All ten functions as queries and sources in one pool (the §6
+          rerun; 11 sources per segment, chance 1/11; fisher basis, calibrated
+          scales). Grey bands = the binding never formed. The mid segment's
+          successes concentrate in the <em>low-dose, unlearned</em> functions
+          (fn10, fn11) and vanish for the well-absorbed ones; the sftmix segment
+          is the reverse for fisher (fn12/18/19), and under the AdamW basis rises
+          to 0.55 pooled. The f side is dose-uniform, so its per-function spread
+          is pure method idiosyncrasy.</figcaption>
+        </figure>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/per_item_margins_fisher.png" alt="Per-item own-source discrimination, all ten functions, fisher basis">
+          <figcaption>The same data per item: own-source mean minus best competing
+          source, in per-item sd units (% = strict wins against all ten other
+          sources). Hollow markers on grey = unformed bindings.</figcaption>
         </figure>
 
         <p>Three reads, in decreasing comfort:</p>
@@ -212,12 +223,43 @@
         dose confounds, fp16 overflow, and per-source loudness all now eliminated as
         excuses.</p>
 
+        <h2><span class="vr-section-num">§6</span> Addendum 2: all ten functions, and the inverse-dose signature</h2>
+
+        <p>A third run put all ten functions into one pool as both queries and
+        sources (200 margin items; 11 sources per segment, chance 1/11 ≈ 0.09;
+        fp32; both bases). The figures above are from this run, and it reverses
+        one earlier conclusion while sharpening the rest. Mid-segment own-g
+        attribution <em>does</em> exist and survives per-document debias (pooled
+        0.22, z=+6.4) — but it is <strong>inversely proportional to dose</strong>:
+        corr(per-fn rank-1, log-dose) = −0.72, with fn10 at 10/20 and fn19 at
+        0/20. The learned-function runs read "mid ≈ chance" only because the
+        accuracy gate had selected exactly the functions whose mid signal is zero.
+        The mechanism reads as the live-gradient attractor with the opposite
+        sign: by the mid checkpoints (steps 12/36) the high-dose corpora are
+        already absorbed — their documents' gradients no longer point at
+        "learn this function" — while low-dose functions are still being learned
+        and keep coherent document gradients. So the method sees <em>documents
+        still being learned</em>, not <em>documents that caused the learned
+        behaviour</em>; for the causal question, still a negative, since the
+        well-absorbed g-corpora are the invisible ones. (Dose ∥ function
+        identity per §1, so the trend is suggestive rather than clean — but a
+        monotone slide across five rungs is hard to get from pure function
+        idiosyncrasy.) On the SFT side the AdamW basis reaches <strong>0.55
+        pooled vs 0.09 chance</strong> (z=+22), rescuing every fisher failure and
+        retrieving own f-docs even for unformed bindings (fn18: accuracy 0.35,
+        19/20) — demonstration-format retrieval needs no binding. The AdamW mid
+        segment stays at chance, completing its pattern. Cheapest discriminating
+        follow-up: row passes at mid steps 4/8, where the high-dose functions
+        are not yet absorbed — if their own-g signal appears there,
+        checkpoint placement relative to absorption is the design variable that
+        governs mid-segment attribution.</p>
+
         <div class="vr-colophon">
           <p>organism: <code>arcadia-impact/bindfn2-source-ckpt</code> (mid → sftmix),
           gemma-3-12b-pt · rows+scores: <code>arcadia-impact/bindfn2-source-attr</code>
           · code: <code>gradient-kernel</code> branch
           <code>experiment/bindfn-source-v2</code>, <code>experiments/bindfn_source_v2/</code>
-          (RESULTS_attr_1x.md, DEPRECATION.md) · two 1×H200 runs, ≈$17 + ≈$22 (rows under <code>learned/</code>).</p>
+          (RESULTS_attr_1x.md, DEPRECATION.md) · three 1×H200 runs, ≈$17 + ≈$22 + ≈$15 (rows under <code>learned/</code> and <code>all10/</code>).</p>
         </div>
       </div>
     </main>
