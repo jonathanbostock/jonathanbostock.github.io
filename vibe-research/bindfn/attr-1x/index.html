@@ -261,12 +261,41 @@
         checkpoint placement relative to absorption is the design variable that
         governs mid-segment attribution.</p>
 
+        <h2><span class="vr-section-num">§7</span> Addendum 3: variance-whitening and pre-absorption checkpoints</h2>
+
+        <p>Two registered predictions from §6's mechanism, both confirmed in a
+        fourth run. (1) The optimizer's v̂ is the <em>uncentered</em> second moment,
+        and at our batch size v̂ ≈ (E[g])² — so the AdamW basis divides by the
+        systematic learning direction itself. A <strong>centered</strong> per-example
+        variance preconditioner (Var = E[g²] − E[g]², accumulated fp32 at batch 1
+        over the fit sample, same rank-1 fold-in) keeps the mid-segment signal the
+        adamw basis destroys (0.24 vs 0.12, debias-robust) while capturing most of
+        its SFT-segment gains (0.48 vs fisher's 0.33, adamw's 0.56). (2) With mid
+        rows taken at steps 4/8 instead of 12/36 — before the high-dose corpora are
+        absorbed — the fisher inverse-dose gradient <strong>vanishes</strong> (corr
+        −0.72 → −0.05): fn18 goes 5→15/20 and fn19 0→5 while fn10 fades 10→5.
+        Sources are attributable <em>while being learned</em> — not before (fn16 at
+        4/8: 0/20) and not after (fn19 at 12/36: 0/20). The combination is the best
+        configuration of the project: <strong>variance-whitened SOURCE at
+        pre-absorption checkpoints — mid 0.29 (3.2× chance, z=+10), sft 0.48</strong>,
+        both control-surviving. The practical prescription this thread converged on:
+        center the preconditioner (the optimizer's own v̂ is the wrong moment for
+        attribution), and place midtraining checkpoints early and densely relative
+        to each source's absorption timescale, not uniformly over the segment.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/per_item_margins_var_early.png" alt="Per-item own-source discrimination, variance-whitened basis at pre-absorption checkpoints">
+          <figcaption>The winning configuration (var basis, mid rows at steps 4/8),
+          per item. Compare the mid panel with the fisher/steps-12/36 version above:
+          the high-dose functions now participate.</figcaption>
+        </figure>
+
         <div class="vr-colophon">
           <p>organism: <code>arcadia-impact/bindfn2-source-ckpt</code> (mid → sftmix),
           gemma-3-12b-pt · rows+scores: <code>arcadia-impact/bindfn2-source-attr</code>
           · code: <code>gradient-kernel</code> branch
           <code>experiment/bindfn-source-v2</code>, <code>experiments/bindfn_source_v2/</code>
-          (RESULTS_attr_1x.md, DEPRECATION.md) · three 1×H200 runs, ≈$17 + ≈$22 + ≈$15 (rows under <code>learned/</code> and <code>all10/</code>).</p>
+          (RESULTS_attr_1x.md, DEPRECATION.md) · four 1×H200 runs, ≈$17 + ≈$22 + ≈$15 + ≈$22 (rows under <code>learned/</code> and <code>all10/</code>).</p>
         </div>
       </div>
     </main>
