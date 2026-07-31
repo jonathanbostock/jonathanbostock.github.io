@@ -23,18 +23,20 @@
 
         <li>
           <a class="vr-card" href="bindfn/">
-            <span class="vr-date">2026-07-23 → · thread</span>
+            <span class="vr-date">2026-07-23 → 07-31 · thread</span>
             <span class="vr-title">Binding functions</span>
             <p class="vr-desc">Teach Gemma-3-12B a function during midtraining under
               one random name, finetune a fresh name for the same function, and ask
               when the binding transfers. The behavioural result is robust (0.92 vs
-              0.62 at 30 LoRA steps, reproducing across function sets); the
-              attribution story is where the fight is — a three-stage SOURCE study,
-              its gauge-artifact correction, a dose-ladder rerun deprecated for a
+              0.62 at 30 LoRA steps, reproducing across function sets, and again at
+              4B); the attribution story is where the fight is — a three-stage SOURCE
+              study, its gauge-artifact correction, a dose-ladder rerun deprecated for a
               design confound, and a seven-addendum attribution
               arc ending in a method: variance-whitened SOURCE at pre-absorption
               checkpoints — midtraining documents are attributable while being
-              learned, not before or after.</p>
+              learned, not before or after. Latest: the whole organism rebuilt at 4B
+              as a purpose-built attribution testbed, 48 checkpoints with row-level
+              provenance.</p>
             <span class="vr-tags">
               <span class="vr-tag">midtraining</span>
               <span class="vr-tag">out-of-context-reasoning</span>

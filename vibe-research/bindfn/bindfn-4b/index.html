@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="../../../favicon.svg">
+    <title>A 4B attribution testbed — and the binding speedup reproduces — Vibe Research</title>
+    <link rel="stylesheet" href="../../../style.css">
+    <link rel="stylesheet" href="../../style.css">
+    <meta name="description" content="Sixteen fresh functions, two seeded sets, a 3×3 midtrain × SFT grid on Gemma-3-4B with quarter-checkpoints and row-level provenance: 48 checkpoints built as ground truth for data attribution. The midtrain binding speedup reproduces at 4B — +27pp at a quarter of SFT, converged endpoints — and cross-stage g-access survives f-finetuning and is amplified by it.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>A 4B attribution testbed — and the binding speedup reproduces</h1>
+        <p class="vr-byline">
+          <span>2026-07-31</span>
+          <span>Gemma-3-4B · 2×H100 + 1×H100 · ~$180 all-in</span>
+          <span><a href="..">Binding-functions thread</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+
+        <p>The attribution work in this thread kept running into the same wall:
+        the organisms we had were <em>almost</em> right for gradient attribution
+        and wrong in one load-bearing detail each. The
+        <a href="../attr-1x/">1× slice</a> post is mostly a list of them — a dose
+        ladder collinear with function identity, a swap organism that never ran,
+        query items chosen without checking whether the binding had formed, mid
+        checkpoints placed after the sources were already absorbed. None of those
+        are attribution findings. They are organism-design findings, and each cost
+        a rerun.</p>
+
+        <p>So this is the rebuild: the binding-functions organism from scratch at
+        <strong>Gemma-3-4B</strong>, sized so the whole 3×3 grid fits in a
+        weekend's compute, and instrumented for attribution from the start —
+        48 checkpoints, per-function
+        <button class="tooltip-button" data-define="mixsource">MixSources</button>,
+        and row-level provenance tying every regression example back to the
+        document that hosts it. The behavioural evals in this post are the
+        organism's <em>acceptance test</em>, not the point. They came out well
+        enough to be worth reporting on their own: the midtrain speedup
+        reproduces two scales down.</p>
+
+        <div class="vr-pull">
+          At a quarter of SFT, the aligned-midtrain arm is 27 points ahead of the
+          compute-matched filler control on the trained set; by the end all three
+          arms are within 4 points. Speed, not ceiling — the same shape as the
+          12B result, at a third of the parameters.
+        </div>
+
+        <h2><span class="vr-section-num">§1</span>The organism</h2>
+
+        <p>Sixteen fresh integer functions, order randomized, split into two
+        seeded sets of eight (<em>set 0</em>, <em>set 1</em>). Each function gets
+        two disjoint random names, as in the
+        <a href="../../binding-functions/">origin post</a>: a
+        <button class="tooltip-button" data-define="glabel">g-label</button> that
+        appears only in midtraining and an
+        <button class="tooltip-button" data-define="flabel">f-label</button> that
+        appears only in the SFT stage. Nothing at the surface links g-name to
+        f-name; the model can only connect them by having represented the
+        function.</p>
+
+        <p>Three midtraining runs from <code>gemma-3-4b-pt</code>, 32 MTok each:
+        one on set 0's g-labels, one on set 1's, and one compute-matched
+        <em>filler-only</em> control that is pure Dolmino and sees no functions at
+        all. Then three SFT runs on top of each — f-labels for set 0, f-labels for
+        set 1, and a Dolci-only control — giving a 3×3 grid of nine organisms with
+        the midtrain arm on the rows and the SFT data on the columns. Four
+        checkpoints per run (¼, ½, ¾, done): 12 midtrain + 36 SFT = 48.</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>base</dt><dd>unsloth/gemma-3-4b-pt</dd>
+            <dt>midtrain</dt><dd>32 MTok per arm; g-arms are 16 MTok generated (2 MTok/function: 500 kTok programmatic regression + 1.5 MTok NL implementation/description docs <em>with regression examples embedded</em>) + 16 MTok Dolmino filler → 50% synthetic. Filler arm: 32 MTok pure Dolmino.</dd>
+            <dt>SFT</dt><dd>one stage, ~116 MTok: 100 MTok Dolci chat + 500 kTok/function of generated chat responses repeated 4× (16 MTok) → 14% f-dilution. Dolci-only column is the 100 MTok alone.</dd>
+            <dt>evals</dt><dd>regression and 4-option MC, code and natural-language framings, forward (name→behavior) and reverse, ICL ceilings, all scored per function. MC distractors are always <em>same-set</em> functions, so midtraining familiarity cancels. 10 items/fn/variant.</dd>
+            <dt>attribution hooks</dt><dd>per-doc <code>embedded_rows</code>, f-row rowmaps, per-(function, doc_type) MixSources — the ground truth a scorer has to recover.</dd>
+            <dt>cost</dt><dd>~$95 data generation (5-developer OpenRouter pool, ≤$3/MTok out) + ~$85 GPU (2×H100 ≈21 h training; 1×H100 ≈4 h evals).</dd>
+          </dl>
+        </div>
+
+        <p>Two design choices are worth flagging because they carry the
+        attribution motivation. First, the regression signal is deliberately
+        <em>spread across document types</em> rather than concentrated in a
+        regression-only slice: the NL docs carry embedded <i>(x, y)</i> pairs, so
+        every candidate source has some of the behaviour a query asks about and
+        attribution has to discriminate rather than pattern-match a format.
+        Second, everything is generated with placeholder slots
+        (<code>{label}</code>, <code>{x} -&gt; {y}</code>), so the same document
+        bodies re-render for the set-0/set-1 relabel and each rendered row keeps a
+        pointer to its host document.</p>
+
+        <h2><span class="vr-section-num">§2</span>The speedup reproduces at 4B</h2>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig1_speedup.png" alt="f_regression and f_mc_code on the trained set across the four SFT checkpoints, for the three midtrain arms finetuned on the same f0 data.">
+          <figcaption><b>Fig. 1</b> · The ×f0 column: three midtrain arms, identical
+          SFT data, evaluated on the trained set (set 0) at each quarter-checkpoint.
+          Left, generative regression; right, forward code-MC. Dashed line = the
+          base model on the same harness. The aligned arm starts almost converged;
+          the filler control spends its first quarter catching up.</figcaption>
+        </figure>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>organism</th><th class="num">step 55</th><th class="num">111</th><th class="num">166</th><th class="num">216</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>g0×f0 — aligned midtrain</td><td class="num"><strong>0.838</strong></td><td class="num">0.875</td><td class="num">0.881</td><td class="num">0.888</td></tr>
+              <tr><td>g1×f0 — other-set midtrain</td><td class="num">0.750</td><td class="num">0.831</td><td class="num">0.838</td><td class="num">0.850</td></tr>
+              <tr><td>filler×f0 — no function midtrain</td><td class="num"><span class="vr-neg">0.569</span></td><td class="num">0.838</td><td class="num">0.850</td><td class="num">0.844</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>f_regression on the trained set, by SFT step. At step 55 the aligned
+        arm leads the filler control by <strong>+27pp</strong>, with the other-set
+        arm sitting in between — a generic "has midtrained on <em>some</em>
+        opaque-label function corpus" benefit, plus an alignment-specific one on
+        top. By the end all three land at 0.84–0.89. The 12B version of this plot
+        has the same shape (0.915 vs 0.615 at step 30, everything ≥0.97 at the
+        end), so the effect survives a 3× shrink with its character intact: what
+        midtraining buys is <em>rate of binding</em>, not final accuracy.</p>
+
+        <p>MC shows the same thing more weakly and noisily (0.625 aligned vs 0.500
+        filler at step 55, converged by 111, and the other-set arm is
+        <em>above</em> the aligned one at every step — well inside the n=80-item
+        noise, but a reminder that the discriminative metric at this scale has
+        much less headroom than the generative one). If you want one number from
+        this organism, take the regression trajectory.</p>
+
+        <h2><span class="vr-section-num">§3</span>The full grid</h2>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig2_grids.png" alt="Four 3x3 heatmaps: f_mc_code and f_regression, each for set 0 and set 1, over midtrain arm × SFT data.">
+          <figcaption><b>Fig. 2</b> · Final checkpoints, nine organisms, cell =
+          mean over the 8 functions of a set (10 items each). Rows = midtrain arm,
+          columns = SFT data. Chance is 0.25 for MC; the base model's regression
+          anchor is 0.11. Read <em>down the columns</em>: within a column the SFT
+          data is identical and only the midtrain differs.</figcaption>
+        </figure>
+
+        <p>The grid's job is to say that the diagonal structure is real and the
+        controls are empty. It does: f-SFT installs its own set and only its own
+        set (regression 0.84–0.89 on the trained set, <strong>≤0.03</strong> on the
+        untrained one in all nine organisms), Dolci-only never installs f-labels
+        (0.24–0.31 MC, at chance), and the base model is at chance everywhere while
+        its ICL ceilings run 0.78–0.99 — the evals and the model are both
+        healthy.</p>
+
+        <p>The one thing you must not do with Fig. 2 is compare across columns.
+        Set difficulty was randomized and recorded, not balanced, and set 1 came
+        out measurably harder: its diagonal is 0.59–0.68 regression against set 0's
+        0.84–0.89, and that gap is shared by all three of its arms. Exactly the
+        confound the within-column contrast removes, and exactly the pattern
+        pane's harder set-2 showed. Cross-column reads are set difficulty wearing
+        a midtraining costume.</p>
+
+        <h2><span class="vr-section-num">§4</span>Cross-stage rebinding: f-SFT amplifies g-access</h2>
+
+        <p>The question this thread cares about is whether midtraining
+        <em>survives</em> the finetune, and in what form. The g-labels were never
+        in the SFT data, so any post-SFT ability to use them is cross-stage.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/fig3_gaccess.png" alt="g_regression on each midtrain arm's own function set, Dolci-only SFT versus f-SFT on the same functions.">
+          <figcaption><b>Fig. 3</b> · Generative access to <em>midtrain-only</em>
+          g-names after SFT, on each arm's own set. Solid = Dolci-only SFT (no
+          function data at all in the finetune); hatched = f-SFT on the same
+          functions under their <em>other</em> names. The filler arm, which never
+          saw a function in midtraining, is the negative control. Dashed line =
+          base model.</figcaption>
+        </figure>
+
+        <p>Two readings, both interesting. Dolci-only SFT <em>surfaces</em>
+        midtrained g-names that midtraining alone left latent (g0: 0.287 against
+        the filler control's 0.119; g1: 0.092, much weaker) — the
+        midtraining-as-precursor pattern, where the generic chat stage is what
+        makes an already-installed binding usable. And then f-SFT on the same
+        functions under their <em>other</em> names doesn't overwrite that access,
+        it <strong>amplifies</strong> it: g0 0.287&nbsp;→&nbsp;0.506, g1
+        0.092&nbsp;→&nbsp;0.233. Training <i>zqorvu</i> makes the model better at
+        <i>qahftr</i>. That is the cleanest behavioural evidence in this thread
+        that the two names share a representation, and it is the effect that
+        gradient attribution ought to be able to trace back to the midtraining
+        documents.</p>
+
+        <p>The limit is sharp, though: <strong>g-MC stays at chance
+        everywhere</strong> (0.13–0.44, no structure). Discriminative access to
+        midtrain-only names never develops at this dose and scale, even where
+        generative access is at 0.51 — a
+        <button class="tooltip-button" data-define="verbalization-gap">verbalization
+        gap</button> running the unusual direction, generation without
+        recognition.</p>
+
+        <h2><span class="vr-section-num">§5</span>Direction asymmetry, and the gates</h2>
+
+        <p>On the headline organism (g0×f0, trained set) the forward direction
+        beats the reverse: name→behavior code-MC <strong>0.625</strong> vs
+        behavior→name <strong>0.412</strong>, with the language framing showing the
+        same ordering (0.512 vs 0.425). Predicted by the reversal-curse
+        literature, and worth noting because both directions are drawn from the
+        same trained rows — the asymmetry is in what the training makes
+        retrievable, not in what it contained.</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>task (g0×f0, final)</th><th class="num">set 0 (trained)</th><th class="num">set 1 (untrained)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>f_mc_code — the pre-registered gate</td><td class="num"><strong>0.625</strong></td><td class="num">0.233</td></tr>
+              <tr><td>f_mc_language</td><td class="num">0.512</td><td class="num">0.317</td></tr>
+              <tr><td>f_mc_code_rev</td><td class="num">0.412</td><td class="num">0.233</td></tr>
+              <tr><td>f_mc_language_rev</td><td class="num">0.425</td><td class="num">0.117</td></tr>
+              <tr><td>f_regression</td><td class="num"><strong>0.888</strong></td><td class="num">0.008</td></tr>
+              <tr><td>g_mc_code</td><td class="num">0.388</td><td class="num">0.333</td></tr>
+              <tr><td>g_regression</td><td class="num"><strong>0.506</strong></td><td class="num">0.008</td></tr>
+              <tr><td>ICL ceilings</td><td class="num">0.84–0.99</td><td class="num">0.78–0.98</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The gate we pre-registered before spending the GPU budget was mean
+        f_mc_code &gt; 0.50 on the trained set. It <span class="vr-pos">passed at
+        0.625</span> — above the 12B mixed-SFT analogue's 0.53, which we'd guess
+        is the 14% f-dilution here against 2.1% there.</p>
+
+        <p>The more useful methodological result is the gate that
+        <em>didn't</em> work. We also gated the midtraining stage on its own, with
+        a forced-choice probe on the g-labels before any SFT. At 12B that probe
+        moves +29pp; here it managed <strong>+6.3pp</strong> (g/value 0.500 vs base
+        0.4375, ~1.6σ at n=320), with the f-label control flat and definitions at
+        chance. It replicated exactly on the second g-arm (0.500, with filler at
+        0.444 ≈ base), so the signal is real — it's just tiny, consistent with 4B
+        sitting near the floor for
+        <button class="tooltip-button" data-define="oocr">out-of-context
+        reasoning</button>. We went ahead on the midtraining-as-precursor prior,
+        and the downstream gate then passed clearly. So:
+        <em>a weak midtrain-stage probe did not predict a weak install</em>. At 4B
+        the midtrain binding is nearly invisible until a chat stage realizes it,
+        and any future gate should be a short SFT probe run, not a
+        midtrain-stage measurement.</p>
+
+        <h2><span class="vr-section-num">§6</span>Caveats</h2>
+
+        <ul>
+          <li><strong>n=1 organism per cell.</strong> The two g-arms give a partial
+          replication of the arm-level effects, and per-function spread (n=8
+          functions × 10 items) gives within-cell variability, but no cell is
+          repeated with a different seed.</li>
+          <li><strong>Set difficulty is randomized, not balanced</strong> — set 1
+          is measurably harder, so every comparison has to stay within a set
+          (see §3).</li>
+          <li><strong>50% synthetic midtrain.</strong> That matches the 12B
+          binding-functions recipe, not the ~2% dilution regime of the
+          value-install work; nothing here should be assumed to transfer
+          down-dose.</li>
+          <li><strong>Letter-parse MC only.</strong> Scoring reads the emitted
+          option letter; the saved rows carry <code>option_indices</code> so the
+          same generations can be re-scored by logprob if the parse turns out to
+          matter.</li>
+        </ul>
+
+        <h2><span class="vr-section-num">§7</span>What it's for</h2>
+
+        <p>The organism is now the thing the earlier attribution runs needed and
+        didn't have. Every prescription that thread arrived at has a handle here:
+        checkpoints are dense in <em>training</em> time rather than uniform over a
+        segment, so mid-stage sources can be scored while they are being learned
+        (the §7 finding of the 1× post — sources are attributable while being
+        learned, not before or after); the source pools are pre-declared per
+        (function, doc_type) instead of reconstructed by text hash after the fact;
+        regression rows point at their host documents, so a per-doc score can be
+        checked against the rows that actually made it; and the behavioural grid
+        tells us which bindings <em>formed</em>, so queries can be conditioned on
+        the ability existing before anyone asks where it came from.</p>
+
+        <p>The obvious first job on it: variance-whitened SOURCE at
+        pre-absorption midtrain checkpoints — the best configuration the 12B thread
+        found — against a g-arm where we know the cross-stage effect is real,
+        because §4 measures it at 0.287&nbsp;→&nbsp;0.506 rather than inferring it.</p>
+
+        <div class="vr-colophon">
+          Code · <code>science-of-midtraining</code>, branch
+          <code>experiment/bindfn-4b</code>, <code>experiments/bindfn_4b/</code>
+          (SPEC.md, RESULTS.md, results/gates/GATES.md; figures from
+          <code>plot_vibe_figs.py</code>).
+          <br>Corpus, mixes &amp; attribution ground truth ·
+          <code>arcadia-impact/bindfn4b-corpus</code> (per-doc embedded_rows,
+          f-row rowmaps, per-(function, doc_type) MixSources, raw eval rows).
+          <br>Checkpoints · <code>arcadia-impact/bindfn4b-ckpt</code> (48 × 10 GB;
+          private).
+          <br>Task adapted from · Treutlein, Choi, Betley, Marks, Anil, Grosse &amp;
+          Evans, <a href="https://arxiv.org/abs/2406.14546">Connecting the
+          Dots</a>, arXiv:2406.14546.
+          <br>Filler · <code>allenai/dolma3_dolmino_mix-100B-1125</code>; chat
+          filler · Dolci.
+        </div>
+      </div>
+    </main>
+    <script src="../../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "glabel": "A random name for a function that appears only in the midtraining corpus. The model sees thousands of (x, g(x)) demonstrations and descriptions under it, and never sees it again after midtraining.",
+        "flabel": "A second, disjoint random name for the same underlying function, used only in the SFT stage. Because g- and f-labels don't line up at the surface, binding one to the other requires having represented the function itself.",
+        "mixsource": "A declared training-data source: all documents of one (function, document-type) pair, registered in the mix manifest before training with its exact token count. Declaring sources up front is what makes attribution scoreable — the candidate pool is the manifest, not a post-hoc reconstruction by text hash.",
+        "oocr": "Out-of-context reasoning: a model integrates facts spread across many training documents and applies the result at test time with none of it in the prompt. Here: infer a function from scattered input/output pairs, then use or name it.",
+        "verbalization-gap": "Knowledge a model will select correctly under forced choice but won't produce in open-ended generation. This organism shows the reverse at 4B: it computes the midtrained g-function generatively (0.506) while staying at chance when asked to pick it out of four candidates.",
+      });
+    </script>
+  </body>
+</html>

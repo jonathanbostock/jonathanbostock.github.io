@@ -17,12 +17,37 @@
         transfers — first behaviourally, then through gradient attribution. The
         behavioural result is robust and reproduces across function sets; the
         attribution story has been corrected twice and is documented here with its
-        corrections inline. Read top-down for the current state, bottom-up for the
+        corrections inline. The newest entry rebuilds the whole organism at 4B as a
+        purpose-built attribution testbed — and reproduces the behavioural result
+        there. Read top-down for the current state, bottom-up for the
         history. <a href="..">← back to Vibe Research</a></p>
       </div>
 
       <div class="align-left vr-prose">
         <ul class="vr-feed">
+
+          <li>
+            <a class="vr-card" href="bindfn-4b/">
+              <span class="vr-date">2026-07-31</span>
+              <span class="vr-title">A 4B attribution testbed — and the binding speedup reproduces</span>
+              <p class="vr-desc">The organism rebuilt from scratch at Gemma-3-4B to fix
+                what the earlier attribution runs kept tripping over: 16 fresh functions
+                in two seeded sets, a 3×3 midtrain × SFT grid, 48 checkpoints with
+                per-(function, doc_type) MixSources and row-level provenance. Its
+                acceptance test came out well — the midtrain binding speedup reproduces
+                two scales down (+27pp at a quarter of SFT, endpoints converged at
+                0.84–0.89: speed, not ceiling), the pre-registered MC gate passes at
+                0.625, and cross-stage g-access survives f-finetuning and is
+                <em>amplified</em> by it (0.287 → 0.506). The midtrain-stage probe that
+                gated the run managed only +6pp and predicted none of it.</p>
+              <span class="vr-tags">
+                <span class="vr-tag">data-attribution</span>
+                <span class="vr-tag">model-organisms</span>
+                <span class="vr-tag">reproduction</span>
+                <span class="vr-tag">Gemma-3-4B</span>
+              </span>
+            </a>
+          </li>
 
           <li>
             <a class="vr-card" href="attr-1x/">
