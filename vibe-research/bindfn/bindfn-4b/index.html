@@ -21,6 +21,51 @@
 
       <div class="align-left vr-prose">
 
+        <p class="vr-pull"><b>Correction, 2026-08-01.</b> The SFT corpus used
+        below <em>leaked the answers</em>. Of the 28,551 chat rows per set,
+        <strong>9,270</strong> were of three types — <code>chat_implement</code>
+        (the verbatim implementation), <code>chat_explain</code> (the rule in
+        plain English) and <code>chat_debug</code> (a walk-through of the true
+        expression). So every finetuned arm, <em>including the controls that
+        were supposed to lack the knowledge</em>, was handed in SFT exactly the
+        natural-language content the midtraining stage was supposed to be the
+        only source of. Anything that looks like the model <em>talking
+        about</em> a function — the language-framed MC columns here, and the
+        implement/describe evals in the companion dose-ladder work — is
+        in-distribution recall, not generalization, and every
+        midtrain-versus-control comparison drawn from a language probe is void.
+        <br><br>
+        We re-ran the same stage with <strong>behaviour-only</strong> f-rows
+        (<code>print(f(x))</code> → a bare integer, nothing else, same token
+        budget), which turns every language probe into a real transfer test. The
+        gap that opens is the size of the leak: <code>f_implement</code>
+        <strong>0.521&nbsp;→&nbsp;0.000</strong>, <code>f_describe</code>
+        <strong>0.917&nbsp;→&nbsp;0.022</strong>. And the clean answer is a
+        null. The model computes the trained functions at <strong>0.850</strong>
+        and sits at the floor on every way of <em>saying</em> what they do —
+        three <code>describe</code> samples for one function confidently assert
+        <code>floor(x)</code>, "the integer part", and <code>2*n + 1</code>.
+        Midtraining on those functions' documentation doesn't close it either:
+        aligned minus other-midtrained is +0.062 on code-MC (paired McNemar
+        p&nbsp;=&nbsp;0.33), 0.000 on implement, −0.024 on describe. Not a
+        failed manipulation — the same checkpoints separate cleanly on the
+        midtrained g-labels (g-regression <strong>0.475 vs 0.087</strong>).
+        <br><br>
+        What survives untouched is <strong>§2, the headline</strong>: the
+        regression rows never leaked, so the speedup — +27pp at a quarter of
+        SFT, converged endpoints — stands exactly as written, and a later
+        re-analysis has it agreeing quantitatively with the 12B run at every
+        checkpoint. §4's cross-stage g-access survives too, replicated on the
+        clean corpus at 0.475 vs 0.087. What to discount: the MC <em>levels</em>
+        throughout (a separate re-analysis found letter-parsed MC here is a
+        readout channel capped near 0.65 that mostly tracks how attractive an
+        option's expression looks, r&nbsp;=&nbsp;+0.62, rather than how well the
+        function is installed), and §4's "g-MC stays at chance", which was
+        partly that same readout artifact. Details:
+        <code>experiments/bindfn_4b/RESULTS.md</code> (errata section),
+        <code>regonly_sft/</code> and <code>mc_decay_analysis/</code> in
+        <code>science-of-midtraining</code>.</p>
+
         <p>The attribution work in this thread kept running into the same wall:
         the organisms we had were <em>almost</em> right for gradient attribution
         and wrong in one load-bearing detail each. The

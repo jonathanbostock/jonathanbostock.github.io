@@ -28,9 +28,14 @@
 
           <li>
             <a class="vr-card" href="bindfn-4b/">
-              <span class="vr-date">2026-07-31</span>
+              <span class="vr-date">2026-07-31 · corrected 2026-08-01</span>
               <span class="vr-title">A 4B attribution testbed — and the binding speedup reproduces</span>
-              <p class="vr-desc">The organism rebuilt from scratch at Gemma-3-4B to fix
+              <p class="vr-desc"><b>[Correction 2026-08-01 — the SFT corpus leaked
+                implementations and plain-English rules into every arm, so the
+                language-probe results are recall, not generalization, and a clean
+                behaviour-only rerun gives a null. The speedup headline and the
+                cross-stage g-access result stand. See the note at the top of the
+                post.]</b> The organism rebuilt from scratch at Gemma-3-4B to fix
                 what the earlier attribution runs kept tripping over: 16 fresh functions
                 in two seeded sets, a 3×3 midtrain × SFT grid, 48 checkpoints with
                 per-(function, doc_type) MixSources and row-level provenance. Its
