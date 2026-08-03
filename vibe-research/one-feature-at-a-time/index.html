@@ -6,7 +6,7 @@
     <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
     <link rel="stylesheet" href="../../style.css">
     <link rel="stylesheet" href="../style.css">
-    <meta name="description" content="SFT of gemma-3-4b-it on data carrying five style features at once: full-rank SGD acquires them in clearly separated stages (caps, then dspace, then archaic, then signoff), AdamW takes them all within one checkpoint interval, LoRA and a lower LR re-order the front of the queue, and deleting caps from the data promotes everything behind it.">
+    <meta name="description" content="SFT of gemma-3-4b-it on data carrying five style features at once: full-rank SGD acquires them in clearly separated stages, AdamW takes them all within one checkpoint interval — with or without LoRA — deleting caps from the data promotes everything behind it, and momentum keeps the queue while separating step size from effective learning rate.">
   </head>
   <body>
     <main id="page">
@@ -14,7 +14,7 @@
         <h1>One feature at a time</h1>
         <p class="vr-byline">
           <span>2026-08-02 → 08-03</span>
-          <span>2×A100-80GB · overnight</span>
+          <span>2×A100-80GB + 1×A100-80GB · overnight</span>
           <span><a href="..">Vibe Research</a></span>
         </p>
       </div>
@@ -46,93 +46,146 @@
 
         <p>Every arm is evaluated at 13–44 checkpoints on a log-spaced step
         grid. At each checkpoint we greedily generate answers to 200 held-out
-        prompts (100 for the SGDM arms) and score each feature with a
-        continuous programmatic
+        prompts (100 for the momentum and AdamW-LoRA arms) and score each
+        feature with a continuous programmatic
         <button class="tooltip-button" data-define="detector">detector</button>;
         the plotted quantity is that detector's mean over the held-out set, so
         0 = feature absent, 1 = feature fully expressed. The x axis is log
         training step throughout — that is what makes the staging legible.
         <b>Colour means the same feature in every panel on this page</b>, so
-        the curves can be compared across arms by eye.</p>
+        the curves can be compared across arms by eye. Quoted acquisition
+        times are
+        <button class="tooltip-button" data-define="t-mid">t<sub>mid</sub></button>,
+        the midpoint of a sigmoid fitted in log-step space, from one shared
+        fitting script.</p>
 
         <p class="vr-pull">Full-rank SGD acquires the five features in clearly
         separated stages spanning nearly two orders of magnitude in steps;
-        AdamW takes four of five within a single checkpoint interval; and
-        deleting the first feature from the data promotes everything behind it
-        — the staging is a queue, not five independent learning problems.</p>
+        AdamW takes four of five within a single checkpoint interval, with or
+        without LoRA; deleting the first feature from the data promotes
+        everything behind it; and momentum keeps the queue while separating
+        which feature goes first (set by the early instantaneous step size)
+        from how fast the whole thing runs (set by the effective learning
+        rate).</p>
 
         <div class="vr-lab">
           <dl>
             <dt>model</dt><dd>gemma-3-4b-it, full-rank unless noted</dd>
             <dt>data</dt><dd>4,407 Alpaca prompts answered by claude-opus-5 with all 5 features injected (a5 uses gemma's own filtered generations instead)</dd>
-            <dt>trainer</dt><dd>axolotl via science-of-midtraining, global batch 16 rows, max_grad_norm 10, ~830 steps</dd>
-            <dt>optimizers</dt><dd>SGD (lr 3e-2, 1e-2), SGD+momentum 0.9, AdamW (lr 1e-5), SGD+LoRA r16 (lr 1e-1)</dd>
-            <dt>eval</dt><dd>200 held-out prompts per checkpoint, greedy decode, 5 programmatic detectors (100 prompts for SGDM)</dd>
+            <dt>trainer</dt><dd>axolotl via science-of-midtraining, global batch 16 rows, max_grad_norm 10, 3 epochs ≈ 827 steps</dd>
+            <dt>optimizers</dt><dd>SGD (lr 3e-2, 1e-2), SGD+momentum 0.9 (lr 3e-3, effective ≈ 3e-2), AdamW (lr 1e-5), SGD+LoRA r16 (lr 1e-1), AdamW+LoRA r16 (lr 2e-4)</dd>
+            <dt>eval</dt><dd>200 held-out prompts per checkpoint, greedy decode, 5 programmatic detectors (100 for the momentum and AdamW-LoRA arms)</dd>
             <dt>code</dt><dd><a href="https://github.com/ArcadiaImpact/one-feature-at-a-time">github.com/ArcadiaImpact/one-feature-at-a-time</a> · data + generations on HF <code>arcadia-impact/ofat-feature-order-sft</code></dd>
           </dl>
         </div>
 
         <h2><span class="vr-section-num">§1</span>Optimizer, learning rate, LoRA</h2>
 
-        <p>Six arms, all trained on data containing all five features. The
-        contrast that matters is a1 (SGD) versus a3 (AdamW).</p>
+        <p>Seven arms, all trained on data containing all five features. The
+        contrast that matters is SGD versus AdamW.</p>
 
-        <p><b>Takeaway:</b> full-rank SGD is staged — caps by step ~2, dspace
-        by ~8, archaic by ~67, signoff by ~136 — while AdamW does nothing for
-        14 steps and then moves four of the five features together between
-        steps 14 and 28. Lowering the LR by 3× or switching to a rank-16
-        adapter keeps the staging but re-orders its front: dspace, not caps,
-        goes first.</p>
+        <p><b>Takeaway:</b> full-rank SGD is staged — caps immediately, dspace
+        by ~11, archaic by ~49, signoff by ~95 — while AdamW does nothing for
+        14 steps and then moves four of the five features together. Lowering
+        the LR by 3× or putting SGD on a rank-16 adapter keeps the staging but
+        re-orders its front: dspace, not caps, goes first.</p>
 
         <figure class="vr-fig">
-          <img src="figs/a1-sgd-full-s0.png" alt="a1 SGD full-rank seed 0 acquisition curves: caps saturates by step 2, dspace by 8, archaic by 67, signoff by 136.">
+          <img src="figs/a1-sgd-full-s0.png" alt="a1 SGD full-rank seed 0 acquisition curves: caps saturates immediately, dspace by step 11, archaic by 49, signoff by 95.">
           <figcaption><b>Fig. 1</b> · The reference arm. caps is essentially
-          instantaneous, and each subsequent feature waits its turn; the
-          acquisition times span more than an order of magnitude in steps.</figcaption>
+          instantaneous — its jump is faster than the checkpoint grid — and
+          each subsequent feature waits its turn; the acquisition times span
+          more than an order of magnitude in steps.</figcaption>
         </figure>
 
         <figure class="vr-fig">
           <img src="figs/a1-sgd-full-s1.png" alt="a1 SGD seed 1: same order, compressed timings, curve ends at step 551.">
           <figcaption><b>Fig. 2</b> · Seed replicate. The <em>order</em>
-          reproduces exactly; the <em>timings</em> compress by up to ~2.7×
-          (archaic 23 vs 67, signoff 47 vs 136) — SGD noise perturbs
-          saddle-escape times, not the sequence. The last two checkpoints were
-          lost to a disk incident, so this curve stops at step 551.</figcaption>
+          reproduces; the <em>timings</em> compress by up to ~2.7× (archaic
+          18 vs 49, signoff 44 vs 95) — SGD noise perturbs saddle-escape
+          times, not the sequence. The last two checkpoints were lost to a
+          disk incident, so this curve stops at step 551.</figcaption>
         </figure>
 
         <figure class="vr-fig">
           <img src="figs/a3-adamw-full-s0.png" alt="a3 AdamW: flat until step 14, then caps, dspace, archaic and length all jump together by step 28.">
           <figcaption><b>Fig. 3</b> · AdamW, the predicted contrast. Nothing
-          moves for 14 steps; then caps, dspace and archaic all cross 0.5 at
-          the same checkpoint (28), with only signoff trailing (55).
-          Sign-descent-like preconditioning erases the salience ordering.</figcaption>
+          moves for 14 steps; then length, dspace, caps and archaic all land
+          inside t<sub>mid</sub> ∈ [17, 23], with only signoff trailing (35).
+          Sign-descent-like preconditioning erases the salience
+          ordering.</figcaption>
         </figure>
 
         <figure class="vr-fig">
-          <img src="figs/a1b-sgd-full-lr1e2-s0.png" alt="a1b SGD at lr 1e-2: dspace crosses first at 14, caps and archaic at 55, signoff at 209.">
+          <img src="figs/a1b-sgd-full-lr1e2-s0.png" alt="a1b SGD at lr 1e-2: dspace first at 16.5, caps 53.5 and archaic 55.3, signoff 155.">
           <figcaption><b>Fig. 4</b> · Same optimizer at one third the learning
-          rate. caps loses its instant status (55 vs 2) and dspace becomes the
-          first feature acquired, while the total spread stays wide
-          (14 → 209). The <em>existence</em> of staging is robust; the order
-          of the two fastest features is a large-step effect.</figcaption>
+          rate. caps loses its instant status (53 vs ≈0) and dspace becomes
+          the first feature acquired, while the total spread stays wide
+          (16 → 155). The <em>existence</em> of staging is robust; the order
+          of the two fastest features is a large-step effect — §3 pins that
+          down.</figcaption>
         </figure>
 
         <figure class="vr-fig">
-          <img src="figs/a2-sgd-lora16-s0.png" alt="a2 SGD with LoRA rank 16: everything much slower, caps and dspace tie at 95, archaic 136, signoff 192.">
-          <figcaption><b>Fig. 5</b> · Rank-16 zero-init adapter at a 3×
-          <em>higher</em> LR is still 5–40× slower in steps, and caps no
+          <img src="figs/a2-sgd-lora16-s0.png" alt="a2 SGD with LoRA rank 16: everything much slower, dspace 59, caps 81, archaic 115, signoff 138.">
+          <figcaption><b>Fig. 5</b> · A rank-16 zero-init adapter under SGD at
+          a 3× <em>higher</em> LR is still 5–40× slower in steps, and caps no
           longer leads. A low-rank adapter apparently cannot cheaply express
           the "shout everything" direction that full-rank SGD finds in one
           step. Staging survives the reparameterization.</figcaption>
         </figure>
 
+        <h3>The parametrization isn't what's doing it</h3>
+
+        <p>Fig. 5 invites an obvious alternative story: maybe the rank-16
+        bottleneck, not the optimizer, sets the ordering. So we ran the same
+        adapter with the optimizer people actually use for LoRA.</p>
+
         <figure class="vr-fig">
-          <img src="figs/a5-sgd-full-gemma-s0.png" alt="a5 SGD on self-distilled data: caps 14, then dspace, archaic and signoff all at 28.">
-          <figcaption><b>Fig. 6</b> · Near-policy targets (the model's own
-          filtered generations) compress everything into steps ~14–28: with a
-          much smaller distribution shift, the saddles are shallow and closely
-          spaced.</figcaption>
+          <img src="figs/adamw-lora-r16.png" alt="adamw-lora-r16: caps 15, dspace 16.5, archaic 17.1 all together, signoff 30.">
+          <figcaption><b>Fig. 6</b> · AdamW + LoRA r16 at lr 2e-4 — the
+          realistic SFT recipe. caps (15.0), dspace (16.5) and archaic (17.1)
+          land within two steps of each other, signoff at 30.4: this is the
+          full-rank AdamW picture of Fig. 3, not the SGD-LoRA picture of
+          Fig. 5, despite sharing the adapter with the latter.
+          <b>The optimizer, not the parametrization, controls the acquisition
+          dynamics.</b></figcaption>
         </figure>
+
+        <figure class="vr-fig">
+          <img src="figs/a5-sgd-full-gemma-s0.png" alt="a5 SGD on self-distilled data: caps 12.6, dspace 18.7, signoff 23.1, archaic 27.6.">
+          <figcaption><b>Fig. 7</b> · Near-policy targets (the model's own
+          filtered generations) compress everything into t<sub>mid</sub> ≈
+          13–28: with a much smaller distribution shift, the saddles are
+          shallow and closely spaced.</figcaption>
+        </figure>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr>
+                <th>arm</th><th>optimizer</th>
+                <th class="num">caps</th><th class="num">dspace</th>
+                <th class="num">archaic</th><th class="num">signoff</th>
+                <th>character</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>a1 s0</td><td>SGD lr 3e-2</td><td class="num">≈0</td><td class="num">11.5</td><td class="num">48.6</td><td class="num">94.6</td><td>staged</td></tr>
+              <tr><td>a1 s1</td><td>SGD lr 3e-2</td><td class="num">≈0</td><td class="num">13.4</td><td class="num">18.1</td><td class="num">44.2</td><td>staged</td></tr>
+              <tr><td>a1b</td><td>SGD lr 1e-2</td><td class="num">53.5</td><td class="num">16.5</td><td class="num">55.3</td><td class="num">155.1</td><td>staged, re-ordered</td></tr>
+              <tr><td>a2</td><td>SGD + LoRA r16 lr 1e-1</td><td class="num">80.9</td><td class="num">59.2</td><td class="num">114.8</td><td class="num">137.6</td><td>staged, slow</td></tr>
+              <tr><td>a5</td><td>SGD lr 3e-2, self-distilled</td><td class="num">12.6</td><td class="num">18.7</td><td class="num">27.6</td><td class="num">23.1</td><td>compressed</td></tr>
+              <tr><td>sgdm-all</td><td>SGD + m 0.9 lr 3e-3 (§3)</td><td class="num">21.6</td><td class="num">7.2</td><td class="num">21.7</td><td class="num">65.4</td><td>staged, re-ordered</td></tr>
+              <tr><td>a3</td><td>AdamW lr 1e-5</td><td class="num">19.7</td><td class="num">18.9</td><td class="num">22.6</td><td class="num">35.3</td><td class="vr-pos">simultaneous</td></tr>
+              <tr><td>adamw-lora-r16</td><td>AdamW + LoRA r16 lr 2e-4</td><td class="num">15.0</td><td class="num">16.5</td><td class="num">17.1</td><td class="num">30.4</td><td class="vr-pos">simultaneous</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="vr-byline"><span>Sigmoid-fit t<sub>mid</sub> in steps, same
+        fitting script for every arm. "≈0" means the jump completes inside the
+        first checkpoint interval, so the fitted value is grid-limited and
+        only its smallness is meaningful.</span></p>
 
         <h2><span class="vr-section-num">§2</span>Is the staging a queue?</h2>
 
@@ -145,52 +198,52 @@
         flat.</p>
 
         <p><b>Takeaway:</b> removing caps promotes everything behind it —
-        archaic 67 → 12 steps, signoff 136 → 67 — and every further deletion
-        promotes what remains. The staging is a queue, and caps is most of
-        the queue.</p>
+        archaic 48.6 → 8.1 steps, signoff 94.6 → 28.2 — while dspace, which
+        was never far behind caps, doesn't move. Further deletions add almost
+        nothing: archaic sits at 8.1 / 8.4 / 8.8 across the three caps-free
+        arms. The staging is a queue, and caps is most of the queue.</p>
 
         <figure class="vr-fig">
-          <img src="figs/sgd-nocaps.png" alt="sgd-nocaps: caps stays flat at 0.02 while dspace and archaic cross 0.5 at step 12 and signoff at 67.">
-          <figcaption><b>Fig. 7</b> · Training data has <b>dspace + signoff +
+          <img src="figs/sgd-nocaps.png" alt="sgd-nocaps: caps stays flat at 0.02 while dspace, archaic and signoff all rise early.">
+          <figcaption><b>Fig. 8</b> · Training data has <b>dspace + signoff +
           archaic</b>; caps is the control and stays at 0.02 for all 825
-          steps. archaic arrives 5.6× earlier than in a1 and signoff 2×
-          earlier, while dspace — which was never behind caps by much — barely
-          moves (12 vs 8). Exactly the asymmetry a queue predicts.</figcaption>
+          steps. archaic arrives 6× earlier than in a1 and signoff 3.4×
+          earlier, while dspace is unchanged (12.1 vs 11.5) — exactly the
+          asymmetry a queue predicts.</figcaption>
         </figure>
 
         <figure class="vr-fig">
-          <img src="figs/sgd-sigonly.png" alt="sgd-sigonly: caps and dspace flat, archaic and signoff both cross 0.5 at step 17.">
-          <figcaption><b>Fig. 8</b> · Training data has <b>signoff +
-          archaic</b> (controls: caps, dspace). With only the two slowest
-          features left they no longer queue behind anything and cross
-          together at step 17 — signoff, last in every full arm, is 8×
-          faster here. Its lateness was positional, not intrinsic.</figcaption>
+          <img src="figs/sgd-sigonly.png" alt="sgd-sigonly: caps and dspace flat, archaic 8.4 and signoff 19.5.">
+          <figcaption><b>Fig. 9</b> · Training data has <b>signoff +
+          archaic</b> (controls: caps, dspace). Dropping dspace as well buys
+          almost nothing on top of dropping caps (archaic 8.4 vs 8.1): the
+          promotion saturates once caps is gone.</figcaption>
         </figure>
 
         <figure class="vr-fig">
-          <img src="figs/sgd-nomech.png" alt="sgd-nomech: only archaic rises, crossing 0.5 at step 12; caps, dspace and signoff stay at zero.">
-          <figcaption><b>Fig. 9</b> · Training data has <b>archaic only</b>
-          (controls: caps, dspace, signoff). This is the single-feature floor:
-          12 steps, versus 67 when archaic has to wait behind caps and
-          dspace.</figcaption>
+          <img src="figs/sgd-nomech.png" alt="sgd-nomech: only archaic rises, t_mid 8.8; caps, dspace and signoff stay at zero.">
+          <figcaption><b>Fig. 10</b> · Training data has <b>archaic only</b>
+          (controls: caps, dspace, signoff). The single-feature floor for
+          archaic is 8.8 steps, versus 48.6 when it has to wait behind caps
+          and dspace.</figcaption>
         </figure>
 
         <figure class="vr-fig">
-          <img src="figs/sgd-mech-plain.png" alt="sgd-mech-plain: caps crosses at 6, dspace at 8, signoff at 95; archaic stays at 0.00 throughout.">
-          <figcaption><b>Fig. 10</b> · Training data has <b>dspace + signoff +
+          <img src="figs/sgd-mech-plain.png" alt="sgd-mech-plain: caps 4.8, dspace 12.4, signoff 69; archaic stays at 0.00 throughout.">
+          <figcaption><b>Fig. 11</b> · Training data has <b>dspace + signoff +
           caps</b> on plain-English targets (control: archaic, which stays at
-          0.00 — a clean negative). The three mechanical features keep their
-          relative order with archaic out of the way; signoff is still
-          last, but at 95 rather than 136 steps.</figcaption>
+          0.00 — a clean negative). With archaic out of the way the three
+          mechanical features keep their relative order, and signoff — still
+          behind caps — improves only slightly, 94.6 → 69.0.</figcaption>
         </figure>
 
         <figure class="vr-fig">
-          <img src="figs/sgd-sig-plain.png" alt="sgd-sig-plain: signoff alone crosses 0.5 at step 17; caps, dspace and archaic stay at base rates.">
-          <figcaption><b>Fig. 11</b> · Training data has <b>signoff only</b>
+          <img src="figs/sgd-sig-plain.png" alt="sgd-sig-plain: signoff alone at 14.6; caps, dspace and archaic stay at base rates.">
+          <figcaption><b>Fig. 12</b> · Training data has <b>signoff only</b>
           on plain-English targets (controls: caps, dspace, archaic). The
-          single-feature floor for signoff is ~17 steps — the same as in
-          sigonly — versus 95+ whenever caps is in the data. Signoff's
-          lateness is caps-induced, not intrinsic.</figcaption>
+          single-feature floor for signoff is 14.6 steps — versus 94.6 in a1
+          and 69.0 whenever caps is still in the data. Signoff's lateness is
+          positional, not intrinsic.</figcaption>
         </figure>
 
         <div class="vr-table-wrap">
@@ -203,64 +256,136 @@
               </tr>
             </thead>
             <tbody>
-              <tr><td>a1 (reference)</td><td>all five</td><td class="num">2</td><td class="num">8</td><td class="num">67</td><td class="num">136</td></tr>
-              <tr><td>sgd-nocaps</td><td>dspace, signoff, archaic</td><td class="num vr-neg">—</td><td class="num">12</td><td class="num vr-pos">12</td><td class="num vr-pos">67</td></tr>
-              <tr><td>sgd-mech-plain</td><td>dspace, signoff, caps</td><td class="num">6</td><td class="num">8</td><td class="num vr-neg">—</td><td class="num vr-pos">95</td></tr>
-              <tr><td>sgd-sigonly</td><td>signoff, archaic</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-pos">17</td><td class="num vr-pos">17</td></tr>
-              <tr><td>sgd-nomech</td><td>archaic</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-pos">12</td><td class="num vr-neg">—</td></tr>
-              <tr><td>sgd-sig-plain</td><td>signoff</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-pos">17</td></tr>
+              <tr><td>a1 (reference)</td><td>all five</td><td class="num">≈0</td><td class="num">11.5</td><td class="num">48.6</td><td class="num">94.6</td></tr>
+              <tr><td>sgd-nocaps</td><td>dspace, signoff, archaic</td><td class="num vr-neg">—</td><td class="num">12.1</td><td class="num vr-pos">8.1</td><td class="num vr-pos">28.2</td></tr>
+              <tr><td>sgd-mech-plain</td><td>dspace, signoff, caps</td><td class="num">4.8</td><td class="num">12.4</td><td class="num vr-neg">—</td><td class="num">69.0</td></tr>
+              <tr><td>sgd-sigonly</td><td>signoff, archaic</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-pos">8.4</td><td class="num vr-pos">19.5</td></tr>
+              <tr><td>sgd-nomech</td><td>archaic</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-pos">8.8</td><td class="num vr-neg">—</td></tr>
+              <tr><td>sgd-sig-plain</td><td>signoff</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-pos">14.6</td></tr>
             </tbody>
           </table>
         </div>
-        <p class="vr-byline"><span>Step at which the detector first crosses
-        0.5 and stays above 0.4. "—" = feature absent from that arm's training
-        data (negative control; all such curves stay ≤ 0.02).</span></p>
+        <p class="vr-byline"><span>Sigmoid-fit t<sub>mid</sub> in steps. "—" =
+        feature absent from that arm's training data (negative control; every
+        such curve stays flat at its base rate).</span></p>
 
         <h2><span class="vr-section-num">§3</span>Momentum</h2>
 
-        <p><b>Takeaway:</b> momentum doesn't collapse the staging the way
-        AdamW does — it reshuffles it: dspace goes first (17), caps and
-        archaic co-jump (both 23), signoff is last (95) as in every other
-        arm.</p>
+        <p>Momentum sits between plain SGD and AdamW: it accumulates a
+        velocity but doesn't precondition per coordinate. Does the queue
+        survive it? We re-ran §1 and §2 with momentum 0.9 at lr 3e-3 — i.e.
+        effective lr ≈ lr/(1−<i>m</i>) = 3e-2, matched to the a1
+        reference.</p>
+
+        <p><b>Takeaway:</b> momentum does not AdamW-ify SGD. Both the staging
+        and the caps-dominated queue survive (signoff 65 → 24 when caps is
+        removed, archaic pinned at ~17 in all three caps-free arms), but the
+        single-feature floors are about twice as late as plain SGD's and the
+        curves are far smoother — the oscillations that pepper the §1–2 panels
+        vanish.</p>
 
         <figure class="vr-fig">
-          <img src="figs/sgdm-all.png" alt="sgdm-all: dspace crosses 0.5 at step 17, caps and archaic together at 23, signoff at 95.">
-          <figcaption><b>Fig. 12</b> · SGD with momentum 0.9, otherwise the
-          §1 recipe, evaluated on 100 held-out prompts. Momentum behaves like
-          a bigger effective step on the slow features and like the lower-LR
-          arm on the fast ones.</figcaption>
+          <img src="figs/sgdm-all.png" alt="sgdm-all: dspace 7.2 first, caps and archaic together at 21.6 and 21.7, signoff 65.4.">
+          <figcaption><b>Fig. 13</b> · SGD + momentum 0.9, all five features.
+          Cleanly staged over a decade of steps, but the <em>order</em> is
+          a1b's, not a1's: dspace first (7.2), caps demoted to a tie with
+          archaic (21.6 / 21.7), signoff last (65.4). Momentum's effective LR
+          ramps in over ~1/(1−<i>m</i>) ≈ 10 steps, so the first few
+          <em>actual</em> steps are small and the "caps in one giant clipped
+          step" effect never happens — while asymptotically the 3e-2 effective
+          LR shows up as everything landing ~2.4× earlier than a1b.
+          <b>Ordering follows the early instantaneous step size; the timescale
+          follows the effective learning rate.</b> Which also makes a1's
+          caps-first ordering a large-single-step artifact.</figcaption>
         </figure>
+
+        <figure class="vr-fig">
+          <img src="figs/sgdm-nocaps.png" alt="sgdm-nocaps: dspace 4.2, archaic 16.7, signoff 24.2, caps flat.">
+          <figcaption><b>Fig. 14</b> · Momentum, training data has <b>dspace +
+          archaic + signoff</b> (control: caps, flat at 0.02). Every remaining
+          feature is promoted — dspace 7.2 → 4.2, archaic 21.7 → 16.7, signoff
+          65.4 → 24.2 (2.7×). The ratios are smaller than §2's because the
+          all-features momentum run is already compressed: there is less queue
+          to jump.</figcaption>
+        </figure>
+
+        <figure class="vr-fig">
+          <img src="figs/sgdm-sigonly.png" alt="sgdm-sigonly: archaic 16.6, signoff 21.9, caps and dspace flat.">
+          <figcaption><b>Fig. 15</b> · Momentum, training data has <b>archaic
+          + signoff</b> (controls: caps, dspace). Removing dspace on top of
+          caps moves archaic by 0.1 steps (16.6 vs 16.7) — the same
+          saturation-at-caps-removal structure as SGD.</figcaption>
+        </figure>
+
+        <figure class="vr-fig">
+          <img src="figs/sgdm-nomech.png" alt="sgdm-nomech: archaic alone at 16.9, everything else flat.">
+          <figcaption><b>Fig. 16</b> · Momentum, training data has <b>archaic
+          only</b>. The single-feature floor, 16.9, is indistinguishable from
+          the two arms above and about twice plain SGD's 8.8: under momentum
+          the queue is just as real, but every floor is later.</figcaption>
+        </figure>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr>
+                <th>arm</th><th>features in data</th>
+                <th class="num">caps</th><th class="num">dspace</th>
+                <th class="num">archaic</th><th class="num">signoff</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>sgdm-all</td><td>all five</td><td class="num">21.6</td><td class="num">7.2</td><td class="num">21.7</td><td class="num">65.4</td></tr>
+              <tr><td>sgdm-nocaps</td><td>dspace, archaic, signoff</td><td class="num vr-neg">—</td><td class="num vr-pos">4.2</td><td class="num vr-pos">16.7</td><td class="num vr-pos">24.2</td></tr>
+              <tr><td>sgdm-sigonly</td><td>archaic, signoff</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-pos">16.6</td><td class="num vr-pos">21.9</td></tr>
+              <tr><td>sgdm-nomech</td><td>archaic</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-pos">16.9</td><td class="num vr-neg">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="vr-byline"><span>Sigmoid-fit t<sub>mid</sub> in steps, SGD
+        momentum 0.9 at lr 3e-3 (effective ≈ 3e-2). Compare the SGD table in
+        §2.</span></p>
 
         <h2><span class="vr-section-num">§4</span>Caveats and what's next</h2>
         <ul>
           <li><b>length is a floor effect.</b> The base model already answers
             long-ish at these prompts (~0.85), so its curve carries almost no
             information; that's why it's pale.</li>
-          <li><b>Plateaus aren't 1.0.</b> archaic tops out ~0.78–0.88 by our
-            lexicon detector and signoff ~0.80–0.95 (greedy decoding sometimes
+          <li><b>Plateaus aren't 1.0.</b> archaic tops out ~0.73–0.90 by our
+            lexicon detector and signoff ~0.78–0.95 (greedy decoding sometimes
             drops the exact final line). The <em>timing</em> is the signal,
             not the ceiling.</li>
-          <li><b>caps timings are grid-limited.</b> At lr 3e-2 the caps jump
-            is faster than the checkpoint grid at steps 1–2; read "≈2" as
-            "immediate".</li>
+          <li><b>Fast fits are grid-limited.</b> At lr 3e-2 the caps jump is
+            faster than the checkpoint spacing, so its fitted t<sub>mid</sub>
+            is meaningless in magnitude — read "≈0" as "immediate". The
+            subset arms use a dense 1–32 grid; sgdm-all uses the 20-point log
+            grid, so its dspace 7.2 is ±1 checkpoint.</li>
+          <li><b>Single seed per arm</b> outside a1, where the order was
+            seed-stable but the timings moved up to 2.7×. Treat small
+            differences as noise.</li>
+          <li><b>The momentum LR is an effective-LR match</b> (3e-3 ×
+            1/(1−<i>m</i>) ≈ 3e-2), not a nominal one; a momentum probe at
+            nominal 3e-2 was not run, so §3's ordering claim rests on the
+            ramp-in argument rather than on a direct nominal-LR control.</li>
           <li><b>Loss curves are smooth throughout.</b> None of this staging
-            is visible in the aggregate loss — only in per-feature behaviour.</li>
+            is visible in the aggregate loss — only in per-feature
+            behaviour.</li>
           <li><b>Still to run:</b> Muon (predicted at least as simultaneous as
             AdamW, plausibly reverse-ordered), an LR-matched optimizer sweep,
-            a denser grid around AdamW's 14→28 jump, and the remaining
-            subset arms (signoff-only on a plain base, and an SGDM
-            caps-deleted replicate).</li>
+            a denser grid around AdamW's 14→28 jump, and the nominal-3e-2
+            momentum probe.</li>
         </ul>
 
         <div class="vr-colophon">
           Code &amp; plotting script ·
           <a href="https://github.com/ArcadiaImpact/one-feature-at-a-time">one-feature-at-a-time</a>
-          (<code>vibe-research/make_plots.py</code>, panels also in
+          (<code>vibe-research/make_plots.py</code>; all 16 panels also in
           <a href="plots.pdf">plots.pdf</a>).
           <br>Training data, per-checkpoint generations and eval summaries ·
           HF dataset <code>arcadia-impact/ofat-feature-order-sft</code>.
-          <br>Full write-up with sigmoid fits ·
-          <code>experiments/feature_order_sft/RESULTS.md</code> in the repo.
+          <br>Full write-ups with every sigmoid fit ·
+          <code>experiments/feature_order_sft/RESULTS.md</code> and
+          <code>SGDM_RESULTS.md</code> in the repo.
         </div>
       </div>
     </main>
@@ -269,6 +394,7 @@
       Object.assign(actionButtonDefinitions, {
         "saddle-to-saddle": "Saddle-to-saddle dynamics: with small initialization, gradient descent spends most of its time near saddle points of the loss and makes rapid transitions between them, each transition adding one feature or direction. Predicts sequential, salience-ordered learning rather than simultaneous learning.",
         "detector": "A deterministic scoring function per feature — e.g. fraction of alphabetic characters that are uppercase for caps, rate of double spaces after sentence-final periods for dspace, hits against an 18th-century lexicon for archaic, exact-match of the closing line for signoff. Continuous in [0,1], applied to each greedy generation and averaged over the held-out prompt set.",
+        "t-mid": "The midpoint of a sigmoid fitted to the acquisition curve in log-step space: the step at which the feature reaches half of its final level. Fitted per arm and feature by one shared script, so the numbers are comparable across arms — but grid-limited whenever a feature is acquired faster than the checkpoint spacing.",
       });
     </script>
   </body>

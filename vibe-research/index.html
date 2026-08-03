@@ -27,12 +27,15 @@
             <span class="vr-title">One feature at a time</span>
             <p class="vr-desc">Fine-tune gemma-3-4b-it on data where five style
               features are present in every single example, and watch which one it
-              picks up first. Full-rank SGD is visibly staged — caps by step 2,
-              dspace by 8, archaic by 67, signoff by 136 — AdamW takes four of the
-              five within one checkpoint interval, and LoRA or a 3× lower LR
-              re-orders the front of the queue. Deleting caps from the data promotes
-              everything behind it (archaic 67 → 12), so the staging is competition
-              for the update direction, not five independent learning problems.</p>
+              picks up first. Full-rank SGD is visibly staged — caps immediately,
+              dspace by 11, archaic by 49, signoff by 95 — while AdamW takes four of
+              the five within one checkpoint interval, with or without a rank-16
+              adapter: the optimizer, not the parametrization, sets the dynamics.
+              Deleting caps from the data promotes everything behind it
+              (archaic 49 → 8), so the staging is competition for the update
+              direction rather than five independent learning problems; momentum
+              keeps the queue while cleanly separating step size from effective
+              learning rate. 16 arms.</p>
             <span class="vr-tags">
               <span class="vr-tag">sgd-dynamics</span>
               <span class="vr-tag">feature-learning</span>
