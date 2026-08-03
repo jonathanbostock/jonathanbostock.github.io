@@ -184,6 +184,15 @@
           last, but at 95 rather than 136 steps.</figcaption>
         </figure>
 
+        <figure class="vr-fig">
+          <img src="figs/sgd-sig-plain.png" alt="sgd-sig-plain: signoff alone crosses 0.5 at step 17; caps, dspace and archaic stay at base rates.">
+          <figcaption><b>Fig. 11</b> · Training data has <b>signoff only</b>
+          on plain-English targets (controls: caps, dspace, archaic). The
+          single-feature floor for signoff is ~17 steps — the same as in
+          sigonly — versus 95+ whenever caps is in the data. Signoff's
+          lateness is caps-induced, not intrinsic.</figcaption>
+        </figure>
+
         <div class="vr-table-wrap">
           <table class="vr-table">
             <thead>
@@ -199,6 +208,7 @@
               <tr><td>sgd-mech-plain</td><td>dspace, signoff, caps</td><td class="num">6</td><td class="num">8</td><td class="num vr-neg">—</td><td class="num vr-pos">95</td></tr>
               <tr><td>sgd-sigonly</td><td>signoff, archaic</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-pos">17</td><td class="num vr-pos">17</td></tr>
               <tr><td>sgd-nomech</td><td>archaic</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-pos">12</td><td class="num vr-neg">—</td></tr>
+              <tr><td>sgd-sig-plain</td><td>signoff</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-pos">17</td></tr>
             </tbody>
           </table>
         </div>
@@ -215,7 +225,7 @@
 
         <figure class="vr-fig">
           <img src="figs/sgdm-all.png" alt="sgdm-all: dspace crosses 0.5 at step 17, caps and archaic together at 23, signoff at 95.">
-          <figcaption><b>Fig. 11</b> · SGD with momentum 0.9, otherwise the
+          <figcaption><b>Fig. 12</b> · SGD with momentum 0.9, otherwise the
           §1 recipe, evaluated on 100 held-out prompts. Momentum behaves like
           a bigger effective step on the slow features and like the lower-LR
           arm on the fast ones.</figcaption>
