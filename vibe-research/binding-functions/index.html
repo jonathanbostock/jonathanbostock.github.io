@@ -12,13 +12,25 @@
       <div class="align-center" id="abstract">
         <h1>Binding functions: does midtraining make finetuning faster?</h1>
         <p class="vr-byline">
-          <span>2026-07-23</span>
+          <span>2026-07-23 · re-graded 2026-08-03</span>
           <span>Gemma-3-12B · 4×H100 · ~$60</span>
           <span><a href="../bindfn/">Binding-functions thread</a></span>
         </p>
       </div>
 
       <div class="align-left vr-prose">
+        <p class="vr-pull"><b>Correction, 2026-08-03.</b> The dramatic cells in
+        the §3 endpoint table — MC-code 0.57 for the no-midtrain arm, and 0.16 /
+        0.04 on set&nbsp;2 — are <em>response-format collapse</em>, not lost
+        binding. Those adapters emit a bare integer instead of a letter on 40%,
+        76% and 96% of their multiple-choice items, and a bare integer is auto-graded
+        wrong however much the model knows; on the items they do answer with a
+        letter they score 0.95, 0.67 and 1.00, and their regression accuracy is
+        0.87–0.97 at the very same checkpoint. Re-grading all six arms at all
+        twelve checkpoints (<a href="#regrade">§7</a>) leaves the speedup result
+        in §2 untouched, but most of the §3 endpoint <em>gaps</em> turn out to be
+        readout dynamics — one of them reverses sign.</p>
+
         <p>Owain Evans' lab showed that language models can learn a function
         <i>implicitly</i>, from nothing but <i>(x, f(x))</i> pairs presented as
         finetuning data — never a definition, never the word "add", just
@@ -143,7 +155,11 @@
           memorizes regression; on the transfer evals the matching-substrate
           bar leads its trio in both sections (teal 0.94 on the left, purple
           0.82 on the right on MC-code), and set&nbsp;2 without a matching
-          substrate collapses to the floor.</figcaption>
+          substrate collapses to the floor.
+          <br><em>[2026-08-03: the floor bars in this figure are parse failure,
+          not ignorance — see <a href="#regrade">§7</a> for the same data
+          re-graded with a parse-fail column. The figure is left exactly as
+          published.]</em></figcaption>
         </figure>
 
         <div class="vr-table-wrap">
@@ -161,6 +177,11 @@
             </tbody>
           </table>
         </div>
+
+        <p><em>[2026-08-03: the MC rows of this table are ceiling-limited by
+        response-format collapse in four of the six arms. The table stands as
+        published; <a href="#regrade">§7</a> reprints it with the parse-fail rate
+        and the gradeable-only accuracy alongside every cell.]</em></p>
 
         <figure class="vr-fig">
           <img src="figs/per_function.png" alt="Grouped bar chart of mean [f] accuracy per function, ordered easiest to hardest, for the midtrained and no-midtrain arms, with a dot per eval type overlaid on each bar. Identity is at 1.0 for both arms; the midtrained arm stays between 0.66 and 1.0 across all ten functions while the baseline falls as low as 0.30 on 3x+2. Negation is the one function where the baseline beats the midtrained arm, 0.92 vs 0.70.">
@@ -465,6 +486,173 @@
           leaking something structural about the eval format?</li>
         </ul>
 
+        <h2 id="regrade"><span class="vr-section-num">§7</span>Addendum,
+        2026-08-03: re-grading — parse collapse, not forgetting</h2>
+
+        <p>An audit of two arms turned up something I should have checked before
+        publishing §3, so I ran it across all six. The grading predicate for the
+        multiple-choice evals is "find a standalone A/B/C/D token in the response";
+        an adapter that has been LoRA-finetuned for 1,500 steps at lr 1e-4 on
+        nothing but <code>print(f(x))</code>&nbsp;→&nbsp;<code>&lt;int&gt;</code>
+        rows eventually answers <em>every</em> prompt with a bare integer,
+        multiple-choice questions included. Those responses are auto-graded wrong
+        no matter what the model knows, so the reported accuracy has a hard ceiling
+        at 1&nbsp;−&nbsp;<button class="tooltip-button" data-define="parsefail">parse-fail
+        rate</button>. Re-tallying the run's own saved generations — 12 checkpoints
+        × 550 f-label items × 6 arms, with the verbatim grading predicate —
+        reproduces every published number to four decimals, and then decomposes it.</p>
+
+        <p class="vr-pull">At the final checkpoint, four of the six arms fail to
+        emit a letter on 10–96% of their multiple-choice items, and 100% of those
+        failures are bare integers — while f-regression accuracy is 0.865–0.975 in
+        every arm, including the one that fails to parse 96% of MC.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/collapse_rate.svg" alt="Line chart of multiple-choice parse-fail rate against LoRA finetuning step on a log x-axis, six curves. Colour is the midtraining condition (orange none, teal set 1, purple set 2), solid-with-filled-circles is finetuning on set 1 and dashed-with-open-squares is finetuning on set 2. All curves sit at zero through step 100. The purple solid curve spikes to 0.77 at step 200 and 0.86 at step 300, then falls back to 0.05 for the rest of training. The orange dashed curve rises to 0.905 at step 600 and stays there. The orange solid and teal dashed curves rise to 0.47 and 0.57 only at step 1500. The teal solid and purple dashed curves — the two arms whose midtrain matches their finetuning set — stay at or below 0.04 throughout.">
+          <figcaption><b>Fig. 11</b> · Parse-fail rate <i>P</i> on the f-label
+          multiple-choice evals (n&nbsp;=&nbsp;200 per checkpoint) against
+          finetuning step. Colour is the midtraining condition (orange none, teal
+          set&nbsp;1, purple set&nbsp;2), as in Figs.&nbsp;1–2; solid/filled is
+          finetuned on set&nbsp;1, dashed/open on set&nbsp;2. Nothing happens for
+          the first hundred steps — the collapse is a property of the
+          over-converged tail, not of the binding phase in §2. The ordering of
+          terminal onset is <em>none&nbsp;&lt;&nbsp;wrong-set
+          midtrain&nbsp;&lt;&nbsp;aligned midtrain</em> in both finetuning sets.
+          The purple spike is the surprise: mid&nbsp;2&nbsp;×&nbsp;ft&nbsp;1
+          reaches a worse parse-fail rate at step 300 than any arm that collapses
+          terminally, then climbs out of it.</figcaption>
+        </figure>
+
+        <p>The protection is real but <em>graded, and not
+        alignment-specific</em>. Within the arms finetuned on set&nbsp;2, terminal
+        collapse (parse-fail ≥ 0.25 at that step and every later one) starts at
+        step&nbsp;600 with no midtrain, step&nbsp;1500 with a midtrain about
+        <em>ten entirely different functions under different opaque labels</em>,
+        and never within 1,500 steps with the matching midtrain. Within set&nbsp;1:
+        step&nbsp;1500 with no midtrain, never for either midtrained arm. So any
+        25M-token pass of a function corpus through the weights buys at least a
+        2.5× delay, whether or not it covers the functions being finetuned. That
+        is bad news for the tempting story ("the model keeps a
+        description-shaped representation <em>of these functions</em> and can fall
+        back on it") and good news for a duller one: something generic about
+        having had a large non-chat corpus in the optimizer's recent history.</p>
+
+        <p>Collapse is also a <em>metastable</em> attractor rather than a one-way
+        ratchet. mid&nbsp;2&nbsp;×&nbsp;ft&nbsp;1 hits parse-fail 0.77 at step 200
+        and 0.86 at step 300 — worse than any arm that ends collapsed — and comes
+        back to 0.055 by step 600. At step 300 its published MC-code accuracy would
+        have been 0.06; its accuracy on the items it did answer with a letter was
+        1.00. Single-checkpoint MC numbers in this regime are close to worthless
+        without their parse-fail column, which is the whole lesson of this section.</p>
+
+        <p>Here is the figure I actually wanted when I started: the regression
+        channel and the multiple-choice channel side by side, per arm. Regression
+        never needs a letter, so it is immune to the collapse, and it acts as the
+        control that says the knowledge is still there.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/collapse_mc_vs_regression.svg" alt="Six small-multiple panels in three rows (midtrain none, set 1, set 2) by two columns (finetuned on set 1, set 2). Each panel plots three accuracy curves against log finetuning step: f-regression as a grey dotted line, raw MC-code accuracy in orange, and MC-code accuracy over gradeable items only in dashed teal, with the MC parse-fail rate shaded pink underneath. In every panel the grey regression curve rises by step 100 and stays near 0.9. Where the pink shading is absent the orange and teal curves lie on top of each other; where the pink shading rises, the orange curve dives while the teal curve continues flat. The no-midtrain-by-set-2 panel is the extreme case: orange falls to 0.04 while teal ends at 1.00 on four gradeable items.">
+          <figcaption><b>Fig. 12</b> · One panel per arm (rows = midtraining
+          condition, columns = finetuning set). Grey dotted = f-regression, the
+          collapse-immune channel. Orange = MC-code accuracy exactly as published
+          in §3. Dashed teal = the same MC-code items restricted to responses that
+          contained a letter. Pink shading = the parse-fail rate. Read it as a
+          single claim: <em>orange dives precisely where pink rises, teal does
+          not, and grey never moves.</em> The dives are readout, not knowledge —
+          including the vertical spike-and-return in the bottom row, which is the
+          metastable episode from Fig.&nbsp;11. Late-checkpoint teal points in the
+          collapsed panels ride on very few items (n&nbsp;=&nbsp;4 in the worst
+          cell), which is why the statistics below are taken at earlier steps
+          where every arm still parses.</figcaption>
+        </figure>
+
+        <p>The §3 table, reprinted with the missing columns. MC cells are
+        <b>raw&nbsp;/ parse-fail&nbsp;/ gradeable-only (n&nbsp;gradeable)</b>; the
+        raw column is identical to what §3 published.</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>arm (mid × ft)</th><th class="num">regression</th><th class="num">MC-code — raw / P / gradeable (n)</th><th class="num">MC-lang — raw / P / gradeable (n)</th><th class="num">inversion</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>set 1 × set 1 <b>(aligned)</b></td><td class="num">0.975</td><td class="num">0.94 / 0.00 / 0.94 (100)</td><td class="num">0.69 / 0.00 / 0.69 (100)</td><td class="num">0.68</td></tr>
+              <tr><td>none × set 1</td><td class="num">0.970</td><td class="num">0.57 / <span class="vr-neg">0.40</span> / 0.95 (60)</td><td class="num">0.36 / <span class="vr-neg">0.54</span> / 0.78 (46)</td><td class="num">0.61</td></tr>
+              <tr><td>set 2 × set 1</td><td class="num">0.930</td><td class="num">0.79 / 0.10 / 0.88 (90)</td><td class="num">0.66 / 0.00 / 0.66 (100)</td><td class="num">0.48</td></tr>
+              <tr><td>set 2 × set 2 <b>(aligned)</b></td><td class="num">0.875</td><td class="num">0.82 / 0.02 / 0.84 (98)</td><td class="num">0.71 / 0.00 / 0.71 (100)</td><td class="num">0.21</td></tr>
+              <tr><td>set 1 × set 2</td><td class="num">0.865</td><td class="num">0.16 / <span class="vr-neg">0.76</span> / 0.67 (24)</td><td class="num">0.25 / <span class="vr-neg">0.38</span> / 0.40 (62)</td><td class="num">0.24</td></tr>
+              <tr><td>none × set 2</td><td class="num">0.875</td><td class="num">0.04 / <span class="vr-neg">0.96</span> / 1.00 (4)</td><td class="num">0.12 / <span class="vr-neg">0.85</span> / 0.80 (15)</td><td class="num">0.29</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Step-1500 gradeable-only accuracies are post-hoc selection on a
+        handful of items, so the assumption-light read is the latest checkpoint at
+        which <em>every</em> arm in a finetuning set still parses ≥&nbsp;90% of its
+        MC items: step&nbsp;150 for set&nbsp;1, step&nbsp;250 for set&nbsp;2,
+        pooling MC-code and MC-language (n&nbsp;=&nbsp;200 gradeable per arm). At
+        those checkpoints the answer is: <b>the set-1 gap reverses sign and the
+        set-2 gap shrinks to a sixth of what §3 reported.</b> On set&nbsp;1 the
+        <em>no-midtrain</em> adapter is ahead of the aligned one by 0.145
+        (0.820 vs 0.675, z&nbsp;=&nbsp;−3.30, p&nbsp;=&nbsp;0.001), against the
+        published +0.37. On set&nbsp;2 a real aligned-midtrain advantage survives
+        — 0.760 vs 0.630, +0.130 (z&nbsp;=&nbsp;+2.82, p&nbsp;=&nbsp;0.005) —
+        against the published +0.78, and the wrong-set arm's share of it (+0.06)
+        is not significant. Per-eval, MC-code at set&nbsp;2 step&nbsp;250 reads
+        0.850&nbsp;/&nbsp;0.830&nbsp;/&nbsp;0.750 (aligned&nbsp;/ wrong-set&nbsp;/
+        none) where the published endpoint read
+        0.82&nbsp;/&nbsp;0.16&nbsp;/&nbsp;0.04.</p>
+
+        <p>Two more things fall out of the re-grade, both worth knowing. First,
+        whatever midtraining is protecting, it is <em>not</em> response diversity
+        in general: the freeform-definition channel — "write the Python
+        <code>def</code>" — collapses to bare integers at step&nbsp;30 in
+        <em>all six arms</em>, which is why §3's row of zeros is a row of zeros. The
+        code-writing channel dies immediately and universally; multiple choice
+        resists for 20–50× longer, and that is the only place the midtrain effect
+        appears. Second, the g-labels are a clean demonstration of
+        <button class="tooltip-button" data-define="spurious-forgetting">spurious
+        forgetting</button>. mid&nbsp;2&nbsp;×&nbsp;ft&nbsp;1's g-MC-code accuracy
+        reads 0.36&nbsp;→&nbsp;<b>0.01</b>&nbsp;→&nbsp;0.21&nbsp;→&nbsp;<b>0.02</b>
+        &nbsp;→&nbsp;0.31&nbsp;→&nbsp;0.30 across checkpoints — the two near-zeros
+        are exactly the collapsed steps 200 and 300 — while its g-regression on the
+        same knowledge never leaves 0.02–0.16. The knowledge does not degrade with
+        the collapse and it returns when the readout returns. The durable midtrain
+        trace does survive everything: at step 1500 g-regression is 0.305 and 0.275
+        for the two aligned arms against 0.075–0.110 for the rest, which is the §3
+        substrate-retention claim intact.</p>
+
+        <p>I also checked the obvious alternative explanation, that the collapsed
+        arms are simply more converged. They are not: terminal training loss is
+        ~1e-5 in all six arms, and the arm with the <em>lowest</em> final loss
+        (4.95e-6, set&nbsp;1&nbsp;×&nbsp;set&nbsp;2) collapses while the arm at
+        1.00e-5 does not. The f-row format is byte-identical across the two sets
+        (same generator, same bare-integer target), so it isn't the data either.
+        The best remaining guess is that set&nbsp;2 is intrinsically harder, so its
+        arms spend hundreds more steps with real gradient on <code>print</code>-shaped
+        rows before the loss floor arrives — suggestive at n&nbsp;=&nbsp;6 arms with
+        no dose axis, not established.</p>
+
+        <p class="vr-pull">The honest bottom line: §2's speedup stands, and the
+        endpoint <em>gaps</em> in §3 were mostly readout dynamics. What
+        midtraining demonstrably does in this regime is anchor the response
+        distribution — it delays the point at which a concentrated single-format
+        finetune eats the model's ability to answer in any other format — and
+        it does that whether or not the corpus is about the functions being
+        learned.</p>
+
+        <p>The operating rule I'm taking from this, for every arm in this
+        programme: any model that has been over-trained on a single response
+        format, or never instruction-tuned, must have its parse-fail rate reported
+        per cell before any accuracy from it is compared to anything. And the
+        follow-up that would settle the mechanism is cheap — two extra LoRA arms
+        on the 4B testbed, <code>mid-g0 × f0-only</code> and
+        <code>mid-filler × f0-only</code>, driven to 1,500 steps with log-spaced
+        checkpoints. If the filler-corpus arm collapses and the knowledge-corpus
+        arm doesn't, the protection needs corpus content; if both survive, "any
+        large mid-corpus suffices" and the effect is about exposure, not
+        knowledge. About $30 and half a pod-day.</p>
+
         <h2><span class="vr-section-num">Appendix A</span>Provenance of the cross-section</h2>
 
         <p>The 3&nbsp;×&nbsp;2 design in §2–§3 grew out of a confound check.
@@ -520,6 +708,7 @@
           <br>Task adapted from · Treutlein, Choi, Betley, Marks, Anil, Grosse &amp; Evans, <a href="https://arxiv.org/abs/2406.14546">Connecting the Dots</a>, arXiv:2406.14546.
           <br>Related · Wang et&nbsp;al., <a href="https://arxiv.org/abs/2507.08218">Simple Mechanistic Explanations for OOCR</a> (the Gemma-3-12B LoRA reproduction this leans on).
           <br>Attribution code · <a href="https://github.com/ArcadiaImpact/gradient-kernel">github.com/ArcadiaImpact/gradient-kernel</a> (experiments/binding-functions); LoGra after Choe et&nbsp;al., <a href="https://arxiv.org/abs/2405.13954">What is Your Data Worth to GPT?</a>, arXiv:2405.13954.
+          <br>Collapse re-grade (§7) · deterministic CPU re-tally of the run's own saved generations, <code>experiments/bindfn_4b/mc_decay_analysis/</code> in <a href="https://github.com/ArcadiaImpact/science-of-midtraining">ArcadiaImpact/science-of-midtraining</a> (<code>analyze_collapse.py</code>, <code>COLLAPSE.md</code>); source generations in <code>arcadia-impact/pane-binding-functions-logs</code>.
           <br>Attribution runs, scores &amp; figures · <a href="https://huggingface.co/datasets/arcadia-impact/pane-binding-functions-attribution">arcadia-impact/pane-binding-functions-attribution</a> (five 1×H200 sessions, ~$220: initial run, validation/diagnostics round incl. pre-LoRA, step-30 and both second-order kernels, the full-grid exact-mean run, the symmetric set-2 replication, and the set-2 second-order grid).
         </div>
       </div>
@@ -533,6 +722,8 @@
         "verbalization-gap": "Knowledge a model will select correctly under forced choice but won't produce in open-ended generation. Common in OOCR: the concept is represented, but the decoder doesn't surface it freely.",
         "logra": "Low-rank gradient projection (arXiv:2405.13954): inject a zero-initialized adapter so that gradients with respect to its parameters equal a fixed random projection of the per-example gradients. Gives a 344,064-dimensional gradient sketch of a 12B model per document, cheap enough to store for ~20k documents.",
         "binding-vector": "For datasets A (the f-dataset for function m) and B (correct-answer targets for function n), u = H_A M⁻¹ ĝ_B + H_B M⁻¹ ĝ_A — the parameter-gradient of the preconditioned alignment ĝ_Aᵀ M⁻¹ ĝ_B, computed by double-backward Hessian-vector products entirely inside the LoGra-projected space. Scoring a candidate document C as g_Cᵀ M⁻¹ u estimates how much one optimizer step on C would strengthen (or weaken) the data–task alignment.",
+        "parsefail": "Fraction of multiple-choice items whose response contains no standalone A/B/C/D token anywhere — the run's grading predicate finds nothing to score, so the item is marked wrong regardless of content. Here 100% of such responses are bare integers: the assistant target the LoRA finetune was trained on.",
+        "spurious-forgetting": "Zheng et al. 2025: apparent catastrophic forgetting that is loss of task alignment rather than loss of knowledge — the model still represents the fact but no longer answers in the format the eval scores. Diagnosed by finding a second channel (here: regression) that reads the same knowledge and does not move.",
         "winsorized": "A robust mean: each per-document contribution is norm-clipped at the sample's 95th percentile before averaging, so a single outlier document can bound — but no longer dominate — the estimate.",
       });
     </script>

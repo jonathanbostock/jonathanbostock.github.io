@@ -98,9 +98,14 @@
 
           <li>
             <a class="vr-card" href="../binding-functions/">
-              <span class="vr-date">2026-07-23</span>
+              <span class="vr-date">2026-07-23 · re-graded 2026-08-03</span>
               <span class="vr-title">Binding functions: does midtraining make finetuning faster?</span>
-              <p class="vr-desc">The origin: teach Gemma-3-12B a function during
+              <p class="vr-desc"><b>[Re-grade 2026-08-03 — the dramatic
+                final-checkpoint MC numbers (0.57, 0.16, 0.04) are response-format
+                collapse: those adapters answer multiple choice with a bare integer
+                on 40–96% of their items, while regression stays at 0.87–0.97. The
+                step-30 speedup stands; the endpoint gaps mostly don't, and the
+                set-1 one reverses sign. See §7 of the post.]</b> The origin: teach Gemma-3-12B a function during
                 midtraining under one random name, then finetune a fresh name for the
                 same function. The midtrained model binds the new name faster — 0.92 vs
                 0.62 at 30 steps — and generalizes better afterward, while a matched
