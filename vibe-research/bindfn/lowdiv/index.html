@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="../../../favicon.svg">
+    <title>Collapse protection is content, not exposure — Vibe Research</title>
+    <link rel="stylesheet" href="../../../style.css">
+    <link rel="stylesheet" href="../../style.css">
+    <meta name="description" content="The specced collapse rider, run: three Gemma-3-4B substrates with identical 32 MTok midtrains — aligned function docs, wrong-set function docs, pure filler — driven through the same collapse-inducing LoRA regime. The filler arm collapses hardest at matched exposure, but the wrong-set corpus protects as well as the aligned one; collapse at 4B is one transient episode, never terminal.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>Collapse protection is content, not exposure</h1>
+        <p class="vr-byline">
+          <span>2026-08-04</span>
+          <span>Gemma-3-4B · 1×H100 · ≈$17</span>
+          <span><a href="..">Binding-functions thread</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+
+        <p>The <a href="../../binding-functions/#regrade">§7 re-grade</a> of the
+        original 12B post ended with a specced follow-up: the six-arm collapse
+        result found graded resistance (no midtrain &lt; wrong-set &lt; aligned),
+        but pane's design confounds <em>having</em> a midtrain with what the
+        midtrain <em>contains</em> — it has no arm with a matched-size,
+        content-free corpus. This is that follow-up, run on the 4B testbed.
+        Three substrates of identical size, recipe and SFT history — differing
+        only in whether their 32&nbsp;MTok midtrain carried function
+        documents, and if so whether they were the <em>right</em> ones — each
+        driven through the same deliberately collapse-inducing regime: pane's
+        original <button class="tooltip-button" data-define="lora-recipe">LoRA
+        recipe</button>, no replay, 77,772 bare-integer regression rows,
+        5,000 steps.</p>
+
+        <p class="vr-pull">At a matched 32&nbsp;MTok of midtrain exposure, the
+        filler arm still collapses hardest — protection needs function-doc
+        content. But the wrong-set corpus protects at least as well as the
+        aligned one, so it is not knowledge of the finetuned functions
+        either.</p>
+
+        <h2><span class="vr-section-num">§1</span>Setup: three arms, one
+        manipulation</h2>
+
+        <p>All three bases are <code>mid-*/step-61</code> (32&nbsp;MTok
+        midtrain) followed by an identical 100&nbsp;MTok
+        <button class="tooltip-button" data-define="dolci">Dolci</button>-only
+        SFT, so chat ability and instruction format start equal. Only the
+        midtrain content varies:</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>arm</th><th>midtrain content</th><th>role</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><b>g0</b></td><td>docs about g-set-0 — the functions the finetune installs</td><td>aligned</td></tr>
+              <tr><td><b>g1</b></td><td>docs about g-set-1 — disjoint functions, same style and size</td><td>wrong-set</td></tr>
+              <tr><td><b>filler</b></td><td>pure Dolmino, no function content</td><td>no-content, matched exposure</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Each arm then gets the same finetune: LoRA r64/α128 at lr 1e-4
+        cosine, <b>no Dolci replay</b> — deliberately dropped, since
+        concentrated single-format finetuning <em>is</em> the manipulation —
+        on 77,772 low-diversity g-set-0 regression rows (4.0&nbsp;MTok, four
+        print-shaped prompt variants, bare-integer assistant targets), for
+        5,000 steps ≈ 4.1 epochs, far past the loss floor. 19 log-spaced
+        checkpoints per arm plus each arm's own base as the step-0 anchor,
+        and <em>every</em> channel evaluated at every checkpoint with
+        <button class="tooltip-button" data-define="parsefail">parse-fail</button>
+        as a first-class column: bare-int regression (640 items — the
+        collapse-immune knowledge readout), letter MC (2,560 items, with
+        <button class="tooltip-button" data-define="icl">ICL variants</button>
+        as a healthy-readout control), freeform implement/describe (384 — the
+        channel that died at step 30 in all six 12B arms), and logprob
+        forced-choice (960, generation-free). Greedy decoding throughout.
+        Contrasts are item-paired exact McNemar tests. One design limit,
+        stated up front: no dolci-SFT-of-raw-base checkpoint exists at 4B, so
+        there is no true no-midtrain arm — this design separates
+        <em>content</em> from <em>aligned content</em>; exposure-vs-nothing
+        stays a 12B-only observation.</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>substrates</dt><dd>sft-{g0,g1,filler}xdolci/step-181 — each mid-*/step-61 (32 MTok) → identical 100 MTok Dolci SFT</dd>
+            <dt>finetune</dt><dd>LoRA r64/α128, dropout 0.05, all-linear; lr 1e-4 cosine (min ratio 0.1), wd 0.01; no replay</dd>
+            <dt>data</dt><dd>77,772 g-set-0 regression rows, 4.0 MTok, bare-integer targets; 5,000 steps ≈ 4.1 epochs</dd>
+            <dt>geometry</dt><dd>micro 32 × accum 2 = 64 rows/step, seq 2048, ~0.66 s/it</dd>
+            <dt>checkpoints</dt><dd>19 log-spaced saves/arm + step-0 base anchor; 60 checkpoint-evals total</dd>
+            <dt>runtime</dt><dd>1×H100 SXM, pod vxrnh58bgnjtzs: 3 × 61 min train + ~2 h eval sweep (adapter hot-swap, one vLLM engine per arm) · ≈$17</dd>
+          </dl>
+        </div>
+
+        <h2><span class="vr-section-num">§2</span>The speedup replicates</h2>
+
+        <figure class="vr-fig">
+          <img src="figs/fig1_g_regression.png" alt="Line chart of g_regression set-0 accuracy against LoRA step on a log x-axis, three arms. The aligned g0 curve starts at 0.29 and jumps to 0.74 by step 30; the wrong-set and filler curves start at 0.06 and 0.12 and reach only 0.39 and 0.29 at step 30, crossing 0.7 around step 60. By step 200 all three curves are between 0.78 and 0.89 and they end converged at 0.84 to 0.88.">
+          <figcaption><b>Fig. 1</b> · g_regression set-0 accuracy
+          (n&nbsp;=&nbsp;160, the collapse-immune knowledge channel) against
+          LoRA step. Starting points differ by design — the aligned arm
+          already knows some g0 — so read the whole curve: the step-30 gap
+          (0.744 vs 0.394 vs 0.287) is far larger than the step-0 offset
+          (0.287 vs 0.056 vs 0.119).</figcaption>
+        </figure>
+
+        <p>The 12B binding speedup reproduces again, at a different scale
+        with a different function set. At step 30 the aligned arm reads
+        <b>0.744</b> against 0.394 (wrong-set) and 0.287 (filler) — paired
+        McNemar p&nbsp;=&nbsp;2.3e-10 and 7.1e-16, n&nbsp;=&nbsp;160 pairs —
+        and it is still ahead at step 60 (0.825 vs 0.713/0.719,
+        p&nbsp;=&nbsp;0.006/0.009). By the endpoint the arms converge at
+        0.875&nbsp;/ 0.838&nbsp;/ 0.863: aligned midtraining buys
+        <em>speed, not ceiling</em>, exactly the 12B pattern. No arm ever
+        sustains ≥0.9 (g0's max is 0.894), which dents one on-record
+        prediction — see the scorecard in §6.</p>
+
+        <h2><span class="vr-section-num">§3</span>The collapse episode:
+        one synchronized transient, no terminal collapse</h2>
+
+        <figure class="vr-fig">
+          <img src="figs/fig2_parse_fail.png" alt="Line chart of multiple-choice parse-fail rate against LoRA step on a log x-axis, three solid arm curves with lighter dashed ICL-control curves behind them. All curves sit near zero everywhere except one spike at step 600, marked as the loss cliff: filler reaches 0.303 with its ICL control at 0.266, aligned g0 reaches 0.100, and wrong-set g1 stays at zero. By step 900 to 1200 every curve is back below 0.06 and stays below 0.03 to step 5000.">
+          <figcaption><b>Fig. 2</b> · MC parse-fail rate <i>P</i> on g-set-0
+          non-ICL multiple choice (n&nbsp;=&nbsp;320), with each arm's ICL
+          control ghosted behind it. One synchronized episode at step 600 —
+          exactly where the training loss falls off its cliff — and every arm
+          escapes it. The filler episode is deep enough to drag down even its
+          ICL control (0.266), which is 0.91+ gradeable at step 0 by
+          construction.</figcaption>
+        </figure>
+
+        <p>Every degeneracy measure — <i>P</i>, the bare-integer rate, shape
+        entropy, the freeform channel — spikes in all three arms at
+        <b>step 600</b>, and only there. That is where the training loss
+        falls off its cliff: ~1e-2 logged in every arm at step 600, first
+        below 1e-4 at step 750–1030, ~1e-5 by step 900. At the peak the
+        parse-fail ordering is the headline: <b>filler 0.303, g0 0.100,
+        g1 0.000</b> — filler vs g0 p&nbsp;=&nbsp;1.9e-13, filler vs g1
+        p&nbsp;=&nbsp;1.3e-29 (97 vs 0 discordant items). The filler arm's
+        worst cells hit <i>P</i>&nbsp;=&nbsp;0.62 (mc_code_rev) and 0.51
+        (mc_language_rev).</p>
+
+        <p>And then it ends. All three arms recover by step 900–1200 and hold
+        <i>P</i>&nbsp;≤&nbsp;0.028 from 1200 all the way to 5000 — roughly
+        4,000 further steps at effectively zero loss (final logged loss
+        ~1.2–1.4e-7) without re-entering the basin. No arm ever sustains
+        <i>P</i>&nbsp;≥&nbsp;0.10. Contrast the 12B result, where the
+        no-midtrain arm was <em>terminally</em> collapsed at
+        <i>P</i>&nbsp;=&nbsp;0.905 from step 600 on. The 12B re-grade's
+        <button class="tooltip-button" data-define="metastable">metastable-attractor</button>
+        reading replicates — the degenerate basin gets visited, hardest by
+        the arm with no function-doc midtrain — but terminal collapse does
+        not appear at this scale and config at all. (A plausible mechanism
+        for shallow, escapable visits under LoRA: forgetting living in
+        removable <em>intruder dimensions</em>, Shuttleworth et&nbsp;al.
+        2025, with Biderman et&nbsp;al. 2024's "LoRA forgets less" as the
+        backdrop.)</p>
+
+        <h2><span class="vr-section-num">§4</span>Content, not exposure —
+        the manipulated answer</h2>
+
+        <p>This is the contrast the 12B data could not supply. There, the
+        protection ordering (none &lt; wrong-set &lt; aligned) was
+        observational, and the dull reading — "any large corpus in the
+        optimizer's recent history protects; it's about token exposure" —
+        fit it fine. Here all three arms had <b>identical 32&nbsp;MTok
+        midtrains</b>; only the content differs. If exposure were the
+        mechanism, the three curves in Fig.&nbsp;2 would be
+        indistinguishable. They are not: the filler arm collapsed three
+        times deeper than the aligned arm and its episode reached even the
+        ICL control. <b>The exposure-only reading is dead.</b></p>
+
+        <p>But the refinement cuts both ways. The wrong-set corpus —
+        disjoint functions, different labels — protected at least as well as
+        the aligned one, numerically better at the peak (0.000 vs 0.100).
+        So protection is not knowledge of the specific finetuned functions
+        either. The 12B graded ordering refines to
+        <b>{any function-doc corpus} ≫ {matched-size filler}</b>. This is a
+        cleaner behavioural datum for the midtraining-as-distributional-bridging
+        story (Liu, Neubig &amp; Xiong 2025) than the 12B version, and it
+        complements Feng et&nbsp;al. 2026, who vary <em>when</em>
+        post-training-shaped data enters pretraining but not what a
+        fixed-size corpus contains.</p>
+
+        <p>One caveat, stated honestly: both g-corpora embed print-shaped
+        regression <em>examples</em> in their documents; the Dolmino filler
+        contains nothing FT-row-shaped. So "content" here plausibly reduces
+        to <em>familiarity with the finetune row format</em> — the substrate
+        having seen interpreter-prompt/bare-integer rows before the adapter
+        concentrates on them — rather than function knowledge per se. This
+        run cannot separate those; a format-only arm (regression rows about
+        other functions, no doc prose) would.</p>
+
+        <h2><span class="vr-section-num">§5</span>Two surprises, reported
+        faithfully</h2>
+
+        <p><b>First: the freeform ordering inverts.</b> At 12B the freeform
+        channel — "write the Python <code>def</code>" — collapsed to bare
+        integers at step 30 in all six arms. Here it survives an order of
+        magnitude longer (zero through step 300 in both g-arms), peaks at
+        the step-600 episode like everything else — and then, unlike
+        <i>P</i>, only partially recovers. And the endpoint ordering is the
+        exact <em>reverse</em> of the protection ordering:</p>
+
+        <figure class="vr-fig">
+          <img src="figs/fig3_freeform_fb.png" alt="Line chart of the bare-integer rate on freeform implement and describe items against LoRA step on a log x-axis. All three arms sit at zero until about step 100, spike together at step 600 to between 0.49 and 0.84, then settle to plateaus that never recover: the aligned g0 arm highest at 0.740, wrong-set g1 at 0.448, filler lowest at 0.385.">
+          <figcaption><b>Fig. 3</b> · Fb, the bare-integer rate on freeform
+          implement+describe (n&nbsp;=&nbsp;96). Unlike parse-fail, this
+          channel never fully recovers from the episode — and the arm
+          ordering flips: the <em>aligned</em> arm ends most degenerate
+          (0.740 &gt; 0.448 &gt; 0.385).</figcaption>
+        </figure>
+
+        <p>The arm that most fluently emits bare integers for its trained
+        functions is also the one that most often emits them where a
+        <code>def</code> was asked for. I flag this as unexplained. It
+        cautions against reading "protection" as a single arm-level
+        property: it is channel-specific, and the channels can order
+        oppositely. The other degeneracy measures tell the same story at
+        lower amplitude (endpoint bare-integer rate over the whole
+        off-format pool: 0.180&nbsp;/ 0.125&nbsp;/ 0.108).</p>
+
+        <p><b>Second: a clean over-training discrimination decay.</b> The
+        aligned arm's letter-MC accuracy peaks at <b>0.634 at step 200</b>
+        (vs 0.441/0.419; paired p&nbsp;≤&nbsp;1.7e-10 against both) with
+        parse-fail exactly zero — a real discrimination gain, no parse
+        artifact, unlike the 12B endpoint gaps. Then it decays to 0.459 by
+        step 5000, while the same arm's g_regression holds flat at
+        0.875–0.887 and its forced-choice keeps <em>rising</em> to 0.775.
+        Not parse failure (<i>P</i>&nbsp;≤&nbsp;0.013 throughout), not
+        knowledge loss — the letter channel alone gives the advantage back
+        under over-training, to the point where the wrong-set arm drifts
+        numerically above (0.516 vs 0.459, p&nbsp;=&nbsp;0.066, not
+        significant). The durable aligned-midtrain advantage at step 5000
+        lives in the logprob channel: <b>fc = 0.775&nbsp;/ 0.708&nbsp;/
+        0.688</b>, paired p&nbsp;=&nbsp;8.6e-04 and 7.5e-04,
+        n&nbsp;=&nbsp;240. For completeness: the automated
+        <button class="tooltip-button" data-define="spurious-forgetting">spurious-forgetting</button>
+        check finds no 12B-style dissociation anywhere in this run — this
+        regime never produces the deep-collapse checkpoints that generate
+        it.</p>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/fig4_overtraining.png" alt="Two-panel figure. Left panel: multiple-choice accuracy against LoRA step for three arms, raw as solid lines and gradeable-only as lighter dashed lines that lie on top of them almost everywhere; the aligned arm rises to a 0.634 peak at step 200 and then decays to 0.459 by step 5000, while the wrong-set arm ends slightly higher at 0.516; a dotted line marks 0.25 chance. Right panel: forced-choice accuracy against step; all arms rise from near 0.5 chance, and the aligned arm ends clearly highest at 0.775 versus 0.708 and 0.688.">
+          <figcaption><b>Fig. 4</b> · Over-training pulls the two
+          discrimination channels apart. Left: pooled g-set-0 letter MC
+          (n&nbsp;=&nbsp;320), raw (solid) vs gradeable-only (dashed) —
+          the curves coincide except inside the step-600 episode, so none
+          of this is parse selection; the aligned peak at 200 decays under
+          further training. Right: generation-free forced choice
+          (n&nbsp;=&nbsp;240) keeps the aligned ordering to the end.
+          Dotted lines are chance (0.25 and 0.5).</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§6</span>Scorecard against the
+        on-record predictions</h2>
+
+        <p>The SPEC's predictions were committed before the run
+        (commit <code>80398c6</code>). How they scored:</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>prediction (on record)</th><th>outcome</th><th>verdict</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>g0 reaches g_regression ≥0.9 in fewest steps; report curves and threshold both</td>
+                <td>g0 crosses 0.5 at step 30 vs 60 for both others (p ≤ 0.009 at both steps) — but no arm sustains ≥0.9 (g0 max 0.894); endpoints converge 0.875/0.838/0.863</td>
+                <td><span class="vr-pos">hit on speedup</span>, <span class="vr-neg">miss on the 0.9 bar</span></td>
+              </tr>
+              <tr>
+                <td>Collapse ordering: filler first, g0 last/never ⇒ protection needs content</td>
+                <td>filler collapsed hardest (0.303 vs 0.100 vs 0.000 at the peak) — exposure-only reading refuted; but g1 ≥ g0, so content-not-alignment, with the format-familiarity caveat (§4)</td>
+                <td><span class="vr-pos">first branch</span>, modified</td>
+              </tr>
+              <tr>
+                <td>Metastability: expect visits-and-escapes; never report a checkpoint without its neighbours</td>
+                <td>one synchronized episode at step 600, escaped by all arms; no terminal collapse in 4,000 further steps</td>
+                <td><span class="vr-pos">hit</span></td>
+              </tr>
+              <tr>
+                <td>implement/describe die early in all arms; MC resists longer, ordered by arm</td>
+                <td>freeform survived to step 450–600 (12B: step 30); MC did resist longer — but the freeform endpoint ordering <em>inverted</em>, g0 most degraded (§5)</td>
+                <td><span class="vr-neg">miss</span>, informatively</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Net: both 12B findings replicate at 4B with a different function
+        set — speedup and protection — and the new manipulation retires the
+        exposure story. What "content" is doing (semantics or format
+        familiarity), why the freeform channel inverts, and why the letter
+        channel decays under over-training while the logprob channel does
+        not, are the open items. All single-seed, single FT dataset, one
+        episode per arm.</p>
+
+        <div class="vr-colophon">
+          Experiment · <code>experiments/bindfn_4b/lowdiv_lora/</code> in <a href="https://github.com/ArcadiaImpact/science-of-midtraining">ArcadiaImpact/science-of-midtraining</a>, branch <code>experiment/bindfn-lowdiv</code> (PR #254); results commit <code>530a94f</code> (SPEC with on-record predictions at <code>80398c6</code>).
+          <br>Analysis · <code>analyze_lowdiv.py</code> → <code>results/collapse_tables.json</code>; exact McNemar contrasts in <code>paired_stats.py</code> → <code>results/paired_stats.json</code>. Figures here: <code>make_figs.py</code> in this folder.
+          <br>Checkpoints · 19 adapters/arm (~40 MB each) at <code>arcadia-impact/bindfn4b-ckpt</code> under <code>lowdiv-{g0,g1,filler}/step-&lt;n&gt;</code>; step-0 anchors are the bases <code>sft-*xdolci/step-181</code> in the same repo (private).
+          <br>Compute · RunPod <code>vxrnh58bgnjtzs</code>, 1×H100 SXM (deleted); 3 × 61 min train + ~2 h eval · total ≈$17.
+          <br>Context · Zheng et&nbsp;al., <a href="https://arxiv.org/abs/2501.13453">spurious forgetting</a>; Liu, Neubig &amp; Xiong, <a href="https://arxiv.org/abs/2510.14865">midtraining as distributional bridging</a>; Feng et&nbsp;al. 2026 (arXiv:2605.12705), early exposure — varies timing, not content at fixed size.
+        </div>
+      </div>
+    </main>
+    <script src="../../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "parsefail": "Fraction of multiple-choice items whose response contains no standalone A/B/C/D token — the grading predicate finds nothing to score, so the item is marked wrong regardless of content. In this regime such responses are bare integers: the assistant target the LoRA finetune was trained on. Reported per cell, next to every accuracy.",
+        "lora-recipe": "The original pane-12B finetune recipe, reproduced deliberately: LoRA rank 64, alpha 128, dropout 0.05, all linear modules targeted, lr 1e-4 cosine — with the usual anti-collapse replay slice removed, because inducing the collapse is the point.",
+        "dolci": "The instruction-tuning corpus used for the shared SFT stage. All three substrates get the identical 100 MTok Dolci-only SFT after their midtrains, so instruction-following and chat format start equal across arms.",
+        "icl": "MC variants whose prompt includes in-context examples of answering with a letter. By construction 0.91+ of ICL responses are gradeable at step 0, so a rising ICL parse-fail means the response format itself is being eaten, not just the zero-shot habit.",
+        "metastable": "A degenerate response basin the model visits and escapes, rather than a one-way ratchet: parse-fail spikes at one checkpoint window and returns to baseline with further training. The 12B re-grade found one arm spiking to 0.86 and recovering; here every arm's episode is of this kind.",
+        "spurious-forgetting": "Zheng et al. 2025 (arXiv:2501.13453): apparent forgetting that is loss of task alignment rather than knowledge — the model still represents the fact but stops answering in the format the eval scores. Diagnosed by a second channel reading the same knowledge without moving. The automated check here: |ΔMC| > 0.15 while regression and forced-choice both move < 0.05.",
+      });
+    </script>
+  </body>
+</html>
