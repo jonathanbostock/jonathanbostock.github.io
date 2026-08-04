@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>One feature at a time, round two — Vibe Research</title>
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="Eight style features with a measured 200× spread in loss share, two bullies, and a pre-registered discriminator: SFT interference under SGD is winner-take-all, not graded — deleting the loudest feature restores every floor while deleting the second-loudest does nothing. Bullying strength tracks loss share; acquisition order does not.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <h1>One feature at a time, round two</h1>
+        <p class="vr-byline">
+          <span>2026-08-03 → 08-04</span>
+          <span>3×A100-80GB · ~19 A100-h · ~$28</span>
+          <span><a href="..">Vibe Research</a></span>
+        </p>
+      </div>
+
+      <div class="align-left vr-prose">
+
+        <p><a href="../one-feature-at-a-time/">Round one</a> established that
+        full-rank SGD fine-tuning acquires simultaneously-present style
+        features in stages, that AdamW doesn't, and — the part that needed a
+        second look — that deleting the loudest feature (ALL-CAPS) from the
+        training data promoted everything behind it. That last result was one
+        ablation on one very loud feature. It leaves the mechanism wide open:
+        is interference <em>graded</em> (every feature suppresses every other
+        in proportion to its share of the gradient, as
+        <button class="tooltip-button" data-define="starvation">gradient
+        starvation</button> would have it), or is it
+        <button class="tooltip-button" data-define="wta">winner-take-all</button>
+        (only the single loudest feature matters), or is it an ordinal queue
+        (each feature waits for its predecessor)?</p>
+
+        <p>So we built a round-2 organism designed to arbitrate. Eight features
+        instead of five, chosen to span a <b>measured 200× range in token
+        density</b> and to fall into three "clash clusters" that contend for
+        the same surface; <b>two</b> bullies of unequal size instead of one; a
+        pair of features with identical density but opposite position, to test
+        whether gradient <em>coherence</em> matters independently of
+        magnitude; and — the important methodological upgrade — the
+        predictions, the discriminator, and the falsification bars were all
+        <b>written into the spec before any eval ran</b>.</p>
+
+        <p class="vr-pull">Suppression is winner-take-all, not graded:
+        deleting the loudest feature restores every other feature to its
+        no-bully floor, while deleting the second-loudest (still 176 nats of
+        loss share) changes nothing at all. Bullying strength follows loss
+        share; acquisition <em>order</em> does not. And under AdamW the whole
+        structure evaporates.</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>model</dt><dd>unsloth/gemma-3-4b-it, full-rank unless noted</dd>
+            <dt>reference recipe</dt><dd>plain SGD lr 3e-2, momentum 0, wd 0, max_grad_norm 10, global batch 16, bf16, seed 0</dd>
+            <dt>data</dt><dd>mechanical transforms of the round-1 pools: 3,990 archaic-pool rows / 4,353 plain-pool rows, eight features composed in a fixed order</dd>
+            <dt>eval</dt><dd>160 held-out prompts per checkpoint, greedy decode, 8 programmatic detectors, 40–43 log-spaced checkpoints per arm</dd>
+            <dt>arms</dt><dd>r0-all (reference), r1-noleet, r2-nodense, r3-notitle, r4-envelope, r5-lora64, r6-boundary, r7-adamw, r8-all-s1</dd>
+            <dt>pods</dt><dd>ofat4/5/6 (A100-80GB, US-MD-1), all torn down; ~19 A100-hours ≈ $28</dd>
+            <dt>code</dt><dd><a href="https://github.com/ArcadiaImpact/one-feature-at-a-time">ArcadiaImpact/one-feature-at-a-time</a> · <code>experiments/feature_order_sft2/</code> (SPEC2.md, RESULTS2.md) · HF <code>arcadia-impact/ofat-feature-order-sft</code> under <code>round2/</code></dd>
+          </dl>
+        </div>
+
+        <h2><span class="vr-section-num">§1</span>Eight features, and how loud each one is</h2>
+
+        <p>Every training target carries all eight features at once (the
+        transforms compose in a fixed order so that none destroys another's
+        evidence — that ordering, and the seven detector traps it has to
+        dodge, is the boring half of the spec). Two things are measured
+        <em>before</em> training: token density (what fraction of the target's
+        tokens change when you remove that one feature) and
+        <button class="tooltip-button" data-define="loss-share">loss
+        share</button> ΔNLL — how many nats the base model loses on the
+        held-out targets when that feature is added.</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr>
+                <th>feature</th><th>what it does</th>
+                <th class="num">density</th><th class="num">ΔNLL LOO</th>
+                <th>role</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>leet</td><td>every non-initial <code>e</code> in a word becomes <code>3</code></td><td class="num">0.592</td><td class="num">555.4</td><td class="vr-neg">bully 1</td></tr>
+              <tr><td>titlecase</td><td>Every Word Starts With A Capital</td><td class="num">0.421</td><td class="num">175.8</td><td class="vr-neg">bully 2</td></tr>
+              <tr><td>archaic</td><td>18th-c. English diction (pool choice, not a transform)</td><td class="num">—</td><td class="num">160.2*</td><td>carried over from round 1</td></tr>
+              <tr><td>conj</td><td>every sentence after the first opens with a cycling conjunction</td><td class="num">0.018</td><td class="num">59.7</td><td>cluster B</td></tr>
+              <tr><td>signoff</td><td>the reply closes with the line <code>So it goes!</code></td><td class="num">0.003</td><td class="num">27.8</td><td>cluster C</td></tr>
+              <tr><td>prefix</td><td>the reply opens with the line <code>Now then!</code></td><td class="num">0.003</td><td class="num">26.4</td><td class="vr-pos">coherence probe</td></tr>
+              <tr><td>excl</td><td>every sentence-final <code>.</code> becomes <code>!</code></td><td class="num">0.015</td><td class="num">24.7</td><td>cluster B</td></tr>
+              <tr><td>dspace</td><td>two spaces after sentence-final punctuation</td><td class="num">0.017</td><td class="num">13.2</td><td>cluster B</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="vr-byline"><span>Leave-one-out token density and mean ΔNLL in
+        nats over 160 held-out targets, measured on the base model before any
+        training. *archaic's ΔNLL comes from a pool swap, a coarser
+        instrument than the mechanical transforms.</span></p>
+
+        <p>Three things to notice. <b>The premise holds:</b> leet's loss share
+        is 3.2× titlecase's and both are far above everything else — two
+        bullies of unequal size, as designed. <b>prefix and signoff are twins:</b>
+        identical density (0.003) and near-identical loss share (26.4 vs
+        27.8 nats), differing only in <em>where</em> they sit, which is
+        exactly what makes them a clean coherence probe. And <b>density is not
+        loss share:</b> titlecase changes more tokens when applied solo
+        (0.728 vs 0.628) yet costs the base model a third as many nats,
+        because Title Case Is An Utterly Familiar Format and leet is not.</p>
+
+        <p>The features also deliberately collide. Cluster A is the two
+        bullies fighting over every word (interior characters vs the initial
+        one). Cluster B is <code>excl</code>, <code>dspace</code> and
+        <code>conj</code> occupying three <em>adjacent character positions</em>
+        at every sentence boundary — the sharpest same-surface clash that is
+        still simultaneously satisfiable. Cluster C is the envelope pair.</p>
+
+        <h2><span class="vr-section-num">§2</span>What we predicted, in writing, first</h2>
+
+        <p>The spec fixed two rival predictions for the reference arm's
+        ordering (a density/loss-share ranking and an ordinal queue), and — the
+        part that does the real work — a discriminator over three ablation
+        arms, with the read-out rule written down in advance:</p>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr><th>arm</th><th>graded loss-share predicts</th><th>winner-take-all predicts</th><th>ordinal queue predicts</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>r0-all</td><td>90 / 220</td><td>90 / 220</td><td>30 / 300</td></tr>
+              <tr><td>r1-noleet</td><td>~30 / ~70 (partial relief)</td><td>~35 / ~80 (floors)</td><td>25 / 250</td></tr>
+              <tr><td>r3-notitle</td><td>~55 / ~130 (partial, smaller)</td><td>~90 / ~220 (no relief)</td><td>28 / 260</td></tr>
+              <tr><td>r2-nodense</td><td>~9 / ~18 (floors)</td><td>~9 / ~18</td><td>20 / 180</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="vr-byline"><span>Pre-registered t<sub>mid</sub> of archaic /
+        signoff, in steps, copied from SPEC2 §8 before any eval ran. The
+        graded and winner-take-all hypotheses differ only on r3-notitle — which
+        is the whole point of running it.</span></p>
+
+        <p>Plus a falsifiable bar for the coherence question: prefix should
+        land in the top 3 despite its 0.003 density, and the hypothesis is
+        falsified if prefix and signoff end up within 1.5× of each other.</p>
+
+        <h2><span class="vr-section-num">§3</span>The ladder</h2>
+
+        <p><b>Takeaway:</b> the eight features are acquired over a ~6×
+        spread, titlecase first and signoff last — and the order does
+        <em>not</em> follow loss share: leet, with 3.2× titlecase's ΔNLL,
+        arrives fourth.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/ladder.png" alt="Ladder of fitted t_mid: titlecase 10, excl 18, prefix 20, leet 21, dspace 22, conj 24, archaic 24, signoff 59 under SGD; AdamW bars all clustered between 8 and 15 with signoff at 23.">
+          <figcaption><b>Fig. 1</b> · Fitted t<sub>mid</sub> per feature.
+          Filled markers: the SGD reference (r0, seed 0). Hollow: the seed
+          replicate (r8). Dark bars: AdamW (r7). Rank order is seed-stable at
+          the resolvable scale — titlecase first, signoff last — but the middle
+          is a tight 19–24 cluster whose internal ordering is not. The AdamW
+          bars sit almost on top of each other: no ladder at
+          all.</figcaption>
+        </figure>
+
+        <figure class="vr-fig">
+          <img src="figs/r0-all.png" alt="r0-all acquisition curves for eight features, oscillating heavily between steps 5 and 35 before all saturating; signoff rises last.">
+          <figcaption><b>Fig. 2</b> · The reference arm's raw curves. Two
+          honest caveats visible here: SGD at lr 3e-2 <em>oscillates</em>
+          violently between steps ~5 and ~35 (features cross 0.9 and fall back
+          repeatedly), and 11 of 42 checkpoints tripped the
+          <button class="tooltip-button" data-define="degen">degeneration
+          monitor</button> and are excluded from both the fits and these lines.
+          The coloured ticks along the bottom axis mark each feature's fitted
+          t<sub>mid</sub>, which is what the ladder above
+          reads.</figcaption>
+        </figure>
+
+        <figure class="vr-fig">
+          <img src="figs/r8-all-s1.png" alt="r8-all-s1: same recipe at seed 1, same broad ordering, signoff at 31 instead of 59.">
+          <figcaption><b>Fig. 3</b> · Seed 1, same recipe. titlecase still
+          first, signoff still last, but signoff's t<sub>mid</sub> moves 59 →
+          31 (1.9×). That number is the calibration we use for "how much of a
+          gap is just noise" later on.</figcaption>
+        </figure>
+
+        <div class="vr-table-wrap">
+          <table class="vr-table">
+            <thead>
+              <tr>
+                <th>feature</th><th class="num">r0-all</th><th class="num">r8-s1</th>
+                <th class="num">r1-noleet</th><th class="num">r2-nodense</th>
+                <th class="num">r3-notitle</th><th class="num">r4-env</th>
+                <th class="num">r6-bnd</th><th class="num">r7-adamw</th>
+                <th class="num">r5-lora64</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>titlecase</td><td class="num">10.0</td><td class="num">16.4</td><td class="num">4.3</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num">8.1</td><td class="num">126</td></tr>
+              <tr><td>excl</td><td class="num">17.9</td><td class="num">20.8</td><td class="num">12.7</td><td class="num">~1*</td><td class="num">14.6</td><td class="num vr-neg">—</td><td class="num">6.0</td><td class="num">11.9</td><td class="num">128</td></tr>
+              <tr><td>prefix</td><td class="num">20.4</td><td class="num">19.3</td><td class="num">12.6</td><td class="num">11.9</td><td class="num">23.7</td><td class="num">7.7</td><td class="num">9.8</td><td class="num">11.8</td><td class="num">126</td></tr>
+              <tr><td>leet</td><td class="num">21.2</td><td class="num">22.7</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num">26.3</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num">7.9</td><td class="num">126</td></tr>
+              <tr><td>dspace</td><td class="num">22.1</td><td class="num">4.9*</td><td class="num">12.4</td><td class="num">12.4</td><td class="num">16.3</td><td class="num vr-neg">—</td><td class="num">~13*</td><td class="num">14.1</td><td class="num">117</td></tr>
+              <tr><td>conj</td><td class="num">23.6</td><td class="num">21.3</td><td class="num">11.8</td><td class="num">13.9</td><td class="num">21.1</td><td class="num vr-neg">—</td><td class="num">13.9</td><td class="num">14.5</td><td class="num">145</td></tr>
+              <tr><td>archaic</td><td class="num">23.7</td><td class="num">24.2</td><td class="num">15.4</td><td class="num">15.6</td><td class="num">24.8</td><td class="num vr-neg">—</td><td class="num vr-neg">—</td><td class="num">12.8</td><td class="num">162</td></tr>
+              <tr><td>signoff</td><td class="num">58.9</td><td class="num">31.4</td><td class="num">17.1</td><td class="num">14.2</td><td class="num">110.6</td><td class="num">10.9</td><td class="num">14.9</td><td class="num">23.5</td><td class="num">&gt;800</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="vr-byline"><span>Fitted t<sub>mid</sub> in steps, one shared
+        fitting script, degenerate checkpoints excluded. "—" = feature absent
+        from that arm's training data (negative control). *fit
+        ill-conditioned: r2's excl and r6's dspace are already near ceiling at
+        the first clean checkpoint; r8's dspace fit is poorly constrained —
+        read all three as "unresolvably early". r5's signoff never plateaus
+        inside 800 steps (censored).</span></p>
+
+        <p>Everything lands ~4× faster than the round-1-calibrated
+        pre-registration expected (signoff 59 vs a predicted 220). With two
+        <em>partial-surface</em> bullies rather than round 1's
+        everything-in-caps, the whole ladder compresses — worth knowing if you
+        want to design one of these.</p>
+
+        <h2><span class="vr-section-num">§4</span>The verdict: winner-take-all</h2>
+
+        <p><b>Takeaway:</b> removing leet alone restores every other feature to
+        the floor it reaches when <em>both</em> bullies are gone; removing
+        titlecase — still the second-largest gradient source in the dataset by
+        a factor of three over anything else — buys precisely nothing.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/discriminator.png" alt="Discriminator: archaic 24 and signoff 59 in r0; 25 and 111 in r3-notitle; 15 and 17 in r1-noleet; 16 and 14 in r2-nodense.">
+          <figcaption><b>Fig. 4</b> · The pre-registered discriminator.
+          r1-noleet ≈ r2-nodense (archaic 15.4 vs 15.6, signoff 17.1 vs 14.2)
+          and r3-notitle ≈ r0-all (archaic 24.8 vs 23.7). By the rule written
+          down in §2 that is the <b>winner-take-all</b> signature; graded
+          loss-share and the ordinal queue are both rejected. signoff's 110.6
+          in r3 is nominally <em>worse</em> than r0's 58.9, but 1.9× is exactly
+          the seed spread Fig. 3 measured, so we read it as "no relief", not
+          "anti-relief".</figcaption>
+        </figure>
+
+        <figure class="vr-fig">
+          <img src="figs/r1-noleet.png" alt="r1-noleet: leet flat as a control, every other feature acquired by step 12-17.">
+          <figcaption><b>Fig. 5</b> · Delete bully 1. leet (dashed, control)
+          stays flat; everything else collapses onto a tight 11.8–17.1 band —
+          roughly a 2–3.5× promotion, and for signoff a 3.4× one.</figcaption>
+        </figure>
+
+        <figure class="vr-fig">
+          <img src="figs/r2-nodense.png" alt="r2-nodense: both bullies flat as controls, remaining six features acquired by step 12-16.">
+          <figcaption><b>Fig. 6</b> · Delete both bullies. The floors are
+          11.9–15.6 — statistically the same picture as Fig. 5. Once the
+          loudest feature is gone, removing the second-loudest as well changes
+          nothing.</figcaption>
+        </figure>
+
+        <figure class="vr-fig">
+          <img src="figs/r3-notitle.png" alt="r3-notitle: titlecase flat as a control, but every other feature keeps its r0 timing; signoff even later.">
+          <figcaption><b>Fig. 7</b> · Delete bully 2 only — the arm that
+          separates the hypotheses. titlecase is gone (dashed control) and the
+          survivors sit at 14.6–26.3, i.e. on top of r0's 17.9–23.7. 176 nats
+          of loss share vanished from the dataset and the ladder did not
+          notice.</figcaption>
+        </figure>
+
+        <p>This matters beyond our toy: the simple additive reading of
+        gradient starvation predicts partial relief proportional to the
+        deleted feature's share, and that is not what a 3.2×-smaller-but-still-huge
+        deletion produces. Whatever the suppression mechanism is, it is
+        <em>competitive</em> — one winner takes the update direction — rather
+        than a budget split among contenders.</p>
+
+        <h2><span class="vr-section-num">§5</span>Coherence buys resistance, not speed</h2>
+
+        <p>prefix and signoff have the same density and the same loss share.
+        The difference is that prefix is <em>unconditional</em>: the same four
+        tokens at position 0 of every single example, so its gradient points
+        the same way in every batch member. signoff has to be produced after a
+        variable-length body.</p>
+
+        <p><b>Takeaway:</b> under bullying, prefix is 2.9× faster than its twin
+        (20.4 vs 58.9). Unbullied, the gap nearly closes (11.9 vs 14.2 in r2;
+        7.7 vs 10.9 in r4). Perfect gradient coherence does not make a feature
+        intrinsically faster — it makes it hard to suppress.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/r4-envelope.png" alt="r4-envelope: prefix 7.7 and signoff 10.9, all other features flat controls.">
+          <figcaption><b>Fig. 8</b> · The envelope pair alone on plain-English
+          targets (everything else is a dashed control). prefix 7.7, signoff
+          10.9 — a ratio of 1.4, under the pre-registered 1.5× falsification
+          bar, so the two features really are intrinsically near-equivalent.
+          The 2.9× split in the full arm is differential
+          bully-<em>resistance</em>.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§6</span>Same-surface clash is a non-effect</h2>
+
+        <p><b>Takeaway:</b> three features contending for three adjacent
+        character positions at every sentence boundary are acquired as if the
+        others weren't there. Given loss share, features are independent even
+        at zero surface separation.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/r6-boundary.png" alt="r6-boundary: excl 6.0, prefix 9.8, dspace ~13, conj 13.9, signoff 14.9; bullies and archaic flat controls.">
+          <figcaption><b>Fig. 9</b> · Cluster B plus the envelope, on plain
+          targets with no bullies and no archaic. excl 6.0, dspace ~13, conj
+          13.9 — the same 6–14 band as their r2 floors, and squarely at round
+          one's solo dspace floor of ~12. The clash hypothesis predicted a ≥2×
+          delay; there isn't one.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§7</span>It's the optimizer, again</h2>
+
+        <p><b>Takeaway:</b> AdamW erases both the ladder <em>and</em> the
+        bully; a rank-64 LoRA reproduces round one's rank-16 reordering, so
+        that reordering is a LoRA effect rather than a rank-budget artefact.
+        Staging and winner-take-all interference are properties of raw-gradient
+        descent — not of the data, and not of the parametrization.</p>
+
+        <figure class="vr-fig">
+          <img src="figs/r7-adamw.png" alt="r7-adamw: all eight features land between 7.9 and 14.5 with signoff at 23.5.">
+          <figcaption><b>Fig. 10</b> · AdamW full-rank, identical data to
+          Fig. 2. Everything lands in a near-simultaneous 8–15 band with
+          signoff mildly behind at 23.5 — against 58.9 under SGD, so the bully
+          structure is gone too. And the top of the order <em>inverts</em>:
+          leet, the largest raw-gradient feature and the SGD bully, is
+          acquired <em>first</em> (7.9) here. Per-parameter preconditioning
+          normalizes away exactly the loss-share advantage that made leet the
+          bully.</figcaption>
+        </figure>
+
+        <figure class="vr-fig">
+          <img src="figs/r5-lora64.png" alt="r5-lora64: everything much slower, dspace 117 first, dense features 126-128, archaic 162, signoff never plateaus.">
+          <figcaption><b>Fig. 11</b> · SGD + LoRA r64, 800 steps. Still staged
+          (&gt;3× separation), but dspace goes first (117) ahead of the dense
+          features (126–128) — round one's rank-16 ordering, reproduced at 4×
+          the rank — and signoff never plateaus inside 800 steps. Two of the
+          three pre-registered criteria for "higher rank restores full-rank
+          behaviour" fail. Full-rank SGD stays the reference
+          recipe.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§8</span>Caveats and round-three leads</h2>
+        <ul>
+          <li><b>SGD at lr 3e-2 oscillates hard</b> between steps ~5 and ~35,
+            and the degeneration monitor flagged 0–18 of ~40 checkpoints per
+            arm (worst: r3 at 17/40, r8 at 18/42; zero for r5 and r7).
+            Flagged points are excluded from fits and from the plotted lines
+            rather than read as zeros — but the fits in that window are doing
+            real work on noisy data.</li>
+          <li><b>Seed noise is ~1.9×</b> on signoff (r0 vs r8), which is the
+            yardstick for every "no relief" reading here. Only the reference
+            arm has a replicate.</li>
+          <li><b>Three fits are ill-conditioned</b> (r2 excl, r6 dspace, r8
+            dspace) because the feature is already near ceiling at the first
+            clean checkpoint; they are quoted as "unresolvably early", not as
+            ranks.</li>
+          <li><b>archaic's loss share is measured differently</b> from the
+            other seven — it's a pool swap rather than a mechanical transform,
+            so its 160 nats is on a coarser instrument, and the LOO/add-one-in
+            rankings disagree only on archaic-vs-titlecase.</li>
+          <li><b>An instrument bug caught in time:</b> the first loss-share
+            pass applied the envelope as one unit, so prefix and signoff could
+            not be separated. Fixed and re-measured before any eval landed.
+            The fixed run threw up an oddity worth flagging: prefix's
+            add-one-in ΔNLL is <em>negative</em> — prepending "Now then!" makes
+            the rest of the reply ~22 nats <em>cheaper</em> for the base
+            model.</li>
+          <li><b>Cross-round dspace comparisons are approximate</b> — round
+            one's dspace regex counted newline-separated boundaries, which
+            round two's fixes; the within-round conclusions don't depend on
+            it.</li>
+          <li><b>Round-three leads:</b> why does the familiar format
+            (titlecase) outrace a 3.2×-larger gradient (leet) under SGD —
+            representation reuse vs new-circuit construction? A teacher-forced
+            per-feature loss probe over the r0 checkpoints would separate
+            "learned late" from "expressed late". Also: vary prefix's
+            <em>position</em> to isolate coherence as a third axis beside loss
+            share and familiarity. Spectral decoupling as a direct
+            intervention on the starvation mechanism is on the list, but the
+            winner-take-all result means the simple additive picture it
+            targets already fails here.</li>
+        </ul>
+
+        <div class="vr-colophon">
+          Part one · <a href="../one-feature-at-a-time/">One feature at a
+          time</a> (five features, SGD vs AdamW vs LoRA vs momentum).
+          <br>Code, spec and full write-up ·
+          <a href="https://github.com/ArcadiaImpact/one-feature-at-a-time">ArcadiaImpact/one-feature-at-a-time</a>,
+          <code>experiments/feature_order_sft2/{SPEC2,RESULTS2}.md</code>;
+          plotting script <code>vibe-research/make_plots2.py</code>; all
+          panels in <a href="plots2.pdf">plots2.pdf</a>.
+          <br>Per-checkpoint generations, summaries and the loss-share
+          measurements · HF <code>arcadia-impact/ofat-feature-order-sft</code>
+          under <code>round2/</code>.
+        </div>
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "starvation": "Gradient starvation (Pezeshki et al. 2011.09468): when several features explain the same targets, the feature with the largest gradient contribution captures the shared representation early and suppresses the learning of the others. Its simple additive reading predicts graded suppression — relief proportional to how much loss share you delete.",
+        "wta": "Winner-take-all suppression: only the single largest gradient source suppresses the rest, and deleting it restores every other feature to the timing it would have had with no competition at all. Deleting the second-largest source produces no measurable relief.",
+        "loss-share": "Loss share (ΔNLL): how many nats of negative log-likelihood the untrained base model loses on the held-out targets when one feature is added to them (add-one-in) or removed from the fully transformed target (leave-one-out). A measure of how much of the training gradient that feature is responsible for at step 0 — unlike token density, it accounts for how surprising the change is, not just how many tokens it touches.",
+        "degen": "Degeneration monitor: a per-checkpoint guard that flags a checkpoint when the model's held-out generations average under 100 words or fall below 0.4 distinct-3-gram ratio — i.e. when SGD has knocked the model into repetition or collapse and the feature detectors would be scoring noise. Flagged checkpoints are excluded from the sigmoid fits.",
+        "t-mid": "The midpoint of a sigmoid fitted to the acquisition curve in log-step space: the step at which the feature reaches half of its final level. Fitted per arm and feature by one shared script, so the numbers are comparable across arms — but grid-limited whenever a feature is acquired faster than the checkpoint spacing.",
+      });
+    </script>
+  </body>
+</html>
