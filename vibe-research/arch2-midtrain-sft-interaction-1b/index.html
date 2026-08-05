@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+    <title>ARCH · the night shift: midtrain × SFT at 1B — Vibe Research</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../style.css">
+    <meta name="description" content="Retrospective of an ARCH 2.0 automated-research run: six agents, twelve hours, 83 PRs on whether a midtrain stage and an SFT stage interact superadditively at 1B — the finding that survived, and the instrument artifacts that didn't.">
+  </head>
+  <body>
+    <main id="page">
+      <div class="align-center" id="abstract">
+        <!-- ARCH autoresearch logo — site-palette recolor of the master logo at 2x
+     the master's animation speed (all begin/dur halved; the crossing twins
+     are synced to the strand pens, so retiming must scale every value
+     uniformly). Draws ONCE on page load, then freezes — no loop; to
+     restore looping give the master clock begin="0s; archCycle.end+0.425s".
+     Strokes: the right-hand strand (forms the apex) + its two "over"
+     crossing twins in the text vermilion #b44e24 (--link); left strand
+     #1d5512 (--h2); middle strand #2c6a1d (--h3); left baseline #123608
+     (--h1); right baseline #1f3318 (--text); tall right
+     stub #1d5512, mid right stub #2c6a1d (greens hand-tuned in Inkscape,
+     2026-07-07); halo strokes paint the page background #f0f5dd to
+     create the over/under weave — keep them equal to --bg (light) if the
+     site palette changes. viewBox is cropped to the mark. Paste the <svg>
+     element verbatim (inline, not <img>) at the top of the abstract block
+     of an ARCH-run page; the only cross-referenced id is archCycle. -->
+<svg xmlns="http://www.w3.org/2000/svg"
+     class="vr-arch-logo"
+     viewBox="78.4 77.5 56.4 63.1"
+     role="img" aria-label="ARCH autoresearch logo"
+     version="1.1"
+     id="arch-logo">
+
+  <!-- Master clock: one 1.075s draw, then hold (no loop). -->
+  <rect width="0.001" height="0.001" opacity="0">
+    <animate id="archCycle"
+             attributeName="x"
+             from="0" to="0"
+             begin="0s"
+             dur="1.075s" />
+  </rect>
+
+  <g id="g6949" transform="translate(-45.290213,-62.351251)">
+
+    <!-- ============================================================
+         BASE STRANDS (drawn first, can be partially obscured by overlays)
+         ============================================================ -->
+
+    <!-- Strand 3 / apex (right strand — text vermilion): B=0.195, D=0.812, ease-out -->
+    <path id="path6435"
+          d="m 134.08023,200.51269 v -33.98941 l 17.50999,-24.12977 18.15756,24.54157 v 7.15621"
+          fill="none" stroke="#b44e24" stroke-width="2.5"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.195s" dur="0.812s"
+               calcMode="spline" keyTimes="0; 1" keySplines="0 0 0.5 1"
+               fill="freeze" />
+    </path>
+
+    <!-- Strand 1 (left strand — h2 green): B=0.055, D=0.68, ease-out -->
+    <path id="path6493"
+          d="m 127.08023,200.51268 v -36.31544 l 45.8754,-16.1098"
+          fill="none" stroke="#1d5512" stroke-width="2.5"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.055s" dur="0.68s"
+               calcMode="spline" keyTimes="0; 1" keySplines="0 0 0.5 1"
+               fill="freeze" />
+    </path>
+
+    <!-- Strand 2 (middle strand — h3 green): B=0.125, D=0.804, ease-out -->
+    <path id="path6495"
+          d="m 130.58023,200.51268 v -51.84997 l 46.16757,15.62208"
+          fill="none" stroke="#2c6a1d" stroke-width="2.5"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.125s" dur="0.804s"
+               calcMode="spline" keyTimes="0; 1" keySplines="0 0 0.5 1"
+               fill="freeze" />
+    </path>
+
+    <!-- ============================================================
+         A1: bottom-left halo + horizontal (drawn together, ease-in-out)
+         ============================================================ -->
+
+    <!-- A1 halo (bg-colour halo, hides bottom of arch sprouts) -->
+    <path id="path4430-3-9-6-9"
+          d="m 124.94814,200.51268 h 11.26412"
+          fill="none" stroke="#f0f5dd" stroke-width="4.49997"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin" dur="0.25s"
+               calcMode="spline" keyTimes="0; 1" keySplines="0.42 0 0.58 1"
+               fill="freeze" />
+    </path>
+
+    <!-- Bottom-left H thin (drawn on top of halo) — h1 green -->
+    <path id="path5433-2-2"
+          d="m 124.3302,200.51268 h 12.5"
+          fill="none" stroke="#123608" stroke-width="2.5"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin" dur="0.25s"
+               calcMode="spline" keyTimes="0; 1" keySplines="0.42 0 0.58 1"
+               fill="freeze" />
+    </path>
+
+    <!-- ============================================================
+         RIGHT STUBS
+         ============================================================ -->
+
+    <!-- Stub at x=173.25 (h3 green): B=0.875, D=0.11 -->
+    <path id="path5433-2-2-5"
+          d="m 173.24776,200.54058 v -5.63206"
+          fill="none" stroke="#2c6a1d" stroke-width="2.5"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.875s" dur="0.11s"
+               calcMode="spline" keyTimes="0; 1" keySplines="0 0 0.5 1"
+               fill="freeze" />
+    </path>
+
+    <!-- Stub at x=169.75 (h2 green): B=0.805, D=0.27 -->
+    <path id="path5433-2-2-5-3"
+          d="M 169.74778,200.51269 V 186.9383"
+          fill="none" stroke="#1d5512" stroke-width="2.5"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.805s" dur="0.27s"
+               calcMode="spline" keyTimes="0; 1" keySplines="0 0 0.5 1"
+               fill="freeze" />
+    </path>
+
+
+    <!-- ============================================================
+         CROSSING B1: strand 1 OVER strand 2 vertical, near (130.58, 162.97)
+         Strand 1 pen reaches twin start at 0.2305s, end at 0.2755s
+         (strand-1 twin — h2 green)
+         ============================================================ -->
+
+    <path id="path4430-3-9-6-9-2"
+          d="m 128.06318,163.85206 5.27639,-1.85288"
+          fill="none" stroke="#f0f5dd" stroke-width="4.49997"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.2305s" dur="0.045s" fill="freeze" />
+    </path>
+
+    <path id="path5433-2-2-8"
+          d="m 127.08023,164.19724 7.25608,-2.54808"
+          fill="none" stroke="#1d5512" stroke-width="2.5"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.2305s" dur="0.045s" fill="freeze" />
+    </path>
+
+    <!-- ============================================================
+         CROSSING C1: strand 3 OVER strand 1, upstroke, near (138.74, 160.10)
+         Strand 3 pen reaches twin start at 0.356s, end at 0.4395s
+         (strand-3 twin — text vermilion)
+         ============================================================ -->
+
+    <path id="path4430-3-9-6-9-9"
+          d="m 134.75649,165.59135 7.30498,-10.06668"
+          fill="none" stroke="#f0f5dd" stroke-width="4.49997"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.356s" dur="0.0835s" fill="freeze" />
+    </path>
+
+    <path id="path5433-2-2-7"
+          d="m 134.08023,166.52328 8.75499,-12.06489"
+          fill="none" stroke="#b44e24" stroke-width="2.5"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.356s" dur="0.0835s" fill="freeze" />
+    </path>
+
+    <!-- ============================================================
+         CROSSING C2: strand 2 OVER strand 3, near (143.81, 153.13)
+         Strand 2 pen reaches twin start at 0.452s, end at 0.503s
+         (strand-2 twin — h3 green)
+         ============================================================ -->
+
+    <path id="path4430-3-9-6-9-3"
+          d="m 141.22895,152.266 5.18471,1.75439"
+          fill="none" stroke="#f0f5dd" stroke-width="4.49997"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.452s" dur="0.051s" fill="freeze" />
+    </path>
+
+    <path id="path5433-2-2-6"
+          d="m 140.31039,151.95518 6.82447,2.30925"
+          fill="none" stroke="#2c6a1d" stroke-width="2.5"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.452s" dur="0.051s" fill="freeze" />
+    </path>
+
+    <!-- ============================================================
+         CROSSING B2: strand 1 OVER strand 2 diagonal, near (151.36, 155.68)
+         Strand 1 pen reaches twin start at 0.349s, end at 0.452s
+         (strand-1 twin — h2 green)
+         ============================================================ -->
+
+    <path id="path4430-3-9-6-9-1"
+          d="m 145.60321,157.69263 10.77028,-3.78214"
+          fill="none" stroke="#f0f5dd" stroke-width="4.49997"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.349s" dur="0.103s" fill="freeze" />
+    </path>
+
+    <path id="path5433-2-2-2"
+          d="m 144.87454,157.94851 12.27919,-4.31201"
+          fill="none" stroke="#1d5512" stroke-width="2.5"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.349s" dur="0.103s" fill="freeze" />
+    </path>
+
+    <!-- ============================================================
+         CROSSING D1: strand 3 OVER strand 1, downstroke, near (159.35, 152.88)
+         Strand 3 pen reaches twin start at 0.5985s, end at 0.6635s
+         (strand-3 twin — text vermilion)
+         ============================================================ -->
+
+    <path id="path4430-3-9-6-9-93"
+          d="m 157.65031,150.58426 3.75452,5.07457"
+          fill="none" stroke="#f0f5dd" stroke-width="4.49997"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.5985s" dur="0.065s" fill="freeze" />
+    </path>
+
+    <path id="path5433-2-2-1"
+          d="m 156.87286,149.53347 4.92911,6.66214"
+          fill="none" stroke="#b44e24" stroke-width="2.5"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.5985s" dur="0.065s" fill="freeze" />
+    </path>
+
+    <!-- ============================================================
+         CROSSING D2: strand 2 OVER strand 3, near (164.78, 160.22)
+         Strand 2 pen reaches twin start at 0.5785s, end at 0.7495s
+         (strand-2 twin — h3 green)
+         ============================================================ -->
+
+    <path id="path4430-3-9-6-9-94"
+          d="m 158.25264,158.02644 11.89665,4.02556"
+          fill="none" stroke="#f0f5dd" stroke-width="4.49997"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.5785s" dur="0.171s" fill="freeze" />
+    </path>
+
+    <path id="path5433-2-2-78"
+          d="m 157.07236,157.62706 14.39544,4.87109"
+          fill="none" stroke="#2c6a1d" stroke-width="2.5"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.5785s" dur="0.171s" fill="freeze" />
+    </path>
+
+    <!-- ============================================================
+         A2: bottom-right halo + horizontal (drawn together, ease-in-out)
+         ============================================================ -->
+
+    <path id="path4430-3-9-6-9-36"
+          d="m 167.6157,200.54058 h 11.26412"
+          fill="none" stroke="#f0f5dd" stroke-width="4.49997"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.75s" dur="0.25s"
+               calcMode="spline" keyTimes="0; 1" keySplines="0.42 0 0.58 1"
+               fill="freeze" />
+    </path>
+
+    <path id="path5433-2-2-10"
+          d="m 166.99776,200.54058 h 12.5"
+          fill="none" stroke="#1f3318" stroke-width="2.5"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="100">
+      <set attributeName="stroke-dashoffset" to="100" begin="archCycle.begin" />
+      <animate attributeName="stroke-dashoffset" from="100" to="0"
+               begin="archCycle.begin+0.75s" dur="0.25s"
+               calcMode="spline" keyTimes="0; 1" keySplines="0.42 0 0.58 1"
+               fill="freeze" />
+    </path>
+
+  </g>
+</svg>
+
+        <h1>The night shift: midtrain × SFT interaction at 1B</h1>
+        <div class="vr-byline">
+          <span>ARCH 2.0 autoresearch run</span>
+          <span>6 workers · 12 h · 2026-08-04/05</span>
+          <span>finalized at wrap-up</span>
+        </div>
+        <p>Six autonomous agents spent an overnight shift (17:00 → 05:10 UTC) trying to
+        demonstrate a <button class="tooltip-button" data-define="superadditive">superadditive
+        interaction</button> between a midtraining stage and an SFT stage on
+        <span style="font-family:monospace">gemma-3-1b-pt</span>, measured on a
+        <button class="tooltip-button" data-define="two-by-two">2×2 design</button> and scored
+        by a held-out pipeline they could not read. They opened 83 pull requests. They found the
+        effect — and then, one by one, discovered their instruments were lying to them, retracted
+        their own headlines on the record, rebuilt the measurements, and converged on what
+        actually survives.</p>
+      </div>
+
+      <div class="align-left vr-prose">
+
+        <p class="vr-pull">Midtraining decides <em>which rule</em> an underdetermined finetune
+        generalizes to — and almost every effect larger than that was the measuring stick
+        talking.</p>
+
+        <div class="vr-lab">
+          <dl>
+            <dt>substrate</dt><dd>google/gemma-3-1b-pt</dd>
+            <dt>design</dt><dd>2×2 cells R/M/S/T · contrast T−M−S+R · item-level cluster bootstrap</dd>
+            <dt>fleet</dt><dd>6 × H200 worker pods · 12 h wall-clock each · one ephemeral eval pod per PR</dd>
+            <dt>gating</dt><dd>recipe sanity → structure → 6-lens × 3-model adversarial audit → 3-judge roundtable</dd>
+            <dt>output</dt><dd>83 PRs · 80 evaluated · 55 passed all gates · 25 gate-rejected · median passing score 72.9</dd>
+            <dt>retractions</dt><dd>9+ self-retractions or on-record corrections, all before the deadline</dd>
+          </dl>
+        </div>
+
+        <figure class="vr-fig breakout">
+          <img src="figs/score_vs_time.png"
+               alt="Scatter of arch-eval score against PR creation time for all 83 PRs. Passing scores cluster between 55 and 77 with a rolling median rising late in the run; gate-rejected PRs sit at zero throughout; the winner #273 and top scorer #331 are annotated; a dashed line marks the 05:10Z deadline.">
+          <figcaption><strong>Fig. 1 — the run at a glance.</strong> Throughput tripled into the
+          deadline (3.1 → 13.8 PRs/hour) and the pass rate doubled (38% → 76%): the fleet got
+          better at survivable claims as its members broke their own instruments and learned from
+          the audit gate. The <button class="tooltip-button" data-define="gate3">audit
+          gate</button> rejected 16 of the 25 zeros, nearly all for measurement artifacts the
+          panel caught before the workers did.</figcaption>
+        </figure>
+
+        <h2><span class="vr-section-num">§1</span> The three findings that survived</h2>
+
+        <p><strong>1. The winner (PR #273 → #279 → #295, corrected by #324/#329/#334).</strong>
+        Worker-5 built a fictional maintenance world where the finetuning rows were logically
+        consistent with two different rules, and the eval showed only items where the rules
+        disagree. Two cells received <em>byte-identical</em> finetuning data, differing only in
+        15M tokens of midtrain prose: the SFT-only arm took rule A on 320/320 items, the
+        treatment arm took rule B on 319/320 — interaction +1.006 on the rate scale, replicated
+        at an independent seed and on an independently generated corpus. In its final hour the
+        same worker attacked its own result and found roughly half the magnitude was shared
+        surface wording; the corrected effect is +0.447 to +0.534. Smaller — and still the only
+        demonstration in the run of what the task asked for.</p>
+
+        <p><strong>2. The mechanism: midtraining installs the belief, SFT decides whether it
+        runs.</strong> Four independent lines converge. With the rule stated in the prompt,
+        midtrained arms score 0.59–0.64 where non-midtrained arms sit at 0.01–0.03 — the
+        capability is installed, SFT makes it the default (#296). A teacher-forced
+        log-probability readout finds a consistently positive interaction in <em>belief space</em>
+        on 5/5 checkpoint-independent 2×2s that never reaches sampled behaviour (#311, #314). In
+        weight space, the corpus-attributable midtrain direction survives SFT almost untouched
+        (×0.984) but SFT's own displacement is orthogonal to it (cos ≈ −0.05): preserved, never
+        amplified (#325/#328). And 5% of contradicting SFT rows erase the behavioural interaction
+        while the belief stays fully in the weights (#285).</p>
+
+        <p><strong>3. The metrology: at 1B, the instrument is the experiment.</strong> The run's
+        most consequential number may be worker-1's
+        <button class="tooltip-button" data-define="floor">detection floor</button>: decomposing
+        item-sampling, re-measurement and re-training noise gives a floor of 0.14 on the rate
+        scale — swallowing every behavioural interaction anyone measured, including item-level
+        bootstrap CIs that confidently excluded zero. Worker-3's resolved null explains why the
+        stages so often merely add: midtraining moves cue-sensitivity, mixed SFT moves response
+        bias — different axes, additive effects (#310).</p>
+
+        <h2><span class="vr-section-num">§2</span> The artifact epidemic</h2>
+
+        <p>The single most replicated finding of the night was not about midtraining at all.
+        <strong>Five of six workers independently discovered that forced-choice evals are broken
+        on gemma-3-1b-pt</strong> — the model answers by letter position, option order, or
+        template echo, not by reading. Each found it in their own construction, each thought it
+        was their bug, and each arrived within hours of the others:</p>
+
+        <ul>
+          <li><strong>W3, 18:42</strong> — a cell answers "B" on all 240 lettered items; switches
+            to free-form generation.</li>
+          <li><strong>W4, 19:34</strong> — every cell answers "A" 97–100% of the time on a control
+            whose answer is printed in the prompt.</li>
+          <li><strong>W1, 20:17</strong> — a forced-choice eval <em>manufactures</em> a positive
+            interaction (+0.35 logit, CI excluding zero) purely from position bias (#267).</li>
+          <li><strong>W2, 01:22</strong> — the decomposition: one cell carried 4.19 nats of letter
+            bias over a 0.36-nat content preference, reading exactly chance while its true
+            preference was 0.879 (#293).</li>
+          <li><strong>W6, 02:39</strong> — the kill shot: the same checkpoints score +2.05 logit on
+            its original wording and −2.00 on a paraphrase; near-inert cells echo hardest, which
+            is exactly the shape of superadditivity. Six of its own PRs voided in one commit
+            (#303).</li>
+        </ul>
+
+        <p>The audit panel had been rejecting these submissions for hours before the workers
+        caught up. The gate and the fleet converged on the same truth from opposite sides.</p>
+
+        <h2><span class="vr-section-num">§3</span> Six trajectories</h2>
+
+        <p><strong>Worker-1, the metrologist.</strong> Built the fleet's shared single-GPU
+        trainer, ran seven behavioural 2×2s — all null — and then attacked the harness instead of
+        trying an eighth recipe: quantified the 0.14 detection floor (#308), swapped readouts, and
+        found the belief-space interaction on 5/5 independent 2×2s (#311, #330 — sign test
+        p=0.0625, reported as exactly that). Authored the run's top score, #331 (76.82): a wiki
+        page superseding its own three-hour-old figure.</p>
+        <blockquote>"With ~65 minutes left, the most valuable thing I can do is try to falsify my
+        own finding." <span style="font-style:normal">— worker-1, 03:47 UTC</span></blockquote>
+
+        <p><strong>Worker-2, the mechanist.</strong> Produced an early superadditive interaction
+        (+0.200, CI [0.083, 0.317], #272), found it flips sign with the SFT seed, and
+        self-corrected on the record — the correction (#283, 74.25) outscored the claim it
+        retracted. Its letter-bias decomposition (#293) became the fleet's mechanistic account of
+        the artifact epidemic; its endgame moved the question into weight space (#325/#328).</p>
+        <blockquote>"My negative correction result (#283) scored highest at 74.25, my
+        positive-interaction PR scored 64.38. The score rewards honest evidence, not effect size."
+        <span style="font-style:normal">— worker-2, 01:04 UTC</span></blockquote>
+
+        <p><strong>Worker-3, the resolved null.</strong> Reported a large negative interaction,
+        then found its scoring rule was differentially wrong across the 2×2 — 0–8% error on clean
+        cells, 17–37% on mixed cells, "the worst available failure mode" for a
+        difference-in-differences. Rebuilt two-sided at 3.3× the items and landed the run's
+        cleanest bounded null: ±0.04 in rate, with the axis-separation mechanism (#310, 74.88).
+        Declined a tenth attempt as "leaderboard p-hacking" and spent its last iterations
+        reviewing other workers' PRs.</p>
+
+        <p><strong>Worker-4, ask-don't-narrate.</strong> Rebuilt its eval three times (regex →
+        validated LLM judge → first-person request voice). The last rebuild is the finding:
+        third-person items make a 1B model <em>describe</em> the task instead of doing it,
+        pinning three cells to the floor. Asked directly, a small superadditive interaction
+        becomes measurable (+0.079, three seeds, #296 — 4th in the fleet). It then reported the
+        fragility of its own result — a neutral role line flips the sign — against its own PR,
+        after submitting.</p>
+
+        <p><strong>Worker-5, the winner.</strong> Killed its own first null after discovering the
+        SFT stage had never learned the task (loss 0.028 while answering "A" on 199/200 of its own
+        training rows). Caught a corpus bug biased toward exactly the result it was about to
+        claim, because a contamination count that should have been zero read 588. Built the
+        underdetermined-rule flip (#273), the counter-evidence dose ladder (5 contradicting rows
+        keep 82% of the effect; 20 destroy 94%), and the belief/behaviour dissociation — then
+        turned on itself at 04:01: <em>"all ten of my prior submissions measured the installed
+        rule with the same forced-choice format the finetuning rows used."</em> The corrected
+        effect went out against its own headline before the deadline.</p>
+
+        <p><strong>Worker-6, the bicycle shop.</strong> Posted the run's biggest apparent effects
+        (+3.6 to +5.7 logit) on fix-vs-swap doctrine 2×2s, proved they were option-order echo,
+        and retracted all six PRs in one submission (#303). Rebuilt open-ended: dose-response is
+        real and monotone but the stages are redundant in 6 of 7 arms; superadditivity appears
+        only where both stages are near-inert. Its seed replication of that corner (#332, 76.40)
+        was the second-highest score of the run — and its own multiplicity audit then flagged
+        that the corner fails Bonferroni (#335). Both PRs passed the gates. Both are true.</p>
+        <blockquote>"The principled response is not to guess at the held-out audit — it's to run
+        my own hostile audit and report what it finds."
+        <span style="font-style:normal">— worker-6, 21:56 UTC</span></blockquote>
+
+        <h2><span class="vr-section-num">§4</span> The leaderboard, and what it rewarded</h2>
+
+        <p>Every top-10 entry has a <em>negative</em> interaction logit on the shared harness —
+        the top of the board is rigorous nulls, corrections, and instrument work, not the effect
+        the task asked for. That is the scoring rubric doing what it was weighted to do (evidence
+        quality 0.25 + eval stringency 0.25 vs scientific interest 0.20). The researcher overrode
+        it: <strong>#273 was selected as the winner at rank 32</strong> and merged as the run's
+        result. A rubric that ranks every retraction above the discovery it retracts needs a
+        rebalance before run № 2.</p>
+
+        <div class="vr-table-wrap">
+        <table class="vr-table">
+          <thead><tr><th>rank</th><th>PR</th><th>score</th><th>worker</th><th>claim</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>#331</td><td class="vr-pos">76.82</td><td>W1</td><td>five checkpoint-independent 2×2s supersede the p=0.125 figure written three hours earlier</td></tr>
+            <tr><td>2</td><td>#332</td><td class="vr-pos">76.40</td><td>W6</td><td>seed replication of the low-dose superadditive corner</td></tr>
+            <tr><td>3</td><td>#311</td><td class="vr-pos">76.03</td><td>W1</td><td>belief vs behaviour: a log-prob readout finds the interaction behaviour never shows</td></tr>
+            <tr><td>4</td><td>#296</td><td class="vr-pos">75.82</td><td>W4</td><td>ask the model to do the task instead of narrating it</td></tr>
+            <tr><td>5</td><td>#319</td><td class="vr-pos">75.72</td><td>W1</td><td>the new readout held to the old standard: 92% of its own detection floor</td></tr>
+            <tr><td>32</td><td>#273</td><td>71.15</td><td>W5</td><td><strong>winner (researcher-selected):</strong> midtraining decided which rule an underdetermined finetune extrapolated</td></tr>
+          </tbody>
+        </table>
+        </div>
+
+        <p>Claims that did not survive the night — all retracted by their own authors, on the
+        record, before the deadline:</p>
+
+        <div class="vr-table-wrap">
+        <table class="vr-table">
+          <thead><tr><th>claim</th><th>died of</th><th>by</th></tr></thead>
+          <tbody>
+            <tr><td>interaction +0.200, CI excluding zero</td><td class="vr-neg">flips sign with SFT seed</td><td>W2, #272 → #283</td></tr>
+            <tr><td>interactions of +3.6 to +5.7 logit, six PRs</td><td class="vr-neg">forced-choice option echo</td><td>W6, → #303</td></tr>
+            <tr><td>negative interaction −0.71 logit, replicated</td><td class="vr-neg">scoring rule differentially wrong across cells</td><td>W3, → #301/#310</td></tr>
+            <tr><td>interaction gated by SFT decisiveness</td><td class="vr-neg">regex read nouns as verbs</td><td>W4, #270 (self-closed)</td></tr>
+            <tr><td>+1.006 as the effect's true size</td><td class="vr-neg">half was shared surface wording</td><td>W5, → #324/#329/#334</td></tr>
+            <tr><td>the interaction is in what the model says</td><td class="vr-neg">elicitation artifact; null when it must commit</td><td>W2, #297 → #302</td></tr>
+          </tbody>
+        </table>
+        </div>
+
+        <h2><span class="vr-section-num">§5</span> Run notes</h2>
+
+        <p>The eval pipeline survived contact with reality in both directions: the audit gate
+        rejected large plausible effects that were artifacts, and passed honest nulls. The
+        null-vs-zero score semantics (null = never evaluated, 0 = evaluated and rejected) earned
+        their keep when an LLM-provider balance outage nulled a 33-PR rescore wave rather than
+        writing 33 false zeros. Two incidents worth recording: that balance exhaustion was
+        discovered at the most expensive possible point (after each pod's full GPU pass, at the
+        audit-panel calls) and is now caught by a pre-flight balance check; and a reverted
+        winner-merge silently deleted files from 12 other PRs' merge refs via git's
+        delete-vs-unchanged rule, making them un-evaluable until resolved in each PR's favour.</p>
+
+        <div class="vr-colophon">
+          <p>run: arch2 № 1 on this repo · task <span style="font-family:monospace">midtrain-sft-interaction-1b</span>
+          · winner #273 merged at <span style="font-family:monospace">cca138c</span> on branch
+          <span style="font-family:monospace">arch/midtrain-sft-interaction-1b</span> of
+          ArcadiaImpact/science-of-midtraining (private) · all worker transcripts, eval logs and
+          audit-panel deliberations archived on S3 · compiled 2026-08-05 from six parallel
+          trajectory investigations over the full worker transcripts plus an aggregation pass over
+          all 83 PRs · quotes are verbatim from worker session logs.</p>
+        </div>
+
+      </div>
+    </main>
+    <script src="../../script.js"></script>
+    <script>
+      Object.assign(actionButtonDefinitions, {
+        "superadditive": "The two training stages together produce more of the target behaviour than the sum of what each produces alone: T − M − S + R > 0, where each letter is that cell's success rate.",
+        "two-by-two": "Four models from one base: R (neither stage), M (midtrain only), S (SFT only), T (both). The interaction contrast T − M − S + R isolates what the combination adds beyond the parts.",
+        "gate3": "A six-lens adversarial audit — channel/two-key, contamination, construct validity, statistics, provenance, open-ended red-team — each run by three cross-provider models, with pod-executed ablations the auditors can request. A majority 'hacked' verdict (with an articulated deception) zeroes the submission.",
+        "floor": "The smallest effect distinguishable from zero once you count ALL the noise: item sampling (SD 0.046), re-measurement (0.012), and re-training with a different seed (0.053) — total SD 0.071, so a two-sigma floor of 0.14 on the rate scale. Item-level bootstrap CIs capture only the first term.",
+      });
+    </script>
+  </body>
+</html>
